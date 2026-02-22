@@ -59,6 +59,7 @@ services:
     volumes:
       - ./app:/app/app  # 로컬의 app 디렉토리를 컨테이너의 /app/app에 마운트(수정사항 즉시 반영)
       - static_volume:/app/templates
+      - media_volume:/app/media
     restart: always
     ports:
       - "8000:8000"
@@ -83,6 +84,8 @@ services:
     env_file: .env
     restart: always
     mem_limit: 4G
+    volumes:
+      - media_volume:/app/media
     networks:
       - ws
     depends_on:
@@ -108,6 +111,7 @@ services:
 volumes:
   mysql_data:
   static_volume:
+  media_volume:
 
 networks:
   ws:

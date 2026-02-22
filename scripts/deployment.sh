@@ -9,6 +9,15 @@ COLOR_NC=$(tput sgr0)
 cd "$(dirname "$0")/.."
 source ./envs/.prod.env
 
+
+replace_in_file() {
+  local pattern=$1
+  local file=$2
+  sed -i.bak "${pattern}" "${file}"
+  rm -f "${file}.bak"
+}
+
+
 # ---------- 도커 이미지 빌드 및 푸시 함수 ----------
 build_and_push () {
   local docker_user=$1
@@ -108,17 +117,20 @@ echo ""
 # ---------- EC2 내에 배포 준비 파일 복사  ----------
 scp -i ~/.ssh/${ssh_key_file} envs/.prod.env ubuntu@${ec2_ip}:~/project/.env
 scp -i ~/.ssh/${ssh_key_file} docker-compose.prod.yml ubuntu@${ec2_ip}:~/project/docker-compose.yml
-if is_https ; then
-  # ---------- prod_https.conf 파일의 server_name, ssl_certificate 자동 수정 ----------
-  sed -i '' "s/server_name .*/server_name ${ec2_ip};/g" nginx/prod_http.conf
+if [[ "$is_https" == "1" ]]; then
+  # ---------- prod_http.conf 파일의 server_name 자동 수정 ----------
+  replace_in_file "s/server_name .*/server_name ${ec2_ip};/g" "nginx/prod_http.conf"
   scp -i ~/.ssh/${ssh_key_file} nginx/prod_http.conf ubuntu@${ec2_ip}:~/project/nginx/default.conf
-else
-  echo "${COLOR_BLUE} 사용중인 도메인을 입력하세요. (ex. api.ozcoding.site)${COLOR_NC}"
+elif [[ "$is_https" == "2" ]]; then
+  echo "${COLOR_BLUE}사용중인 도메인을 입력하세요. (ex. api.ozcoding.site)${COLOR_NC}"
   read -p "Domain: " domain
   # ---------- prod_https.conf 파일의 server_name, ssl_certificate 자동 수정 ----------
-  sed -i '' "s/server_name .*/server_name ${domain};/g" nginx/prod_https.conf
-  sed -i '' "s|/etc/letsencrypt/live/[^/]*|/etc/letsencrypt/live/${domain}|g" nginx/prod_https.conf
+  replace_in_file "s/server_name .*/server_name ${domain};/g" "nginx/prod_https.conf"
+  replace_in_file "s|/etc/letsencrypt/live/[^/]*|/etc/letsencrypt/live/${domain}|g" "nginx/prod_https.conf"
   scp -i ~/.ssh/${ssh_key_file} nginx/prod_https.conf ubuntu@${ec2_ip}:~/project/nginx/default.conf
+else
+  echo "${COLOR_RED}잘못된 선택입니다. 1 또는 2를 입력해주세요.${COLOR_NC}"
+  exit 1
 fi
 
 # ---------- EC2 배포 자동화  ----------

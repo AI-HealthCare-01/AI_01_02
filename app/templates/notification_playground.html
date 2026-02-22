@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Notification API Playground</title>
+    <style>
+        :root {
+            --bg-1: #f4f7ff;
+            --bg-2: #dfe7ff;
+            --surface: #ffffff;
+            --surface-2: #f8f9ff;
+            --text: #1b2340;
+            --subtext: #5a6380;
+            --line: #d3daee;
+            --accent: #0f6bd8;
+            --accent-2: #134b9c;
+            --danger: #b42318;
+            --success: #067647;
+            --shadow: 0 14px 40px rgba(33, 49, 93, 0.12);
+            --radius: 14px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", "Noto Sans KR", sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(1200px 600px at 20% -15%, #ffffffcc 0%, transparent 60%),
+                radial-gradient(1200px 600px at 120% 110%, #b9cbff66 0%, transparent 55%),
+                linear-gradient(145deg, var(--bg-1), var(--bg-2));
+        }
+
+        .page {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 28px 18px 40px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 30px;
+            letter-spacing: 0.4px;
+        }
+
+        p {
+            margin: 8px 0 0;
+            color: var(--subtext);
+        }
+
+        .layout {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 16px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .card-head {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--line);
+            background: linear-gradient(135deg, #f8fbff, #eff4ff);
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+        }
+
+        .card-body {
+            padding: 14px 16px 16px;
+            display: grid;
+            gap: 10px;
+        }
+
+        label {
+            font-size: 12px;
+            color: var(--subtext);
+            margin-bottom: 2px;
+            display: block;
+        }
+
+        .row-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: var(--surface-2);
+            color: var(--text);
+            padding: 9px 10px;
+            font-size: 13px;
+            outline: none;
+        }
+
+        textarea {
+            min-height: 102px;
+            resize: vertical;
+            font-family: "Consolas", "Cascadia Code", monospace;
+            line-height: 1.45;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(15, 107, 216, 0.16);
+        }
+
+        button {
+            border: 0;
+            border-radius: 10px;
+            padding: 10px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 700;
+            color: #fff;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            transition: transform 120ms ease, box-shadow 120ms ease;
+            box-shadow: 0 8px 20px rgba(15, 107, 216, 0.25);
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        button.secondary {
+            background: linear-gradient(135deg, #7b88a8, #5f6f90);
+            box-shadow: 0 8px 20px rgba(67, 80, 110, 0.22);
+        }
+
+        button.danger {
+            background: linear-gradient(135deg, #d92d20, #b42318);
+            box-shadow: 0 8px 20px rgba(180, 35, 24, 0.2);
+        }
+
+        .inline-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .log {
+            background: #101a33;
+            color: #d9e6ff;
+            border-radius: 12px;
+            border: 1px solid #2f416f;
+            min-height: 230px;
+            max-height: 380px;
+            overflow: auto;
+            padding: 11px;
+            font-family: "Consolas", "Cascadia Code", monospace;
+            font-size: 12px;
+            line-height: 1.45;
+            white-space: pre-wrap;
+        }
+
+        .status {
+            display: grid;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--subtext);
+        }
+
+        .status strong {
+            color: var(--text);
+            margin-right: 6px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 9px;
+            border-radius: 999px;
+            background: #e7eefc;
+            color: #2a4678;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .badge.ok {
+            background: #e6f8ee;
+            color: var(--success);
+        }
+
+        .badge.err {
+            background: #feeceb;
+            color: var(--danger);
+        }
+
+        .notification-list {
+            display: grid;
+            gap: 8px;
+        }
+
+        .notification {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 10px;
+            background: #fbfcff;
+            display: grid;
+            gap: 6px;
+        }
+
+        .notification .title {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .notification .meta {
+            color: var(--subtext);
+            font-size: 12px;
+        }
+
+        .notification .payload {
+            border: 1px dashed #c9d3f1;
+            background: #f1f5ff;
+            border-radius: 8px;
+            padding: 8px;
+            font-family: "Consolas", "Cascadia Code", monospace;
+            font-size: 11px;
+            white-space: pre-wrap;
+        }
+
+        @media (max-width: 960px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<main class="page">
+    <h1>Notification API Playground</h1>
+    <p>Sign up, login, trigger profile update, and verify notification APIs from one page.</p>
+
+    <section class="layout">
+        <div class="card">
+            <div class="card-head">Setup & Actions</div>
+            <div class="card-body">
+                <div>
+                    <label for="baseUrl">Base URL</label>
+                    <input id="baseUrl" />
+                </div>
+                <div class="row-2">
+                    <div>
+                        <label for="email">Email</label>
+                        <input id="email" />
+                    </div>
+                    <div>
+                        <label for="password">Password</label>
+                        <input id="password" value="Password123!" />
+                    </div>
+                </div>
+                <div class="row-2">
+                    <div>
+                        <label for="name">Name</label>
+                        <input id="name" value="FrontendTester" />
+                    </div>
+                    <div>
+                        <label for="gender">Gender</label>
+                        <select id="gender">
+                            <option value="MALE">MALE</option>
+                            <option value="FEMALE">FEMALE</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row-2">
+                    <div>
+                        <label for="birthDate">Birth Date</label>
+                        <input id="birthDate" value="1994-04-04" />
+                    </div>
+                    <div>
+                        <label for="phoneNumber">Phone</label>
+                        <input id="phoneNumber" value="01011112222" />
+                    </div>
+                </div>
+                <div class="inline-actions">
+                    <button id="btnPrepare">1) Signup + Login</button>
+                    <button class="secondary" id="btnUpdateProfile">2) Update Profile (Trigger)</button>
+                </div>
+                <div class="inline-actions">
+                    <button class="secondary" id="btnList">3) List Notifications</button>
+                    <button class="secondary" id="btnUnreadCount">Unread Count</button>
+                    <button class="danger" id="btnReadAll">Read All</button>
+                </div>
+                <div>
+                    <label for="readNotificationId">Read One Notification by ID</label>
+                    <div class="inline-actions">
+                        <input id="readNotificationId" placeholder="notification_id" />
+                        <button class="secondary" id="btnReadOne">Mark Read</button>
+                    </div>
+                </div>
+                <div class="status">
+                    <div><strong>Access Token:</strong><span id="tokenState" class="badge">EMPTY</span></div>
+                    <div><strong>Last HTTP:</strong><span id="httpState" class="badge">NONE</span></div>
+                    <div><strong>Unread:</strong><span id="unreadState" class="badge">-</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-head">Response / Logs</div>
+            <div class="card-body">
+                <div>
+                    <label for="responseJson">Latest Response JSON</label>
+                    <textarea id="responseJson" readonly></textarea>
+                </div>
+                <div>
+                    <label>Notifications</label>
+                    <div id="notificationList" class="notification-list"></div>
+                </div>
+                <div>
+                    <label>Request Logs</label>
+                    <div id="log" class="log"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<script>
+    const state = {
+        accessToken: "",
+        lastNotifications: [],
+    };
+
+    const el = {
+        baseUrl: document.getElementById("baseUrl"),
+        email: document.getElementById("email"),
+        password: document.getElementById("password"),
+        name: document.getElementById("name"),
+        gender: document.getElementById("gender"),
+        birthDate: document.getElementById("birthDate"),
+        phoneNumber: document.getElementById("phoneNumber"),
+        readNotificationId: document.getElementById("readNotificationId"),
+        tokenState: document.getElementById("tokenState"),
+        httpState: document.getElementById("httpState"),
+        unreadState: document.getElementById("unreadState"),
+        responseJson: document.getElementById("responseJson"),
+        notificationList: document.getElementById("notificationList"),
+        log: document.getElementById("log"),
+        btnPrepare: document.getElementById("btnPrepare"),
+        btnUpdateProfile: document.getElementById("btnUpdateProfile"),
+        btnList: document.getElementById("btnList"),
+        btnUnreadCount: document.getElementById("btnUnreadCount"),
+        btnReadAll: document.getElementById("btnReadAll"),
+        btnReadOne: document.getElementById("btnReadOne"),
+    };
+
+    function nowString() {
+        const d = new Date();
+        return d.toLocaleTimeString();
+    }
+
+    function log(message) {
+        el.log.textContent += `[${nowString()}] ${message}\n`;
+        el.log.scrollTop = el.log.scrollHeight;
+    }
+
+    function setToken(token) {
+        state.accessToken = token || "";
+        if (state.accessToken) {
+            el.tokenState.textContent = "SET";
+            el.tokenState.className = "badge ok";
+        } else {
+            el.tokenState.textContent = "EMPTY";
+            el.tokenState.className = "badge";
+        }
+    }
+
+    function setHttpState(statusCode, ok) {
+        el.httpState.textContent = String(statusCode);
+        el.httpState.className = ok ? "badge ok" : "badge err";
+    }
+
+    function renderJson(data) {
+        el.responseJson.value = JSON.stringify(data, null, 2);
+    }
+
+    function renderNotifications(items) {
+        state.lastNotifications = items || [];
+        el.notificationList.innerHTML = "";
+        if (!items || items.length === 0) {
+            const empty = document.createElement("div");
+            empty.className = "notification";
+            empty.textContent = "No notifications.";
+            el.notificationList.appendChild(empty);
+            return;
+        }
+
+        for (const item of items) {
+            const box = document.createElement("div");
+            box.className = "notification";
+            const payload = typeof item.payload === "object" ? JSON.stringify(item.payload, null, 2) : String(item.payload);
+            box.innerHTML = `
+                <div class="title">#${item.id} ${item.title}</div>
+                <div>${item.message}</div>
+                <div class="meta">
+                    type=${item.type}, is_read=${item.is_read}, created_at=${item.created_at}
+                </div>
+                <div class="payload">${payload}</div>
+            `;
+            el.notificationList.appendChild(box);
+        }
+    }
+
+    async function api(path, method = "GET", body = null) {
+        const base = el.baseUrl.value.trim().replace(/\/$/, "");
+        const url = `${base}${path}`;
+        const headers = { "Content-Type": "application/json" };
+        if (state.accessToken) {
+            headers.Authorization = `Bearer ${state.accessToken}`;
+        }
+
+        log(`${method} ${url}`);
+        const res = await fetch(url, {
+            method,
+            headers,
+            body: body ? JSON.stringify(body) : null,
+            credentials: "include",
+        });
+
+        let data = null;
+        const text = await res.text();
+        if (text) {
+            try {
+                data = JSON.parse(text);
+            } catch {
+                data = { raw: text };
+            }
+        }
+
+        setHttpState(res.status, res.ok);
+        renderJson(data);
+        log(`-> ${res.status} ${res.ok ? "OK" : "ERROR"}`);
+        return { ok: res.ok, status: res.status, data };
+    }
+
+    function generateUniqueEmail() {
+        const stamp = Date.now();
+        return `playground_${stamp}@example.com`;
+    }
+
+    function randomPhone() {
+        const tail = String(Math.floor(Math.random() * 90000000) + 10000000);
+        return `010${tail}`;
+    }
+
+    function randomName(prefix) {
+        const n = Math.floor(Math.random() * 1000);
+        return `${prefix}${n}`;
+    }
+
+    async function signupAndLogin() {
+        if (!el.email.value.trim()) {
+            el.email.value = generateUniqueEmail();
+        }
+        if (!el.phoneNumber.value.trim()) {
+            el.phoneNumber.value = randomPhone();
+        }
+
+        const signupPayload = {
+            email: el.email.value.trim(),
+            password: el.password.value,
+            name: el.name.value.trim() || "FrontendTester",
+            gender: el.gender.value,
+            birth_date: el.birthDate.value.trim() || "1994-04-04",
+            phone_number: el.phoneNumber.value.trim(),
+        };
+
+        const signup = await api("/api/v1/auth/signup", "POST", signupPayload);
+        if (!signup.ok && signup.status !== 409) {
+            return;
+        }
+
+        const login = await api("/api/v1/auth/login", "POST", {
+            email: signupPayload.email,
+            password: signupPayload.password,
+        });
+        if (!login.ok) {
+            return;
+        }
+
+        const token = login.data && login.data.access_token ? login.data.access_token : "";
+        setToken(token);
+        log(`access token updated (${token ? "ok" : "empty"})`);
+    }
+
+    async function updateProfileTrigger() {
+        const payload = { name: randomName("UpdatedUser") };
+        const response = await api("/api/v1/users/me", "PATCH", payload);
+        if (response.ok) {
+            log("profile update completed, notification should be created");
+        }
+    }
+
+    async function listNotifications() {
+        const response = await api("/api/v1/notifications?limit=20&offset=0");
+        if (!response.ok) {
+            renderNotifications([]);
+            return;
+        }
+        const unread = response.data && typeof response.data.unread_count === "number" ? response.data.unread_count : "-";
+        el.unreadState.textContent = String(unread);
+        el.unreadState.className = "badge";
+        const items = response.data && Array.isArray(response.data.items) ? response.data.items : [];
+        renderNotifications(items);
+        if (items.length > 0) {
+            el.readNotificationId.value = String(items[0].id);
+        }
+    }
+
+    async function unreadCount() {
+        const response = await api("/api/v1/notifications/unread-count");
+        if (!response.ok) {
+            return;
+        }
+        const unread = response.data && typeof response.data.unread_count === "number" ? response.data.unread_count : "-";
+        el.unreadState.textContent = String(unread);
+        el.unreadState.className = "badge";
+    }
+
+    async function readAll() {
+        await api("/api/v1/notifications/read-all", "PATCH");
+        await unreadCount();
+        await listNotifications();
+    }
+
+    async function readOne() {
+        const id = Number(el.readNotificationId.value.trim());
+        if (!id) {
+            log("notification_id is required");
+            return;
+        }
+        await api(`/api/v1/notifications/${id}/read`, "PATCH");
+        await unreadCount();
+        await listNotifications();
+    }
+
+    function initDefaults() {
+        el.baseUrl.value = window.location.origin;
+        if (!el.email.value.trim()) {
+            el.email.value = generateUniqueEmail();
+        }
+        if (!el.phoneNumber.value.trim()) {
+            el.phoneNumber.value = randomPhone();
+        }
+        setToken("");
+        renderJson({ ready: true });
+        renderNotifications([]);
+        log("playground ready");
+    }
+
+    el.btnPrepare.addEventListener("click", signupAndLogin);
+    el.btnUpdateProfile.addEventListener("click", updateProfileTrigger);
+    el.btnList.addEventListener("click", listNotifications);
+    el.btnUnreadCount.addEventListener("click", unreadCount);
+    el.btnReadAll.addEventListener("click", readAll);
+    el.btnReadOne.addEventListener("click", readOne);
+
+    initDefaults();
+</script>
+</body>
+</html>

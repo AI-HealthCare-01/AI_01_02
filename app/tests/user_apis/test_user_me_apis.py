@@ -58,3 +58,34 @@ class TestUserMeApis(TestCase):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/v1/users/me")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    async def test_update_user_me_creates_notification(self):
+        email = "update_notification@example.com"
+        signup_data = {
+            "email": email,
+            "password": "Password123!",
+            "name": "알림전",
+            "gender": "FEMALE",
+            "birth_date": "1993-03-03",
+            "phone_number": "01090909090",
+        }
+        update_data = {"name": "알림후"}
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            await client.post("/api/v1/auth/signup", json=signup_data)
+            login_response = await client.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
+            access_token = login_response.json()["access_token"]
+            headers = {"Authorization": f"Bearer {access_token}"}
+
+            update_response = await client.patch("/api/v1/users/me", json=update_data, headers=headers)
+            assert update_response.status_code == status.HTTP_200_OK
+
+            notifications_response = await client.get("/api/v1/notifications", headers=headers)
+            assert notifications_response.status_code == status.HTTP_200_OK
+            items = notifications_response.json()["items"]
+            profile_notifications = [
+                item
+                for item in items
+                if item["payload"].get("event") == "profile_updated" and "name" in item["payload"].get("changed_fields", [])
+            ]
+            assert len(profile_notifications) == 1

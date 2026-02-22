@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.responses import ORJSONResponse
 
 from app.apis.v1 import v1_routers
+from app.apis.v2 import v2_routers
 from app.db.databases import initialize_tortoise
 
 app = FastAPI(
@@ -10,3 +11,4 @@ app = FastAPI(
 initialize_tortoise(app)
 
 app.include_router(v1_routers)
+app.include_router(v2_routers)

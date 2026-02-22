@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, status
@@ -28,16 +29,19 @@ async def login(
 ) -> Response:
     user = await auth_service.authenticate(request)
     tokens = await auth_service.login(user)
+    refresh_token = tokens["refresh_token"]
+    refresh_token_exp = datetime.fromtimestamp(refresh_token.payload["exp"], tz=UTC)
     resp = Response(
         content=LoginResponse(access_token=str(tokens["access_token"])).model_dump(), status_code=status.HTTP_200_OK
     )
     resp.set_cookie(
         key="refresh_token",
-        value=str(tokens["refresh_token"]),
+        value=str(refresh_token),
         httponly=True,
         secure=True if config.ENV == Env.PROD else False,
         domain=config.COOKIE_DOMAIN or None,
-        expires=tokens["access_token"].payload["exp"],
+        expires=refresh_token_exp,
+        max_age=config.REFRESH_TOKEN_EXPIRE_MINUTES * 60,
     )
     return resp
 
