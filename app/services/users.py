@@ -18,10 +18,10 @@ class UserManageService:
     async def update_user(self, user: User, data: UserUpdateRequest) -> User:
         update_payload = data.model_dump(exclude_none=True)
         if data.email:
-            await self.auth_service.check_email_exists(data.email)
+            await self.auth_service.check_email_exists(data.email, exclude_user_id=user.id)
         if data.phone_number:
             normalized_phone_number = normalize_phone_number(data.phone_number)
-            await self.auth_service.check_phone_number_exists(normalized_phone_number)
+            await self.auth_service.check_phone_number_exists(normalized_phone_number, exclude_user_id=user.id)
             data.phone_number = normalized_phone_number
             update_payload["phone_number"] = normalized_phone_number
         async with in_transaction():

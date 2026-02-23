@@ -1,6 +1,6 @@
 # Project Memory (Living Baseline)
 
-Last updated: 2026-02-20
+Last updated: 2026-02-23
 Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.mypy_cache`, IDE cache).
 
 ## 1) Current Product State
@@ -10,6 +10,10 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - `ai_worker/`: Redis queue consumer + OCR/Guide placeholder processors + heartbeat + retry/state-transition guard.
 - Infra includes MySQL, Redis, Nginx, Docker Compose, CI workflow, and deployment scripts.
 - Notification feature appears recently added and partially versioned (`v1` real API, `v2` capability placeholder).
+- Canonical planning docs are split and versioned:
+- `docs/REQUIREMENTS_DEFINITION.md` (v1.8)
+- `docs/API_SPECIFICATION.md` (v1.2)
+- `docs/TEAM_DEVELOPMENT_GUIDELINE.md` (v2.1)
 
 ## 2) Repository Map (Meaningful Files)
 
@@ -69,6 +73,13 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - `app/tests/ocr_worker/*`
 - `app/tests/guide_apis/*`
 - `app/tests/guide_worker/*`
+- Project docs:
+- `docs/REQUIREMENTS_DEFINITION.md`
+- `docs/API_SPECIFICATION.md`
+- `docs/TEAM_DEVELOPMENT_GUIDELINE.md`
+- `docs/ADHD_CARE_SERVICE_BLUEPRINT.md`
+- `docs/PROJECT_MEMORY.md`
+- `docs/PROJECT_FILE_INDEX.md`
 
 ## 3) Core Architecture and Flow
 
@@ -95,6 +106,7 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - Job create endpoint validates document ownership, creates `QUEUED` job, then publishes `job_id` to Redis list queue.
 - Job status endpoint returns job state and timestamps for requesting owner only.
 - Job result endpoint returns OCR result when status is `SUCCEEDED`.
+- Worker success/terminal-failure 처리 후 원본 업로드 파일을 즉시 폐기한다.
 - Guide flow:
 - Job create endpoint validates OCR ownership and `SUCCEEDED` status, creates `QUEUED` guide job, and publishes `job_id` to Redis list queue.
 - Job status endpoint returns guide state and timestamps for requesting owner only.
@@ -200,7 +212,7 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - Local execution command used:
 - `.venv\Scripts\python.exe -m pytest app/tests -q`
 - Result at analysis time:
-- `39 passed in 16.78s`
+- `40 passed in 17.78s`
 - Covered suites:
 - auth signup/login/refresh
 - user me read/update
@@ -250,6 +262,7 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - OCR upload/job-create/status/result APIs + schema (REQ-005~009 basic).
 - OCR status-transition/retry guard rails in worker logic (REQ-103 partial).
 - OCR retry backoff + dead-letter queue baseline implemented.
+- OCR worker raw image disposal after processing completion/final failure (REQ-127 baseline).
 - Guide job-create/status/result APIs + safety notice + worker placeholder generation (REQ-010~013 basic).
 - Guide failure status baseline implemented (REQ-025 partial).
 - Not implemented yet (major):
@@ -263,18 +276,9 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 
 ## 11) Known Working Tree Situation (at scan time)
 
-- Repository is dirty with multiple modified and untracked files.
-- Notably includes new notification-related files under:
-- `app/apis/v1/dev_routers.py`
-- `app/apis/v1/notification_routers.py`
-- `app/apis/v2/notification_routers.py`
-- `app/models/notifications.py`
-- `app/repositories/notification_repository.py`
-- `app/services/notifications.py`
-- `app/tests/notification_apis/*`
-- `app/tests/dev_apis/*`
-- `app/templates/notification_playground.html`
-- plus migration and docs additions.
+- Repository has local working-tree changes (document updates/renames in progress on `main`).
+- Always re-check exact pending files via `git status --short --branch` before commit/push.
+- HEAD commit is `0b93db3` on branch `main` (dated 2026-02-22).
 
 ## 12) Memory Update Protocol
 
@@ -285,6 +289,10 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - Data Model snapshot
 - Requirement gap mapping
 - Test baseline section (include command + result)
+- Keep requirements/API/team guideline documents synchronized when contracts change:
+- `docs/REQUIREMENTS_DEFINITION.md`
+- `docs/API_SPECIFICATION.md`
+- `docs/TEAM_DEVELOPMENT_GUIDELINE.md`
 - If behavior changes, add date-stamped note under this section:
 - Format: `YYYY-MM-DD: <what changed + affected files>`
 - 2026-02-20: full-scan baseline revalidated, tests re-run (`16 passed`).
@@ -294,3 +302,17 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - 2026-02-20: OCR retry_count/max_retries/failure_code + strict transition guard + retry loop (`30 passed`).
 - 2026-02-20: OCR exponential backoff retry queue + dead-letter queue introduced (`31 passed`).
 - 2026-02-20: Guide domain/migration + guide API + guide worker placeholder pipeline added (`39 passed`).
+- 2026-02-23: full project rescan revalidated; test baseline re-run (`39 passed in 16.79s`).
+- 2026-02-23: planning doc renamed from `docs/READ.md` to `docs/ADHD_CARE_SERVICE_BLUEPRINT.md`.
+- 2026-02-23: file index/memory docs re-synced to current repository layout.
+- 2026-02-23: `ruff format` 적용 및 Redis/Tortoise 관련 `mypy` 타입 오류 20건 정리.
+- 2026-02-23: 검증 재실행 완료 (`ruff check`, `ruff format --check`, `mypy`, `pytest 39 passed in 17.08s`).
+- 2026-02-23: 요구사항/계약 문서 분리본 최신화(`REQUIREMENTS v1.7`, `API SPEC v1.1`) 및 팀 가이드(`docs/TEAM_DEVELOPMENT_GUIDELINE.md`) 추가.
+- 2026-02-23: `README.md`를 템플릿 설명에서 프로젝트 실사용 가이드 중심으로 개편.
+- 2026-02-23: `docs/PROJECT_FILE_INDEX.md` 재생성(신규 문서 포함) 및 검증 재실행 완료 (`ruff`, `mypy`, `pytest 39 passed in 17.03s`).
+- 2026-02-23: 팀 가이드 v2.0으로 전면 개편(5대 주요 구현 기능 기준 재작성).
+- 2026-02-23: API 명세 v1.2로 동기화(챗봇 출처/재질문/자동세션 종료 메타, 이미지분석 다중객체/품질실패 상태, OCR 원본 폐기 정책, 누락 객체 정의 보강).
+- 2026-02-23: 팀 가이드 v2.1로 버전 동기화(API 명세 v1.2 기준 참조 버전/이력 정합화).
+- 2026-02-23: PDF 원문 보존용 RAW 문서 재생성(`docs/PROJECT_TOPIC_AND_EVALUATION_CRITERIA_RAW.json`, `docs/PROJECT_TOPIC_AND_EVALUATION_CRITERIA_RAW.md`) 및 무결성 검증 완료.
+- 2026-02-23: OCR 워커에 원본 파일 즉시 폐기 로직 반영(성공/최종실패), 사용자 본인 이메일/전화번호 재저장 시 중복 충돌 오탐 수정, 검증 재실행(`40 passed`).
+- 2026-02-23: RAW 원문 보존 파일(`docs/PROJECT_TOPIC_AND_EVALUATION_CRITERIA_RAW.json`, `docs/PROJECT_TOPIC_AND_EVALUATION_CRITERIA_RAW.md`) 삭제 및 문서 참조 정리.

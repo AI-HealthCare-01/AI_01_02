@@ -31,6 +31,7 @@ class OcrFailureCode(StrEnum):
 
 class Document(models.Model):
     id = fields.BigIntField(primary_key=True)
+    user_id: int
     user: ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User",
         related_name="documents",
@@ -50,6 +51,8 @@ class Document(models.Model):
 
 class OcrJob(models.Model):
     id = fields.BigIntField(primary_key=True)
+    user_id: int
+    document_id: int
     user: ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User",
         related_name="ocr_jobs",
@@ -78,6 +81,7 @@ class OcrJob(models.Model):
 
 class OcrResult(models.Model):
     id = fields.BigIntField(primary_key=True)
+    job_id: int
     job: OneToOneRelation[OcrJob] = fields.OneToOneField(
         "models.OcrJob",
         related_name="result",

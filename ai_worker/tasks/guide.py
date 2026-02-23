@@ -1,6 +1,8 @@
 import asyncio
+from collections.abc import Awaitable
 from datetime import datetime
 from logging import Logger
+from typing import Any, cast
 
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
@@ -39,7 +41,10 @@ class GuideQueueConsumer:
 
     async def pop_job_id(self) -> int | None:
         try:
-            popped = await self.client.blpop(config.GUIDE_QUEUE_KEY, timeout=config.GUIDE_QUEUE_BLOCK_TIMEOUT_SECONDS)
+            popped = await cast(
+                Awaitable[list[Any] | None],
+                self.client.blpop([config.GUIDE_QUEUE_KEY], timeout=config.GUIDE_QUEUE_BLOCK_TIMEOUT_SECONDS),
+            )
         except RedisError:
             self.logger.warning("redis guide queue consume failed")
             await asyncio.sleep(1)

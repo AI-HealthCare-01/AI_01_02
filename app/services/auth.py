@@ -65,10 +65,10 @@ class AuthService:
         await self.user_repo.update_last_login(user.id)
         return self.jwt_service.issue_jwt_pair(user)
 
-    async def check_email_exists(self, email: str | EmailStr) -> None:
-        if await self.user_repo.exists_by_email(email):
+    async def check_email_exists(self, email: str | EmailStr, *, exclude_user_id: int | None = None) -> None:
+        if await self.user_repo.exists_by_email(str(email), exclude_user_id=exclude_user_id):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="이미 사용중인 이메일입니다.")
 
-    async def check_phone_number_exists(self, phone_number: str) -> None:
-        if await self.user_repo.exists_by_phone_number(phone_number):
+    async def check_phone_number_exists(self, phone_number: str, *, exclude_user_id: int | None = None) -> None:
+        if await self.user_repo.exists_by_phone_number(phone_number, exclude_user_id=exclude_user_id):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="이미 사용중인 휴대폰 번호입니다.")

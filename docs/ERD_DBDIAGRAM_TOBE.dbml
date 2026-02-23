@@ -1,0 +1,891 @@
+Project AI_Health_ToBe {
+  database_type: "MySQL"
+  Note: 'To-Be ERD for final target architecture (development guide). Built from REQUIREMENTS_DEFINITION + API_SPECIFICATION + TEAM_DEVELOPMENT_GUIDELINE.'
+}
+
+Enum gender_enum {
+  MALE
+  FEMALE
+}
+
+Enum notification_type_enum {
+  SYSTEM
+  HEALTH_ALERT
+  REPORT_READY
+  GUIDE_READY
+  REMINDER_DUE
+  MEDICATION_DDAY
+}
+
+Enum document_type_enum {
+  MEDICAL_RECORD
+  PRESCRIPTION
+  MEDICATION_BAG
+}
+
+Enum storage_status_enum {
+  TEMPORARY
+  DISPOSED
+}
+
+Enum ocr_job_status_enum {
+  QUEUED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+Enum ocr_failure_code_enum {
+  FILE_NOT_FOUND
+  INVALID_STATE_TRANSITION
+  PROCESSING_ERROR
+  LOW_CONFIDENCE
+  UPSTREAM_OCR_ERROR
+  UPSTREAM_TIMEOUT
+}
+
+Enum ocr_review_status_enum {
+  PENDING
+  CONFIRMED
+  CORRECTED
+}
+
+Enum intake_time_enum {
+  MORNING
+  LUNCH
+  DINNER
+  BEDTIME
+  PRN
+}
+
+Enum administration_timing_enum {
+  BEFORE_MEAL
+  AFTER_MEAL
+  WITH_MEAL
+  IRRELEVANT
+}
+
+Enum guide_job_status_enum {
+  QUEUED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+Enum guide_failure_code_enum {
+  OCR_NOT_READY
+  OCR_RESULT_NOT_FOUND
+  INVALID_STATE_TRANSITION
+  PROCESSING_ERROR
+  UPSTREAM_LLM_ERROR
+  UPSTREAM_TIMEOUT
+}
+
+Enum guide_risk_level_enum {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+Enum source_trace_type_enum {
+  OCR_RESULT
+  HEALTH_PROFILE
+  KNOWLEDGE_DOCUMENT
+  CHAT_CONTEXT
+}
+
+Enum chat_session_status_enum {
+  ACTIVE
+  CLOSED
+}
+
+Enum chat_role_enum {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+Enum chat_intent_enum {
+  SMALLTALK
+  MEDICAL
+  CRISIS
+}
+
+Enum guardrail_type_enum {
+  SUICIDE
+  SELF_HARM
+  CRIME
+  DRUG_ABUSE
+}
+
+Enum guardrail_action_enum {
+  BLOCK_AND_EMERGENCY_MESSAGE
+  ALLOW
+}
+
+Enum pill_analysis_status_enum {
+  QUEUED
+  PROCESSING
+  SUCCEEDED
+  UNREADABLE
+  OOD
+  MULTI_OBJECT
+  FAILED
+}
+
+Enum pill_rejection_reason_enum {
+  LOW_CONFIDENCE
+  BLUR
+  CROPPED
+  OOD
+  MULTI_OBJECT
+}
+
+Enum misclassification_status_enum {
+  RECEIVED
+  REVIEWED
+  REFLECTED
+  REJECTED
+}
+
+Enum reminder_channel_enum {
+  IN_APP
+  PUSH
+  EMAIL
+  SMS
+}
+
+Enum reminder_delivery_status_enum {
+  SENT
+  FAILED
+  SKIPPED
+}
+
+Enum model_domain_enum {
+  OCR
+  GUIDE
+  CHAT
+  PILL
+  EMBEDDING
+}
+
+Enum prompt_domain_enum {
+  OCR_PARSING
+  GUIDE
+  CHAT
+}
+
+Enum pipeline_kind_enum {
+  OCR
+  GUIDE
+  CHAT
+  PILL
+}
+
+Enum inference_status_enum {
+  SUCCEEDED
+  FAILED
+  BLOCKED
+}
+
+Enum upstream_kind_enum {
+  OCR_API
+  LLM_API
+  VECTOR_DB
+}
+
+Table users {
+  id bigint [pk, increment, not null]
+  email varchar(255) [not null, unique]
+  hashed_password varchar(128) [not null]
+  name varchar(50) [not null]
+  gender gender_enum [not null]
+  birthday date [not null]
+  phone_number varchar(20) [not null, unique]
+  is_active boolean [not null, default: true]
+  is_admin boolean [not null, default: false]
+  last_login datetime(6)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  Note: 'Unique constraints on email/phone are enforced at DB level in To-Be.'
+}
+
+Table health_profiles {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null, unique]
+  basic_info json [not null]
+  medical_history json [not null]
+  lifestyle_input json [not null]
+  sleep_input json [not null]
+  nutrition_input json [not null]
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (user_id) [name: 'idx_health_profiles_user_id', unique]
+  }
+}
+
+Table medications {
+  id bigint [pk, increment, not null]
+  drug_code varchar(100) [not null, unique]
+  name_ko varchar(255) [not null]
+  name_en varchar(255)
+  ingredient varchar(255) [not null]
+  dosage_form varchar(100)
+  strength_label varchar(100)
+  is_adhd_target boolean [not null, default: true]
+  can_take_empty_stomach boolean
+  can_split boolean
+  guidance json [not null]
+  side_effects json [not null]
+  source_url varchar(1000)
+  is_active boolean [not null, default: true]
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (name_ko) [name: 'idx_medications_name_ko']
+    (ingredient) [name: 'idx_medications_ingredient']
+  }
+}
+
+Table knowledge_sources {
+  id bigint [pk, increment, not null]
+  name varchar(255) [not null]
+  organization varchar(255)
+  base_url varchar(1000)
+  reliability_tier varchar(20) [not null, default: 'TRUSTED']
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+}
+
+Table knowledge_documents {
+  id bigint [pk, increment, not null]
+  source_id bigint [not null]
+  title varchar(500) [not null]
+  url varchar(1000)
+  document_type varchar(100)
+  language varchar(20) [not null, default: 'ko']
+  version_tag varchar(100)
+  checksum_sha256 char(64)
+  published_at datetime(6)
+  effective_from datetime(6)
+  effective_to datetime(6)
+  is_active boolean [not null, default: true]
+  ingested_at datetime(6)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (source_id, is_active) [name: 'idx_knowledge_documents_source_active']
+    (title) [name: 'idx_knowledge_documents_title']
+  }
+}
+
+Table knowledge_chunks {
+  id bigint [pk, increment, not null]
+  knowledge_document_id bigint [not null]
+  chunk_index int [not null]
+  content longtext [not null]
+  lexical_content longtext [not null]
+  token_count int
+  chunk_hash char(64)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (knowledge_document_id, chunk_index) [name: 'idx_knowledge_chunks_doc_chunk', unique]
+  }
+}
+
+Table vector_index_mappings {
+  id bigint [pk, increment, not null]
+  knowledge_chunk_id bigint [not null]
+  provider varchar(100) [not null]
+  index_name varchar(255) [not null]
+  vector_id varchar(255) [not null]
+  embedding_model varchar(255) [not null]
+  embedding_dim int
+  is_active boolean [not null, default: true]
+  embedded_at datetime(6) [not null]
+
+  indexes {
+    (knowledge_chunk_id, provider, index_name) [name: 'idx_vector_chunk_provider_index', unique]
+    (provider, index_name, vector_id) [name: 'idx_vector_provider_index_vector', unique]
+  }
+}
+
+Table documents {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  document_type document_type_enum [not null]
+  original_file_name varchar(255) [not null]
+  mime_type varchar(100) [not null]
+  file_size_bytes bigint [not null]
+  file_sha256 char(64)
+  temporary_object_path varchar(500)
+  storage_status storage_status_enum [not null, default: 'TEMPORARY']
+  uploaded_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  disposed_at datetime(6)
+
+  Note: 'REQ-127: OCR raw file is temporary and must be disposed immediately after OCR/parsing.'
+
+  indexes {
+    (user_id, uploaded_at) [name: 'idx_documents_user_uploaded_at']
+    (document_type) [name: 'idx_documents_document_type']
+    (storage_status, disposed_at) [name: 'idx_documents_storage_disposed_at']
+  }
+}
+
+Table ocr_jobs {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  document_id bigint [not null]
+  status ocr_job_status_enum [not null, default: 'QUEUED']
+  retry_count int [not null, default: 0]
+  max_retries int [not null, default: 3]
+  failure_code ocr_failure_code_enum
+  error_message longtext
+  queued_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  started_at datetime(6)
+  completed_at datetime(6)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (user_id, status) [name: 'idx_ocr_jobs_user_status']
+    (document_id, created_at) [name: 'idx_ocr_jobs_document_created_at']
+    (status, retry_count) [name: 'idx_ocr_jobs_status_retry_count']
+  }
+}
+
+Table ocr_results {
+  id bigint [pk, increment, not null]
+  job_id bigint [not null, unique]
+  raw_text longtext [not null]
+  structured_data json [not null]
+  overall_confidence decimal(5,4)
+  needs_user_review boolean [not null, default: false]
+  ocr_engine_provider varchar(100)
+  ocr_engine_version varchar(100)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+}
+
+Table ocr_raw_blocks {
+  id bigint [pk, increment, not null]
+  ocr_result_id bigint [not null]
+  block_index int [not null]
+  text longtext [not null]
+  bbox json [not null]
+  confidence decimal(5,4)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (ocr_result_id, block_index) [name: 'idx_ocr_raw_blocks_result_index', unique]
+  }
+}
+
+Table ocr_medications {
+  id bigint [pk, increment, not null]
+  ocr_result_id bigint [not null]
+  line_index int [not null]
+  raw_drug_name varchar(255) [not null]
+  normalized_drug_name varchar(255)
+  medication_id bigint
+  dose_mg decimal(8,3)
+  frequency_per_day int
+  dosage_per_once decimal(6,2)
+  intake_time intake_time_enum
+  administration_timing administration_timing_enum
+  dispensed_date date
+  total_days int
+  confidence decimal(5,4)
+  field_confidence json
+  is_validated boolean [not null, default: false]
+  validation_reason varchar(255)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (ocr_result_id, line_index) [name: 'idx_ocr_medications_result_line', unique]
+    (medication_id) [name: 'idx_ocr_medications_medication_id']
+  }
+}
+
+Table ocr_result_reviews {
+  id bigint [pk, increment, not null]
+  ocr_result_id bigint [not null]
+  user_id bigint [not null]
+  review_status ocr_review_status_enum [not null, default: 'PENDING']
+  confirmed boolean [not null, default: false]
+  comment longtext
+  reviewed_at datetime(6)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (ocr_result_id, created_at) [name: 'idx_ocr_result_reviews_result_created_at']
+  }
+}
+
+Table ocr_review_medications {
+  id bigint [pk, increment, not null]
+  review_id bigint [not null]
+  line_index int [not null]
+  medication_id bigint
+  drug_name varchar(255) [not null]
+  dose_mg decimal(8,3)
+  frequency_per_day int
+  dosage_per_once decimal(6,2)
+  intake_time intake_time_enum
+  administration_timing administration_timing_enum
+  dispensed_date date
+  total_days int
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (review_id, line_index) [name: 'idx_ocr_review_medications_review_line', unique]
+  }
+}
+
+Table guide_jobs {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  ocr_job_id bigint [not null]
+  status guide_job_status_enum [not null, default: 'QUEUED']
+  retry_count int [not null, default: 0]
+  max_retries int [not null, default: 3]
+  failure_code guide_failure_code_enum
+  error_message longtext
+  queued_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  started_at datetime(6)
+  completed_at datetime(6)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (user_id, status) [name: 'idx_guide_jobs_user_status']
+    (ocr_job_id, created_at) [name: 'idx_guide_jobs_ocr_job_created_at']
+    (status, retry_count) [name: 'idx_guide_jobs_status_retry_count']
+  }
+}
+
+Table analysis_summaries {
+  id bigint [pk, increment, not null]
+  guide_job_id bigint [not null, unique]
+  bmi decimal(6,3)
+  weight_status varchar(30)
+  weighted_exercise_score decimal(6,3)
+  total_digital_time_hours decimal(6,2)
+  substance_risk varchar(20)
+  calculated_sleep_hours decimal(4,2)
+  sleep_quality_status varchar(20)
+  nutrition_status varchar(30)
+  malnutrition_risk boolean
+  summary_json json [not null]
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+}
+
+Table guide_results {
+  id bigint [pk, increment, not null]
+  job_id bigint [not null, unique]
+  medication_guide json [not null]
+  health_coaching json [not null]
+  risk_flags json [not null]
+  safety_notice longtext [not null]
+  structured_data json [not null]
+  risk_level guide_risk_level_enum [not null, default: 'MEDIUM']
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+}
+
+Table guide_source_traces {
+  id bigint [pk, increment, not null]
+  guide_result_id bigint [not null]
+  source_type source_trace_type_enum [not null]
+  ocr_result_id bigint
+  health_profile_id bigint
+  knowledge_document_id bigint
+  relevance_score decimal(6,4)
+  excerpt longtext
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (guide_result_id, source_type) [name: 'idx_guide_source_traces_result_type']
+  }
+}
+
+Table chat_sessions {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  title varchar(255)
+  status chat_session_status_enum [not null, default: 'ACTIVE']
+  auto_close_after_minutes smallint [not null, default: 20]
+  last_activity_at datetime(6)
+  closed_at datetime(6)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (user_id, status) [name: 'idx_chat_sessions_user_status']
+    (status, last_activity_at) [name: 'idx_chat_sessions_status_last_activity']
+  }
+}
+
+Table chat_messages {
+  id bigint [pk, increment, not null]
+  session_id bigint [not null]
+  role chat_role_enum [not null]
+  intent chat_intent_enum
+  content longtext [not null]
+  needs_clarification boolean [not null, default: false]
+  similarity_top_score decimal(6,4)
+  model_version_id bigint
+  prompt_version_id bigint
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (session_id, created_at) [name: 'idx_chat_messages_session_created_at']
+    (role) [name: 'idx_chat_messages_role']
+  }
+}
+
+Table chat_message_references {
+  id bigint [pk, increment, not null]
+  message_id bigint [not null]
+  knowledge_document_id bigint
+  knowledge_chunk_id bigint
+  title varchar(500) [not null]
+  source varchar(255) [not null]
+  url varchar(1000)
+  score decimal(6,4)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (message_id, score) [name: 'idx_chat_message_references_message_score']
+  }
+}
+
+Table chat_guardrail_events {
+  id bigint [pk, increment, not null]
+  session_id bigint [not null]
+  message_id bigint [not null]
+  guardrail_type guardrail_type_enum [not null]
+  action guardrail_action_enum [not null]
+  trigger_terms json
+  emergency_message longtext
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (session_id, created_at) [name: 'idx_chat_guardrail_events_session_created_at']
+    (guardrail_type, created_at) [name: 'idx_chat_guardrail_events_type_created_at']
+  }
+}
+
+Table pill_analyses {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  status pill_analysis_status_enum [not null, default: 'QUEUED']
+  temporary_image_path varchar(500)
+  image_sha256 char(64)
+  image_width int
+  image_height int
+  preprocess_version varchar(100)
+  model_version_id bigint
+  predicted_medication_id bigint
+  predicted_drug_name_snapshot varchar(255)
+  confidence decimal(5,4)
+  detected_object_count int
+  rejection_reason pill_rejection_reason_enum
+  message longtext
+  guidance json
+  error_code varchar(100)
+  error_message longtext
+  requested_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  started_at datetime(6)
+  completed_at datetime(6)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (user_id, requested_at) [name: 'idx_pill_analyses_user_requested_at']
+    (status, requested_at) [name: 'idx_pill_analyses_status_requested_at']
+  }
+}
+
+Table pill_analysis_candidates {
+  id bigint [pk, increment, not null]
+  analysis_id bigint [not null]
+  medication_id bigint [not null]
+  rank_order int [not null]
+  score decimal(6,4) [not null]
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (analysis_id, rank_order) [name: 'idx_pill_candidates_analysis_rank', unique]
+    (analysis_id, medication_id) [name: 'idx_pill_candidates_analysis_medication', unique]
+  }
+}
+
+Table pill_misclassification_reports {
+  id bigint [pk, increment, not null]
+  analysis_id bigint [not null]
+  reported_by_user_id bigint [not null]
+  correct_medication_id bigint
+  correct_drug_name varchar(255)
+  reason varchar(255)
+  comment longtext
+  status misclassification_status_enum [not null, default: 'RECEIVED']
+  reviewed_by_user_id bigint
+  reviewed_at datetime(6)
+  reflected_at datetime(6)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (analysis_id, created_at) [name: 'idx_pill_misreports_analysis_created_at']
+    (status, created_at) [name: 'idx_pill_misreports_status_created_at']
+  }
+}
+
+Table notifications {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  type notification_type_enum [not null, default: 'SYSTEM']
+  title varchar(100) [not null]
+  message longtext [not null]
+  is_read boolean [not null, default: false]
+  read_at datetime(6)
+  payload json [not null]
+  target_type varchar(50)
+  target_id bigint
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (user_id, is_read) [name: 'idx_notifications_user_is_read']
+    (user_id, created_at) [name: 'idx_notifications_user_created_at']
+    (target_type, target_id) [name: 'idx_notifications_target']
+  }
+}
+
+Table medication_reminders {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  medication_id bigint
+  medication_name_snapshot varchar(255) [not null]
+  dose_text varchar(100)
+  start_date date
+  end_date date
+  timezone varchar(50) [not null, default: 'Asia/Seoul']
+  enabled boolean [not null, default: true]
+  last_sent_at datetime(6)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (user_id, enabled) [name: 'idx_medication_reminders_user_enabled']
+    (user_id, medication_name_snapshot) [name: 'idx_medication_reminders_user_med_name']
+  }
+}
+
+Table reminder_schedule_times {
+  id bigint [pk, increment, not null]
+  reminder_id bigint [not null]
+  time_of_day varchar(5) [not null, note: 'HH:MM']
+  days_of_week varchar(20) [not null, default: 'MON,TUE,WED,THU,FRI,SAT,SUN']
+  is_active boolean [not null, default: true]
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (reminder_id, time_of_day) [name: 'idx_reminder_schedule_reminder_time', unique]
+  }
+}
+
+Table reminder_delivery_logs {
+  id bigint [pk, increment, not null]
+  reminder_id bigint [not null]
+  channel reminder_channel_enum [not null, default: 'IN_APP']
+  delivery_status reminder_delivery_status_enum [not null]
+  scheduled_for datetime(6) [not null]
+  sent_at datetime(6)
+  notification_id bigint
+  error_code varchar(100)
+  error_message longtext
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (reminder_id, scheduled_for) [name: 'idx_reminder_delivery_reminder_scheduled_for']
+    (delivery_status, created_at) [name: 'idx_reminder_delivery_status_created_at']
+  }
+}
+
+Table medication_supply_states {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  medication_id bigint [not null]
+  source_ocr_medication_id bigint
+  dispensed_date date [not null]
+  total_days int [not null]
+  daily_intake_count decimal(6,2) [not null]
+  estimated_depletion_date date [not null]
+  last_recalculated_at datetime(6)
+  is_active boolean [not null, default: true]
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (user_id, medication_id, dispensed_date) [name: 'idx_supply_user_med_dispensed', unique]
+    (estimated_depletion_date, is_active) [name: 'idx_supply_depletion_active']
+  }
+}
+
+Table model_versions {
+  id bigint [pk, increment, not null]
+  domain model_domain_enum [not null]
+  provider varchar(100) [not null]
+  model_name varchar(255) [not null]
+  model_version varchar(100) [not null]
+  parameters json [not null]
+  is_active boolean [not null, default: true]
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (domain, provider, model_name, model_version) [name: 'idx_model_versions_unique', unique]
+  }
+}
+
+Table prompt_versions {
+  id bigint [pk, increment, not null]
+  domain prompt_domain_enum [not null]
+  version_tag varchar(100) [not null]
+  template_text longtext [not null]
+  constraints json [not null]
+  is_active boolean [not null, default: true]
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (domain, version_tag) [name: 'idx_prompt_versions_unique', unique]
+  }
+}
+
+Table inference_audits {
+  id bigint [pk, increment, not null]
+  request_id varchar(100) [not null, unique]
+  pipeline_kind pipeline_kind_enum [not null]
+  status inference_status_enum [not null]
+  user_id bigint
+  ocr_job_id bigint
+  guide_job_id bigint
+  chat_message_id bigint
+  pill_analysis_id bigint
+  model_version_id bigint
+  prompt_version_id bigint
+  input_tokens int
+  output_tokens int
+  latency_ms int
+  similarity_top_score decimal(6,4)
+  needs_clarification boolean
+  error_code varchar(100)
+  error_message longtext
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (pipeline_kind, created_at) [name: 'idx_inference_audits_pipeline_created_at']
+    (user_id, created_at) [name: 'idx_inference_audits_user_created_at']
+  }
+}
+
+Table external_api_call_logs {
+  id bigint [pk, increment, not null]
+  inference_audit_id bigint
+  upstream_kind upstream_kind_enum [not null]
+  provider varchar(100) [not null]
+  endpoint varchar(500)
+  attempt_no int [not null, default: 1]
+  status_code int
+  timeout_ms int
+  latency_ms int
+  error_code varchar(100)
+  error_message longtext
+  started_at datetime(6) [not null]
+  ended_at datetime(6)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (upstream_kind, provider, created_at) [name: 'idx_external_api_upstream_provider_created']
+    (inference_audit_id, created_at) [name: 'idx_external_api_audit_created']
+  }
+}
+
+// Core user relations
+Ref: users.id - health_profiles.user_id [delete: cascade]
+Ref: users.id < notifications.user_id [delete: cascade]
+
+// Knowledge base / RAG
+Ref: knowledge_sources.id < knowledge_documents.source_id [delete: cascade]
+Ref: knowledge_documents.id < knowledge_chunks.knowledge_document_id [delete: cascade]
+Ref: knowledge_chunks.id < vector_index_mappings.knowledge_chunk_id [delete: cascade]
+
+// OCR pipeline
+Ref: users.id < documents.user_id [delete: cascade]
+Ref: users.id < ocr_jobs.user_id [delete: cascade]
+Ref: documents.id < ocr_jobs.document_id [delete: cascade]
+Ref: ocr_jobs.id - ocr_results.job_id [delete: cascade]
+Ref: ocr_results.id < ocr_raw_blocks.ocr_result_id [delete: cascade]
+Ref: ocr_results.id < ocr_medications.ocr_result_id [delete: cascade]
+Ref: medications.id < ocr_medications.medication_id
+Ref: ocr_results.id < ocr_result_reviews.ocr_result_id [delete: cascade]
+Ref: users.id < ocr_result_reviews.user_id [delete: cascade]
+Ref: ocr_result_reviews.id < ocr_review_medications.review_id [delete: cascade]
+Ref: medications.id < ocr_review_medications.medication_id
+
+// Guide / analysis pipeline
+Ref: users.id < guide_jobs.user_id [delete: cascade]
+Ref: ocr_jobs.id < guide_jobs.ocr_job_id [delete: cascade]
+Ref: guide_jobs.id - analysis_summaries.guide_job_id [delete: cascade]
+Ref: guide_jobs.id - guide_results.job_id [delete: cascade]
+Ref: guide_results.id < guide_source_traces.guide_result_id [delete: cascade]
+Ref: ocr_results.id < guide_source_traces.ocr_result_id
+Ref: health_profiles.id < guide_source_traces.health_profile_id
+Ref: knowledge_documents.id < guide_source_traces.knowledge_document_id
+
+// Chatbot
+Ref: users.id < chat_sessions.user_id [delete: cascade]
+Ref: chat_sessions.id < chat_messages.session_id [delete: cascade]
+Ref: chat_messages.id < chat_message_references.message_id [delete: cascade]
+Ref: knowledge_documents.id < chat_message_references.knowledge_document_id
+Ref: knowledge_chunks.id < chat_message_references.knowledge_chunk_id
+Ref: chat_sessions.id < chat_guardrail_events.session_id [delete: cascade]
+Ref: chat_messages.id < chat_guardrail_events.message_id [delete: cascade]
+
+// Pill analysis
+Ref: users.id < pill_analyses.user_id [delete: cascade]
+Ref: model_versions.id < pill_analyses.model_version_id
+Ref: medications.id < pill_analyses.predicted_medication_id
+Ref: pill_analyses.id < pill_analysis_candidates.analysis_id [delete: cascade]
+Ref: medications.id < pill_analysis_candidates.medication_id
+Ref: pill_analyses.id < pill_misclassification_reports.analysis_id [delete: cascade]
+Ref: users.id < pill_misclassification_reports.reported_by_user_id [delete: cascade]
+Ref: users.id < pill_misclassification_reports.reviewed_by_user_id
+Ref: medications.id < pill_misclassification_reports.correct_medication_id
+
+// Reminder / D-day
+Ref: users.id < medication_reminders.user_id [delete: cascade]
+Ref: medications.id < medication_reminders.medication_id
+Ref: medication_reminders.id < reminder_schedule_times.reminder_id [delete: cascade]
+Ref: medication_reminders.id < reminder_delivery_logs.reminder_id [delete: cascade]
+Ref: notifications.id < reminder_delivery_logs.notification_id
+Ref: users.id < medication_supply_states.user_id [delete: cascade]
+Ref: medications.id < medication_supply_states.medication_id
+Ref: ocr_medications.id < medication_supply_states.source_ocr_medication_id
+
+// Ops / audit
+Ref: model_versions.id < chat_messages.model_version_id
+Ref: prompt_versions.id < chat_messages.prompt_version_id
+Ref: users.id < inference_audits.user_id
+Ref: ocr_jobs.id < inference_audits.ocr_job_id
+Ref: guide_jobs.id < inference_audits.guide_job_id
+Ref: chat_messages.id < inference_audits.chat_message_id
+Ref: pill_analyses.id < inference_audits.pill_analysis_id
+Ref: model_versions.id < inference_audits.model_version_id
+Ref: prompt_versions.id < inference_audits.prompt_version_id
+Ref: inference_audits.id < external_api_call_logs.inference_audit_id [delete: set null]

@@ -25,6 +25,7 @@ class TestOcrWorkerTasks(TestCase):
         logger = Mock()
         scheduled_retries: list[tuple[int, int]] = []
         dead_letters: list[dict] = []
+        file_exists_after_process = True
 
         async def _schedule_retry(job_id: int, retry_count: int) -> None:
             scheduled_retries.append((job_id, retry_count))
@@ -56,6 +57,7 @@ class TestOcrWorkerTasks(TestCase):
                     schedule_retry=_schedule_retry,
                     send_to_dead_letter=_dead_letter,
                 )
+            file_exists_after_process = absolute_file_path.exists()
 
         await job.refresh_from_db()
         result = await OcrResult.get(job_id=job.id)
@@ -65,6 +67,7 @@ class TestOcrWorkerTasks(TestCase):
         assert job.failure_code is None
         assert result.job_id == job.id
         assert "success.png" in result.extracted_text
+        assert file_exists_after_process is False
         assert scheduled_retries == []
         assert dead_letters == []
 

@@ -48,7 +48,9 @@ async def get_unread_count(
     return Response(UnreadCountResponse(unread_count=unread_count).model_dump(), status_code=status.HTTP_200_OK)
 
 
-@notification_router.patch("/{notification_id}/read", response_model=NotificationInfoResponse, status_code=status.HTTP_200_OK)
+@notification_router.patch(
+    "/{notification_id}/read", response_model=NotificationInfoResponse, status_code=status.HTTP_200_OK
+)
 async def mark_notification_as_read(
     notification_id: int,
     user: Annotated[User, Depends(get_request_user)],
@@ -64,4 +66,6 @@ async def mark_all_notifications_as_read(
     notification_service: Annotated[NotificationService, Depends(NotificationService)],
 ) -> Response:
     updated_count = await notification_service.mark_all_as_read(user=user)
-    return Response(ReadAllNotificationsResponse(updated_count=updated_count).model_dump(), status_code=status.HTTP_200_OK)
+    return Response(
+        ReadAllNotificationsResponse(updated_count=updated_count).model_dump(), status_code=status.HTTP_200_OK
+    )

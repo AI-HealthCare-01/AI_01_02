@@ -1,6 +1,6 @@
 # Project File Index
 
-Generated: 2026-02-20
+Generated: 2026-02-23
 
 | Path | Type | Lines |
 |---|---:|---:|
@@ -8,11 +8,10 @@ Generated: 2026-02-20
 | .github/commit_template.txt | text | 23 |
 | .github/PULL_REQUEST_TEMPLATE.md | text | 15 |
 | .github/workflows/checks.yml | text | 85 |
-| .gitignore | text | 14 |
-| 프로젝트_주제와_평가기준.pdf | binary | - |
+| .gitignore | text | 15 |
 | AGENT.md | text | 65 |
-| ai_worker/__init__.py | text | 0 |
 | ai_worker/.dockerignore | text | 16 |
+| ai_worker/__init__.py | text | 0 |
 | ai_worker/core/__init__.py | text | 17 |
 | ai_worker/core/config.py | text | 35 |
 | ai_worker/core/logger.py | text | 26 |
@@ -21,16 +20,16 @@ Generated: 2026-02-20
 | ai_worker/main.py | text | 72 |
 | ai_worker/schemas/__init__.py | text | 0 |
 | ai_worker/tasks/__init__.py | text | 10 |
-| ai_worker/tasks/guide.py | text | 163 |
-| ai_worker/tasks/ocr.py | text | 242 |
-| app/__init__.py | text | 0 |
+| ai_worker/tasks/guide.py | text | 181 |
+| ai_worker/tasks/ocr.py | text | 257 |
 | app/.dockerignore | text | 16 |
+| app/__init__.py | text | 0 |
 | app/apis/__init__.py | text | 0 |
 | app/apis/v1/__init__.py | text | 16 |
 | app/apis/v1/auth_routers.py | text | 59 |
 | app/apis/v1/dev_routers.py | text | 14 |
 | app/apis/v1/guide_routers.py | text | 81 |
-| app/apis/v1/notification_routers.py | text | 67 |
+| app/apis/v1/notification_routers.py | text | 71 |
 | app/apis/v1/ocr_routers.py | text | 91 |
 | app/apis/v1/user_routers.py | text | 28 |
 | app/apis/v2/__init__.py | text | 6 |
@@ -41,7 +40,7 @@ Generated: 2026-02-20
 | app/db/__init__.py | text | 0 |
 | app/db/databases.py | text | 42 |
 | app/db/migrations/models/0_20260204142014_init.py | text | 54 |
-| app/db/migrations/models/1_20260220153000_add_notifications.py | text | 56 |
+| app/db/migrations/models/1_20260220153000_add_notifications.py | text | 55 |
 | app/db/migrations/models/2_20260220191500_add_ocr_domain.py | text | 55 |
 | app/db/migrations/models/3_20260220204500_add_ocr_retry_policy.py | text | 24 |
 | app/db/migrations/models/4_20260220213000_add_guide_domain.py | text | 48 |
@@ -57,23 +56,23 @@ Generated: 2026-02-20
 | app/dtos/users.py | text | 41 |
 | app/main.py | text | 14 |
 | app/models/__init__.py | text | 0 |
-| app/models/guides.py | text | 78 |
-| app/models/notifications.py | text | 36 |
-| app/models/ocr.py | text | 92 |
+| app/models/guides.py | text | 81 |
+| app/models/notifications.py | text | 37 |
+| app/models/ocr.py | text | 96 |
 | app/models/users.py | text | 26 |
 | app/repositories/__init__.py | text | 0 |
 | app/repositories/guide_repository.py | text | 13 |
 | app/repositories/notification_repository.py | text | 62 |
 | app/repositories/ocr_repository.py | text | 31 |
-| app/repositories/user_repository.py | text | 67 |
+| app/repositories/user_repository.py | text | 73 |
 | app/services/__init__.py | text | 0 |
 | app/services/auth.py | text | 74 |
-| app/services/guide_queue.py | text | 26 |
+| app/services/guide_queue.py | text | 29 |
 | app/services/guides.py | text | 53 |
 | app/services/jwt.py | text | 56 |
 | app/services/notifications.py | text | 44 |
-| app/services/ocr_queue.py | text | 26 |
-| app/services/ocr.py | text | 97 |
+| app/services/ocr.py | text | 99 |
+| app/services/ocr_queue.py | text | 29 |
 | app/services/users.py | text | 39 |
 | app/templates/notification_playground.html | text | 580 |
 | app/tests/__init__.py | text | 0 |
@@ -87,7 +86,7 @@ Generated: 2026-02-20
 | app/tests/guide_apis/__init__.py | text | 1 |
 | app/tests/guide_apis/test_guide_apis.py | text | 174 |
 | app/tests/guide_worker/__init__.py | text | 1 |
-| app/tests/guide_worker/test_guide_worker_tasks.py | text | 80 |
+| app/tests/guide_worker/test_guide_worker_tasks.py | text | 86 |
 | app/tests/notification_apis/__init__.py | text | 1 |
 | app/tests/notification_apis/test_notification_apis.py | text | 175 |
 | app/tests/ocr_apis/__init__.py | text | 1 |
@@ -95,9 +94,9 @@ Generated: 2026-02-20
 | app/tests/ocr_models/__init__.py | text | 1 |
 | app/tests/ocr_models/test_ocr_models.py | text | 60 |
 | app/tests/ocr_worker/__init__.py | text | 1 |
-| app/tests/ocr_worker/test_ocr_worker_tasks.py | text | 175 |
+| app/tests/ocr_worker/test_ocr_worker_tasks.py | text | 178 |
 | app/tests/user_apis/__init__.py | text | 0 |
-| app/tests/user_apis/test_user_me_apis.py | text | 91 |
+| app/tests/user_apis/test_user_me_apis.py | text | 121 |
 | app/utils/__init__.py | text | 0 |
 | app/utils/common.py | text | 9 |
 | app/utils/jwt/__init__.py | text | 0 |
@@ -111,19 +110,25 @@ Generated: 2026-02-20
 | app/validators/user_validators.py | text | 56 |
 | docker-compose.prod.yml | text | 126 |
 | docker-compose.yml | text | 118 |
-| docs/PROJECT_FILE_INDEX.md | text | 144 |
-| docs/PROJECT_MEMORY.md | text | 296 |
-| docs/REQUIREMENTS_DEFINITION.md | text | 81 |
+| docs/ADHD_CARE_SERVICE_BLUEPRINT.md | text | 589 |
+| docs/API_SPECIFICATION.md | text | 297 |
+| docs/ERD_DBDIAGRAM.dbml | text | 191 |
+| docs/ERD_DBDIAGRAM_TOBE.dbml | text | 891 |
+| docs/PROJECT_FILE_INDEX.md | text | 132 |
+| docs/PROJECT_MEMORY.md | text | 318 |
+| docs/REQUIREMENTS_DEFINITION.md | text | 289 |
+| docs/TEAM_DEVELOPMENT_GUIDELINE.md | text | 289 |
 | envs/example.local.env | text | 38 |
 | envs/example.prod.env | text | 38 |
 | nginx/default.conf | text | 28 |
 | nginx/prod_http.conf | text | 28 |
 | nginx/prod_https.conf | text | 49 |
 | pyproject.toml | text | 88 |
-| README.md | text | 176 |
+| README.md | text | 105 |
 | scripts/certbot.sh | text | 101 |
 | scripts/ci/check_mypy.sh | text | 18 |
 | scripts/ci/code_fommatting.sh | text | 25 |
 | scripts/ci/run_test.sh | text | 52 |
 | scripts/deployment.sh | text | 156 |
 | uv.lock | text | 2258 |
+| 프로젝트_주제와_평가기준.pdf | binary | - |

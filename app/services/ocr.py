@@ -44,7 +44,9 @@ class OcrService:
         try:
             target_path.write_bytes(content)
         except OSError as err:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="파일 저장에 실패했습니다.") from err
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="파일 저장에 실패했습니다."
+            ) from err
 
         try:
             async with in_transaction():

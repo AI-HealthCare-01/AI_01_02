@@ -1,0 +1,191 @@
+Project AI_Health_Final {
+  database_type: "MySQL"
+  Note: '''
+  Source of truth: app/models + app/db/migrations/models (current implemented schema).
+  Includes service tables + migration metadata table (aerich).
+  '''
+}
+
+Enum Gender {
+  MALE
+  FEMALE
+}
+
+Enum NotificationType {
+  SYSTEM
+  HEALTH_ALERT
+  REPORT_READY
+  GUIDE_READY
+}
+
+Enum DocumentType {
+  MEDICAL_RECORD
+  PRESCRIPTION
+  MEDICATION_BAG
+}
+
+Enum OcrJobStatus {
+  QUEUED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+Enum OcrFailureCode {
+  FILE_NOT_FOUND
+  INVALID_STATE_TRANSITION
+  PROCESSING_ERROR
+}
+
+Enum GuideJobStatus {
+  QUEUED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+Enum GuideFailureCode {
+  OCR_NOT_READY
+  OCR_RESULT_NOT_FOUND
+  INVALID_STATE_TRANSITION
+  PROCESSING_ERROR
+}
+
+Enum GuideRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+Table aerich {
+  id int [pk, increment, not null]
+  version varchar(255) [not null]
+  app varchar(100) [not null]
+  content json [not null]
+
+  Note: 'Aerich migration metadata table'
+}
+
+Table users {
+  id bigint [pk, increment, not null]
+  email varchar(40) [not null]
+  hashed_password varchar(128) [not null]
+  name varchar(20) [not null]
+  gender Gender [not null]
+  birthday date [not null]
+  phone_number varchar(11) [not null]
+  is_active boolean [not null, default: true]
+  is_admin boolean [not null, default: false]
+  last_login datetime(6)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`, note: 'ON UPDATE CURRENT_TIMESTAMP(6)']
+
+  Note: 'email/phone uniqueness is currently enforced at application layer, not DB unique index'
+}
+
+Table notifications {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  type NotificationType [not null, default: 'SYSTEM']
+  title varchar(100) [not null]
+  message longtext [not null]
+  is_read boolean [not null, default: false]
+  read_at datetime(6)
+  payload json [not null, note: 'App creates payload; DB has no default']
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (user_id, is_read) [name: 'idx_notifications_user_id_is_read']
+    (user_id, created_at) [name: 'idx_notifications_user_id_created_at']
+  }
+}
+
+Table documents {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  document_type DocumentType [not null]
+  file_name varchar(255) [not null]
+  file_path varchar(500) [not null]
+  file_size bigint [not null]
+  mime_type varchar(100) [not null]
+  uploaded_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  indexes {
+    (user_id, uploaded_at) [name: 'idx_documents_user_id_uploaded_at']
+    (document_type) [name: 'idx_documents_document_type']
+  }
+}
+
+Table ocr_jobs {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  document_id bigint [not null]
+  status OcrJobStatus [not null, default: 'QUEUED']
+  retry_count int [not null, default: 0]
+  max_retries int [not null, default: 3]
+  failure_code OcrFailureCode
+  error_message longtext
+  queued_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  started_at datetime(6)
+  completed_at datetime(6)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`, note: 'ON UPDATE CURRENT_TIMESTAMP(6)']
+
+  indexes {
+    (user_id, status) [name: 'idx_ocr_jobs_user_id_status']
+    (document_id, created_at) [name: 'idx_ocr_jobs_document_id_created_at']
+    (status, retry_count) [name: 'idx_ocr_jobs_status_retry_count']
+  }
+}
+
+Table ocr_results {
+  id bigint [pk, increment, not null]
+  job_id bigint [not null, unique]
+  extracted_text longtext [not null]
+  structured_data json [not null, note: 'App creates data; DB has no default']
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`, note: 'ON UPDATE CURRENT_TIMESTAMP(6)']
+}
+
+Table guide_jobs {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  ocr_job_id bigint [not null]
+  status GuideJobStatus [not null, default: 'QUEUED']
+  retry_count int [not null, default: 0]
+  max_retries int [not null, default: 3]
+  failure_code GuideFailureCode
+  error_message longtext
+  queued_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  started_at datetime(6)
+  completed_at datetime(6)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`, note: 'ON UPDATE CURRENT_TIMESTAMP(6)']
+
+  indexes {
+    (user_id, status) [name: 'idx_guide_jobs_user_id_status']
+    (ocr_job_id, created_at) [name: 'idx_guide_jobs_ocr_job_id_created_at']
+    (status, retry_count) [name: 'idx_guide_jobs_status_retry_count']
+  }
+}
+
+Table guide_results {
+  id bigint [pk, increment, not null]
+  job_id bigint [not null, unique]
+  medication_guidance longtext [not null]
+  lifestyle_guidance longtext [not null]
+  risk_level GuideRiskLevel [not null, default: 'MEDIUM']
+  safety_notice longtext [not null]
+  structured_data json [not null, note: 'App creates data; DB has no default']
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`, note: 'ON UPDATE CURRENT_TIMESTAMP(6)']
+}
+
+Ref: users.id < notifications.user_id [delete: cascade]
+Ref: users.id < documents.user_id [delete: cascade]
+Ref: users.id < ocr_jobs.user_id [delete: cascade]
+Ref: documents.id < ocr_jobs.document_id [delete: cascade]
+Ref: ocr_jobs.id - ocr_results.job_id [delete: cascade]
+Ref: users.id < guide_jobs.user_id [delete: cascade]
+Ref: ocr_jobs.id < guide_jobs.ocr_job_id [delete: cascade]
+Ref: guide_jobs.id - guide_results.job_id [delete: cascade]

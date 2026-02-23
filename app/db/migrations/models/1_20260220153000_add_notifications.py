@@ -27,7 +27,7 @@ async def downgrade(db: BaseDBAsyncClient) -> str:
 
 
 MODELS_STATE = (
-"eJztmm1P4zgQgP9KlE+ctIdoKNBFp5PSEpbe9mVVwt3uAorcxG0tEqcbOwvVqv/97Lw0if"
+    "eJztmm1P4zgQgP9KlE+ctIdoKNBFp5PSEpbe9mVVwt3uAorcxG0tEqcbOwvVqv/97Lw0if"
     "NCioC2q36hzXgmsZ+MZzxDf8mOa0GbHKrQQ+ZMPpd+yRg4kH0RRj5IMpjPEzkXUDC2A1WQ"
     "6IwJ9YBJmXQCbAKZyILE9NCcIhczKfZtmwtdkykiPE1EPkY/fGhQdwrpDHps4PaeiRG24B"
     "Mk8eX8wZggaFuZqSKLPzuQG3QxD2RdTC8DRf60sWG6tu/gRHm+oDMXr7QRplw6hRh6gEJ+"
@@ -53,4 +53,3 @@ MODELS_STATE = (
     "BxNpaDCv4b/yzS2Gzfk8witQGhhu1Oi6BWt1WylvvO5IY7k/v+2O/aH5tbL3yxWcv9i93o"
     "iw0mv8ZvTVLllfh7DiH1ReaXn0fQXv08pLhvJ/6IZPved1n/bvn6Xbfl/zb/WsU="
 )
-

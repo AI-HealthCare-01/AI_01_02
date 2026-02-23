@@ -54,6 +54,35 @@ class TestUserMeApis(TestCase):
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["name"] == "수정후"
 
+    async def test_update_user_me_with_same_email_and_phone_success(self):
+        email = "same_profile@example.com"
+        original_phone_number = "01033334444"
+        signup_data = {
+            "email": email,
+            "password": "Password123!",
+            "name": "동일정보",
+            "gender": "MALE",
+            "birth_date": "1991-11-11",
+            "phone_number": original_phone_number,
+        }
+        update_data = {
+            "email": email,
+            "phone_number": "010-3333-4444",
+        }
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            await client.post("/api/v1/auth/signup", json=signup_data)
+
+            login_response = await client.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
+            access_token = login_response.json()["access_token"]
+            headers = {"Authorization": f"Bearer {access_token}"}
+
+            response = await client.patch("/api/v1/users/me", json=update_data, headers=headers)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["email"] == email
+        assert response.json()["phone_number"] == original_phone_number
+
     async def test_get_user_me_unauthorized(self):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/v1/users/me")
@@ -86,6 +115,7 @@ class TestUserMeApis(TestCase):
             profile_notifications = [
                 item
                 for item in items
-                if item["payload"].get("event") == "profile_updated" and "name" in item["payload"].get("changed_fields", [])
+                if item["payload"].get("event") == "profile_updated"
+                and "name" in item["payload"].get("changed_fields", [])
             ]
             assert len(profile_notifications) == 1

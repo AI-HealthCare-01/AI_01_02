@@ -33,6 +33,8 @@ class GuideRiskLevel(StrEnum):
 
 class GuideJob(models.Model):
     id = fields.BigIntField(primary_key=True)
+    user_id: int
+    ocr_job_id: int
     user: ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User",
         related_name="guide_jobs",
@@ -61,6 +63,7 @@ class GuideJob(models.Model):
 
 class GuideResult(models.Model):
     id = fields.BigIntField(primary_key=True)
+    job_id: int
     job: OneToOneRelation[GuideJob] = fields.OneToOneField(
         "models.GuideJob",
         related_name="result",

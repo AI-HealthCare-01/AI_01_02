@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
@@ -46,7 +46,10 @@ class OcrQueueConsumer:
 
     async def pop_job_id(self) -> int | None:
         try:
-            popped = await self.client.blpop(config.OCR_QUEUE_KEY, timeout=config.OCR_QUEUE_BLOCK_TIMEOUT_SECONDS)
+            popped = await cast(
+                Awaitable[list[Any] | None],
+                self.client.blpop([config.OCR_QUEUE_KEY], timeout=config.OCR_QUEUE_BLOCK_TIMEOUT_SECONDS),
+            )
         except RedisError:
             self.logger.warning("redis queue consume failed")
             await asyncio.sleep(1)
@@ -81,7 +84,7 @@ class OcrQueueConsumer:
                     removed = await self.client.zrem(config.OCR_RETRY_QUEUE_KEY, member)
                     if not removed:
                         continue
-                    await self.client.rpush(config.OCR_QUEUE_KEY, member)
+                    await cast(Awaitable[int], self.client.rpush(config.OCR_QUEUE_KEY, member))
                     moved += 1
                     if moved >= batch_size:
                         break
@@ -109,7 +112,10 @@ class OcrQueueConsumer:
 
     async def send_to_dead_letter(self, payload: dict[str, Any]) -> None:
         try:
-            await self.client.rpush(config.OCR_DEAD_LETTER_QUEUE_KEY, json.dumps(payload, ensure_ascii=False))
+            await cast(
+                Awaitable[int],
+                self.client.rpush(config.OCR_DEAD_LETTER_QUEUE_KEY, json.dumps(payload, ensure_ascii=False)),
+            )
         except RedisError:
             self.logger.warning("redis dead letter enqueue failed (payload=%s)", payload)
 
@@ -129,6 +135,13 @@ def _classify_failure(err: Exception) -> OcrFailureCode:
 
 def _format_error_message(*, failure_code: OcrFailureCode, detail: str) -> str:
     return f"[{failure_code.value}] {detail}"[:1000]
+
+
+def _dispose_raw_document_file(*, file_path: Path, job_id: int, logger: Logger) -> None:
+    try:
+        file_path.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("failed to dispose raw ocr file (job_id=%s path=%s)", job_id, file_path)
 
 
 async def process_ocr_job(
@@ -159,8 +172,8 @@ async def process_ocr_job(
         logger.warning("ocr job not found after claim (job_id=%s)", job_id)
         return False
 
+    absolute_file_path = Path(config.MEDIA_DIR).resolve() / job.document.file_path
     try:
-        absolute_file_path = Path(config.MEDIA_DIR).resolve() / job.document.file_path
         if not absolute_file_path.exists():
             raise FileNotFoundError(f"document file not found: {absolute_file_path}")
 
@@ -190,6 +203,7 @@ async def process_ocr_job(
                 error_message=None,
                 failure_code=None,
             )
+        _dispose_raw_document_file(file_path=absolute_file_path, job_id=job.id, logger=logger)
         logger.info("ocr job processed successfully (job_id=%s)", job_id)
     except Exception as err:
         current = await OcrJob.get_or_none(id=job_id)
@@ -237,6 +251,7 @@ async def process_ocr_job(
                     "failed_at": failed_at.isoformat(),
                 }
             )
+        _dispose_raw_document_file(file_path=absolute_file_path, job_id=current.id, logger=logger)
         logger.exception("ocr job processing failed (job_id=%s)", job_id)
 
     return True
