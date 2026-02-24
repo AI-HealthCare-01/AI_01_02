@@ -1,5 +1,7 @@
 import asyncio
-from collections.abc import Awaitable
+import json
+import time
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from logging import Logger
 from typing import Any, cast
@@ -17,10 +19,16 @@ GUIDE_SAFETY_NOTICE = "본 가이드는 의료진 진료를 대체할 수 없습
 
 ALLOWED_STATUS_TRANSITIONS: dict[GuideJobStatus, set[GuideJobStatus]] = {
     GuideJobStatus.QUEUED: {GuideJobStatus.PROCESSING},
-    GuideJobStatus.PROCESSING: {GuideJobStatus.SUCCEEDED, GuideJobStatus.FAILED},
+    GuideJobStatus.PROCESSING: {GuideJobStatus.QUEUED, GuideJobStatus.SUCCEEDED, GuideJobStatus.FAILED},
     GuideJobStatus.SUCCEEDED: set(),
     GuideJobStatus.FAILED: set(),
 }
+
+
+def compute_retry_delay_seconds(retry_count: int) -> int:
+    attempt = max(retry_count - 1, 0)
+    delay = config.GUIDE_RETRY_BACKOFF_BASE_SECONDS * (2**attempt)
+    return min(delay, config.GUIDE_RETRY_BACKOFF_MAX_SECONDS)
 
 
 class GuideQueueConsumer:
@@ -60,6 +68,60 @@ class GuideQueueConsumer:
             self.logger.warning("invalid guide queue payload received: %s", raw_job_id)
             return None
 
+    async def flush_due_retries(self, *, batch_size: int) -> int:
+        now = int(time.time())
+        moved = 0
+        try:
+            while moved < batch_size:
+                members = await self.client.zrangebyscore(
+                    config.GUIDE_RETRY_QUEUE_KEY,
+                    min="-inf",
+                    max=now,
+                    start=0,
+                    num=batch_size - moved,
+                )
+                if not members:
+                    break
+
+                for member in members:
+                    removed = await self.client.zrem(config.GUIDE_RETRY_QUEUE_KEY, member)
+                    if not removed:
+                        continue
+                    await cast(Awaitable[int], self.client.rpush(config.GUIDE_QUEUE_KEY, member))
+                    moved += 1
+                    if moved >= batch_size:
+                        break
+        except RedisError:
+            self.logger.warning("redis guide retry queue flush failed")
+            return moved
+
+        if moved:
+            self.logger.info("moved %s guide retry jobs back to main queue", moved)
+        return moved
+
+    async def schedule_retry(self, job_id: int, retry_count: int) -> None:
+        delay_seconds = compute_retry_delay_seconds(retry_count)
+        retry_at = int(time.time()) + delay_seconds
+        try:
+            await self.client.zadd(config.GUIDE_RETRY_QUEUE_KEY, {str(job_id): retry_at})
+            self.logger.warning(
+                "guide job scheduled for retry (job_id=%s retry_count=%s delay=%ss)",
+                job_id,
+                retry_count,
+                delay_seconds,
+            )
+        except RedisError:
+            self.logger.warning("redis guide retry schedule failed (job_id=%s retry_count=%s)", job_id, retry_count)
+
+    async def send_to_dead_letter(self, payload: dict[str, Any]) -> None:
+        try:
+            await cast(
+                Awaitable[int],
+                self.client.rpush(config.GUIDE_DEAD_LETTER_QUEUE_KEY, json.dumps(payload, ensure_ascii=False)),
+            )
+        except RedisError:
+            self.logger.warning("redis guide dead letter enqueue failed (payload=%s)", payload)
+
 
 def _ensure_transition(from_status: GuideJobStatus, to_status: GuideJobStatus) -> None:
     if to_status not in ALLOWED_STATUS_TRANSITIONS[from_status]:
@@ -94,7 +156,69 @@ def _build_placeholder_guidance(extracted_text: str) -> tuple[str, str, GuideRis
     return medication_guidance, lifestyle_guidance, GuideRiskLevel.MEDIUM
 
 
-async def process_guide_job(job_id: int, logger: Logger) -> bool:
+async def _handle_guide_job_failure(
+    *,
+    job_id: int,
+    err: Exception,
+    logger: Logger,
+    schedule_retry: Callable[[int, int], Awaitable[None]] | None = None,
+    send_to_dead_letter: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+) -> bool:
+    current = await GuideJob.get_or_none(id=job_id)
+    if not current:
+        logger.warning("guide job missing during failure handling (job_id=%s)", job_id)
+        return False
+
+    next_retry_count = current.retry_count + 1
+    failure_code = _classify_failure(err)
+    error_message = _format_error_message(failure_code=failure_code, detail=str(err))
+
+    if next_retry_count < current.max_retries:
+        _ensure_transition(GuideJobStatus.PROCESSING, GuideJobStatus.QUEUED)
+        await GuideJob.filter(id=current.id, status=GuideJobStatus.PROCESSING).update(
+            status=GuideJobStatus.QUEUED,
+            retry_count=next_retry_count,
+            error_message=error_message,
+            failure_code=failure_code,
+            completed_at=None,
+        )
+        if schedule_retry:
+            await schedule_retry(current.id, next_retry_count)
+        logger.warning("guide job retry scheduled (job_id=%s retry_count=%s)", current.id, next_retry_count)
+        return True
+
+    _ensure_transition(GuideJobStatus.PROCESSING, GuideJobStatus.FAILED)
+    failed_at = datetime.now(config.TIMEZONE)
+    await GuideJob.filter(id=current.id, status=GuideJobStatus.PROCESSING).update(
+        status=GuideJobStatus.FAILED,
+        retry_count=next_retry_count,
+        completed_at=failed_at,
+        error_message=error_message,
+        failure_code=failure_code,
+    )
+    if send_to_dead_letter:
+        await send_to_dead_letter(
+            {
+                "job_id": current.id,
+                "user_id": current.user_id,
+                "ocr_job_id": current.ocr_job_id,
+                "failure_code": failure_code.value,
+                "error_message": error_message,
+                "retry_count": next_retry_count,
+                "max_retries": current.max_retries,
+                "failed_at": failed_at.isoformat(),
+            }
+        )
+    logger.exception("guide job processing failed (job_id=%s)", job_id)
+    return True
+
+
+async def process_guide_job(
+    job_id: int,
+    logger: Logger,
+    schedule_retry: Callable[[int, int], Awaitable[None]] | None = None,
+    send_to_dead_letter: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+) -> bool:
     now = datetime.now(config.TIMEZONE)
     _ensure_transition(GuideJobStatus.QUEUED, GuideJobStatus.PROCESSING)
     claimed = await GuideJob.filter(id=job_id, status=GuideJobStatus.QUEUED).update(
@@ -165,17 +289,12 @@ async def process_guide_job(job_id: int, logger: Logger) -> bool:
             )
         logger.info("guide job processed successfully (job_id=%s)", job_id)
     except Exception as err:
-        failure_code = _classify_failure(err)
-        error_message = _format_error_message(failure_code=failure_code, detail=str(err))
-        _ensure_transition(GuideJobStatus.PROCESSING, GuideJobStatus.FAILED)
-        failed_at = datetime.now(config.TIMEZONE)
-        await GuideJob.filter(id=job.id, status=GuideJobStatus.PROCESSING).update(
-            status=GuideJobStatus.FAILED,
-            retry_count=job.retry_count + 1,
-            completed_at=failed_at,
-            error_message=error_message,
-            failure_code=failure_code,
+        return await _handle_guide_job_failure(
+            job_id=job_id,
+            err=err,
+            logger=logger,
+            schedule_retry=schedule_retry,
+            send_to_dead_letter=send_to_dead_letter,
         )
-        logger.exception("guide job processing failed (job_id=%s)", job_id)
 
     return True

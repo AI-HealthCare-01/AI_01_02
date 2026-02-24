@@ -1,6 +1,6 @@
 # Project Memory (Living Baseline)
 
-Last updated: 2026-02-23
+Last updated: 2026-02-24
 Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.mypy_cache`, IDE cache).
 
 ## 1) Current Product State
@@ -8,12 +8,13 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - Runtime shape is a two-service backend:
 - `app/`: FastAPI API server with auth, user profile, notification APIs, OCR upload/job/status/result APIs, guide job/status/result APIs.
 - `ai_worker/`: Redis queue consumer + OCR/Guide placeholder processors + heartbeat + retry/state-transition guard.
+- `ADHD Care Web App Design/`: Figma wireframe React app for UX prototyping (not production API runtime).
 - Infra includes MySQL, Redis, Nginx, Docker Compose, CI workflow, and deployment scripts.
 - Notification feature appears recently added and partially versioned (`v1` real API, `v2` capability placeholder).
 - Canonical planning docs are split and versioned:
-- `docs/REQUIREMENTS_DEFINITION.md` (v1.8)
-- `docs/API_SPECIFICATION.md` (v1.2)
-- `docs/TEAM_DEVELOPMENT_GUIDELINE.md` (v2.1)
+- `docs/REQUIREMENTS_DEFINITION.md` (v1.10)
+- `docs/API_SPECIFICATION.md` (v1.7)
+- `docs/TEAM_DEVELOPMENT_GUIDELINE.md` (v2.6)
 
 ## 2) Repository Map (Meaningful Files)
 
@@ -80,6 +81,15 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - `docs/ADHD_CARE_SERVICE_BLUEPRINT.md`
 - `docs/PROJECT_MEMORY.md`
 - `docs/PROJECT_FILE_INDEX.md`
+- Wireframe frontend:
+- `ADHD Care Web App Design/src/app/routes.ts`
+- `ADHD Care Web App Design/src/app/components/Layout.tsx`
+- `ADHD Care Web App Design/src/app/pages/OcrScan.tsx`
+- `ADHD Care Web App Design/src/app/pages/AiCoach.tsx`
+- `ADHD Care Web App Design/src/app/pages/Chatbot.tsx`
+- `ADHD Care Web App Design/src/app/pages/Notifications.tsx`
+- `ADHD Care Web App Design/src/app/pages/Signup.tsx`
+- `ADHD Care Web App Design/src/app/pages/Onboarding.tsx`
 
 ## 3) Core Architecture and Flow
 
@@ -104,11 +114,13 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - OCR flow:
 - Upload endpoint validates extension/size and stores file metadata in `documents`.
 - Job create endpoint validates document ownership, creates `QUEUED` job, then publishes `job_id` to Redis list queue.
+- Queue publish failure sets job `FAILED` with standardized failure info, returns `503`, and disposes raw upload file immediately.
 - Job status endpoint returns job state and timestamps for requesting owner only.
 - Job result endpoint returns OCR result when status is `SUCCEEDED`.
 - Worker success/terminal-failure 처리 후 원본 업로드 파일을 즉시 폐기한다.
 - Guide flow:
 - Job create endpoint validates OCR ownership and `SUCCEEDED` status, creates `QUEUED` guide job, and publishes `job_id` to Redis list queue.
+- Queue publish failure sets job `FAILED` with standardized failure info and returns `503`.
 - Job status endpoint returns guide state and timestamps for requesting owner only.
 - Job result endpoint returns generated guide payload when status is `SUCCEEDED`.
 - Worker flow:
@@ -120,7 +132,8 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - Retry exhausted jobs move to dead-letter queue and are marked `FAILED`.
 - Success creates/updates `ocr_results`; failure stores standardized `failure_code` + error message.
 - Guide success path: `QUEUED -> PROCESSING -> SUCCEEDED` and creates/updates `guide_results` with fixed safety notice.
-- Guide failure path: `QUEUED -> PROCESSING -> FAILED` and stores standardized `failure_code` + error message.
+- Guide failure path with retries: `QUEUED -> PROCESSING -> QUEUED` with exponential backoff.
+- Guide retry exhausted jobs move to dead-letter queue and are marked `FAILED`.
 
 ## 4) API Surface (Current)
 
@@ -195,6 +208,11 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - `OCR_JOB_MAX_RETRIES` (default: `3`)
 - Guide queue settings:
 - `GUIDE_QUEUE_KEY` (default: `guide:jobs`)
+- `GUIDE_RETRY_QUEUE_KEY` (default: `guide:jobs:retry`)
+- `GUIDE_DEAD_LETTER_QUEUE_KEY` (default: `guide:jobs:dead-letter`)
+- `GUIDE_RETRY_BACKOFF_BASE_SECONDS` (default: `5`)
+- `GUIDE_RETRY_BACKOFF_MAX_SECONDS` (default: `60`)
+- `GUIDE_RETRY_RELEASE_BATCH_SIZE` (default: `100`)
 - `GUIDE_JOB_MAX_RETRIES` (default: `3`)
 - Timezone default fallback handles missing `zoneinfo`.
 - JWT:
@@ -210,9 +228,17 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 ## 7) Test Baseline
 
 - Local execution command used:
+- `.venv\Scripts\ruff.exe check app ai_worker`
+- `.venv\Scripts\ruff.exe format --check app ai_worker`
+- `.venv\Scripts\mypy.exe app ai_worker`
 - `.venv\Scripts\python.exe -m pytest app/tests -q`
+- `npm run build` (workdir: `ADHD Care Web App Design`)
 - Result at analysis time:
-- `40 passed in 17.78s`
+- `ruff check`: passed
+- `ruff format --check`: passed
+- `mypy`: passed
+- `46 passed in 15.95s`
+- `vite build` 성공 (`1619 modules transformed`, output: `dist/assets/index-BGiojbbD.js`)
 - Covered suites:
 - auth signup/login/refresh
 - user me read/update
@@ -233,6 +259,8 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - Dead-letter writer: `ai_worker/tasks/ocr.py::send_to_dead_letter` (`OCR_DEAD_LETTER_QUEUE_KEY`).
 - Job processor: `ai_worker/tasks/ocr.py::process_ocr_job`.
 - Queue consumer: `ai_worker/tasks/guide.py::GuideQueueConsumer` (`GUIDE_QUEUE_KEY`).
+- Retry scheduler: `ai_worker/tasks/guide.py::flush_due_retries` and `schedule_retry` (`GUIDE_RETRY_QUEUE_KEY`).
+- Dead-letter writer: `ai_worker/tasks/guide.py::send_to_dead_letter` (`GUIDE_DEAD_LETTER_QUEUE_KEY`).
 - Job processor: `ai_worker/tasks/guide.py::process_guide_job`.
 - Placeholder OCR output currently uses file metadata/size, not real OCR engine yet.
 - Placeholder guide output currently uses OCR text + fixed template/safety notice, not real LLM yet.
@@ -264,14 +292,15 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - OCR retry backoff + dead-letter queue baseline implemented.
 - OCR worker raw image disposal after processing completion/final failure (REQ-127 baseline).
 - Guide job-create/status/result APIs + safety notice + worker placeholder generation (REQ-010~013 basic).
-- Guide failure status baseline implemented (REQ-025 partial).
+- Guide retry backoff + dead-letter queue baseline implemented.
+- Queue publish failure on OCR/Guide create path is fail-fast (`503`) and job is marked `FAILED`.
 - Not implemented yet (major):
 - Production-grade OCR model inference pipeline (currently placeholder processor).
 - Production-grade guide LLM inference pipeline (currently placeholder processor).
 - DB-level transition constraints and operational retry tuning (jitter/backoff strategy, dead-letter consumer).
 - Chat session/message/context/history (REQ-014~017).
 - Reminder CRUD (REQ-023).
-- Failure handling states for OCR/guide pipelines as full production workflow (REQ-024/025).
+- Failure handling states for OCR/guide pipelines as full production workflow (REQ-024/025, partial baseline done).
 - Many non-functional requirements exist only as target, not enforced instrumentation.
 
 ## 11) Known Working Tree Situation (at scan time)
@@ -311,8 +340,14 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - 2026-02-23: `README.md`를 템플릿 설명에서 프로젝트 실사용 가이드 중심으로 개편.
 - 2026-02-23: `docs/PROJECT_FILE_INDEX.md` 재생성(신규 문서 포함) 및 검증 재실행 완료 (`ruff`, `mypy`, `pytest 39 passed in 17.03s`).
 - 2026-02-23: 팀 가이드 v2.0으로 전면 개편(5대 주요 구현 기능 기준 재작성).
-- 2026-02-23: API 명세 v1.2로 동기화(챗봇 출처/재질문/자동세션 종료 메타, 이미지분석 다중객체/품질실패 상태, OCR 원본 폐기 정책, 누락 객체 정의 보강).
+- 2026-02-23: API 명세 v1.2로 동기화(챗봇 출처/재질문/자동세션 종료 메타, OCR 원본 폐기 정책, 누락 객체 정의 보강).
 - 2026-02-23: 팀 가이드 v2.1로 버전 동기화(API 명세 v1.2 기준 참조 버전/이력 정합화).
 - 2026-02-23: PDF 원문 보존용 RAW 문서 재생성(`docs/PROJECT_TOPIC_AND_EVALUATION_CRITERIA_RAW.json`, `docs/PROJECT_TOPIC_AND_EVALUATION_CRITERIA_RAW.md`) 및 무결성 검증 완료.
 - 2026-02-23: OCR 워커에 원본 파일 즉시 폐기 로직 반영(성공/최종실패), 사용자 본인 이메일/전화번호 재저장 시 중복 충돌 오탐 수정, 검증 재실행(`40 passed`).
 - 2026-02-23: RAW 원문 보존 파일(`docs/PROJECT_TOPIC_AND_EVALUATION_CRITERIA_RAW.json`, `docs/PROJECT_TOPIC_AND_EVALUATION_CRITERIA_RAW.md`) 삭제 및 문서 참조 정리.
+- 2026-02-24: 기획 범위 변경 반영으로 이미지 분류 기반 복약 분석 관련 문서 요구사항/API/팀가이드/ERD 전면 정리(`docs/REQUIREMENTS_DEFINITION.md`, `docs/API_SPECIFICATION.md`, `docs/TEAM_DEVELOPMENT_GUIDELINE.md`, `docs/ERD_DBDIAGRAM_TOBE.dbml`, `README.md`).
+- 2026-02-24: `ADHD Care Web App Design` 와이어프레임을 4대 기능 기준으로 정합화(이미지 분류 화면 제거, OCR 확인/수정 플로우 보강, 챗봇/알림 화면 신규 추가, 회원가입/온보딩 스키마 보강) 및 프런트 빌드 검증 완료(`npm install`, `npm run build`).
+- 2026-02-24: 전체 정합성 검수 반영으로 JWT 무효 토큰 응답 코드를 401로 통일하고 회귀 테스트 2건을 추가했으며(`app/services/jwt.py`, `app/tests/auth_apis/test_token_api.py`, `app/tests/user_apis/test_user_me_apis.py`), API/팀가이드 문서를 구현 응답 스키마 기준으로 동기화했다(`docs/API_SPECIFICATION.md`, `docs/TEAM_DEVELOPMENT_GUIDELINE.md`), 검증 재실행 완료(`ruff`, `mypy`, `pytest 42 passed`, `npm run build`).
+- 2026-02-24: OCR/Guide 작업 생성 시 큐 publish 실패 고착을 방지하도록 `503 + FAILED` 처리로 보강하고(`app/services/ocr.py`, `app/services/guides.py`), 가이드 워커에 재시도/지연큐/데드레터를 추가했다(`ai_worker/tasks/guide.py`, `ai_worker/main.py`, `ai_worker/core/config.py`), API/워커 회귀 테스트 4건을 확장했다(`app/tests/ocr_apis/test_ocr_apis.py`, `app/tests/guide_apis/test_guide_apis.py`, `app/tests/guide_worker/test_guide_worker_tasks.py`), 문서 동기화 및 검증 재실행 완료(`ruff`, `mypy`, `pytest 46 passed`, `npm run build`).
+- 2026-02-24: OCR 큐 등록 실패 시 원본 파일까지 즉시 폐기하도록 보강하고(`app/services/ocr.py`), API 회귀 테스트에 파일 폐기 검증을 추가했으며(`app/tests/ocr_apis/test_ocr_apis.py`), 요구사항/API/팀가이드에 raw blocks 선택 저장 정책을 명시했다(`docs/REQUIREMENTS_DEFINITION.md`, `docs/API_SPECIFICATION.md`, `docs/TEAM_DEVELOPMENT_GUIDELINE.md`).
+- 2026-02-24: 삭제된 `docs/ERD_DBDIAGRAM.dbml` 반영 후 문서-코드 정합성 재검수로 API 명세(v1.7)에 구현 보조 엔드포인트(`/api/v2/notifications/capabilities`, `/api/v1/dev/notifications-playground`)를 명시하고 팀 가이드(v2.6)와 파일 인덱스를 동기화했으며, 검증 재실행(`ruff check`, `ruff format --check`, `mypy`, `pytest 46 passed`, `npm run build`)을 완료했다.

@@ -33,6 +33,7 @@ class Worker:
                     next_heartbeat_at = now + self.interval_seconds
 
                 await ocr_queue_consumer.flush_due_retries(batch_size=config.OCR_RETRY_RELEASE_BATCH_SIZE)
+                await guide_queue_consumer.flush_due_retries(batch_size=config.GUIDE_RETRY_RELEASE_BATCH_SIZE)
                 ocr_job_id = await ocr_queue_consumer.pop_job_id()
                 if ocr_job_id is not None:
                     await process_ocr_job(
@@ -49,6 +50,8 @@ class Worker:
                 await process_guide_job(
                     job_id=guide_job_id,
                     logger=default_logger,
+                    schedule_retry=guide_queue_consumer.schedule_retry,
+                    send_to_dead_letter=guide_queue_consumer.send_to_dead_letter,
                 )
         finally:
             await ocr_queue_consumer.close()

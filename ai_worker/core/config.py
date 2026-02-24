@@ -26,6 +26,11 @@ class Config(BaseSettings):
     OCR_RETRY_RELEASE_BATCH_SIZE: int = 100
     OCR_QUEUE_BLOCK_TIMEOUT_SECONDS: int = 1
     GUIDE_QUEUE_KEY: str = "guide:jobs"
+    GUIDE_RETRY_QUEUE_KEY: str = "guide:jobs:retry"
+    GUIDE_DEAD_LETTER_QUEUE_KEY: str = "guide:jobs:dead-letter"
+    GUIDE_RETRY_BACKOFF_BASE_SECONDS: int = 5
+    GUIDE_RETRY_BACKOFF_MAX_SECONDS: int = 60
+    GUIDE_RETRY_RELEASE_BATCH_SIZE: int = 100
     GUIDE_QUEUE_BLOCK_TIMEOUT_SECONDS: int = 1
     HEARTBEAT_INTERVAL_SECONDS: int = 30
     REDIS_HOST: str = "localhost"

@@ -1,7 +1,7 @@
 # AI Health Final
 
 AI Health Final은 ADHD 환자/보호자 지원을 위한 백엔드 프로젝트다.  
-`FastAPI + AI Worker + MySQL + Redis + Nginx` 구조로, OCR/가이드/알림 기능을 중심으로 동작하며 챗봇/이미지분석 고도화를 진행 중이다.
+`FastAPI + AI Worker + MySQL + Redis + Nginx` 구조로, OCR/가이드/알림 기능을 중심으로 동작하며 챗봇 고도화를 진행 중이다.
 
 ## 문서 바로가기
 
@@ -22,7 +22,6 @@ AI Health Final은 ADHD 환자/보호자 지원을 위한 백엔드 프로젝트
   - AI Worker 큐 소비, 재시도/실패 처리 기본 구조
 - 미구현 또는 고도화 예정:
   - 실시간 챗봇 RAG 파이프라인
-  - 이미지 분류 기반 복약 분석
   - OCR/가이드 실제 모델 연동 고도화
 
 ## 프로젝트 구조

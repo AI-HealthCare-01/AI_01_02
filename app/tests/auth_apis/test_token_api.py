@@ -44,3 +44,10 @@ class TestJWTTokenRefreshAPI(TestCase):
             response = await client.get("/api/v1/auth/token/refresh")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.json()["detail"] == "Refresh token is missing."
+
+    async def test_token_refresh_invalid_token(self):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            client.cookies["refresh_token"] = "invalid-token"
+            response = await client.get("/api/v1/auth/token/refresh")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.json()["detail"] == "Provided invalid token."

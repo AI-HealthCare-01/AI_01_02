@@ -123,31 +123,6 @@ Enum guardrail_action_enum {
   ALLOW
 }
 
-Enum pill_analysis_status_enum {
-  QUEUED
-  PROCESSING
-  SUCCEEDED
-  UNREADABLE
-  OOD
-  MULTI_OBJECT
-  FAILED
-}
-
-Enum pill_rejection_reason_enum {
-  LOW_CONFIDENCE
-  BLUR
-  CROPPED
-  OOD
-  MULTI_OBJECT
-}
-
-Enum misclassification_status_enum {
-  RECEIVED
-  REVIEWED
-  REFLECTED
-  REJECTED
-}
-
 Enum reminder_channel_enum {
   IN_APP
   PUSH
@@ -165,7 +140,6 @@ Enum model_domain_enum {
   OCR
   GUIDE
   CHAT
-  PILL
   EMBEDDING
 }
 
@@ -179,7 +153,6 @@ Enum pipeline_kind_enum {
   OCR
   GUIDE
   CHAT
-  PILL
 }
 
 Enum inference_status_enum {
@@ -328,7 +301,7 @@ Table documents {
   uploaded_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   disposed_at datetime(6)
 
-  Note: 'REQ-127: OCR raw file is temporary and must be disposed immediately after OCR/parsing.'
+  Note: 'REQ-127: OCR raw file is temporary and must be disposed immediately after OCR/parsing. Queue publish failure path must also dispose raw file immediately.'
 
   indexes {
     (user_id, uploaded_at) [name: 'idx_documents_user_uploaded_at']
@@ -380,6 +353,8 @@ Table ocr_raw_blocks {
   bbox json [not null]
   confidence decimal(5,4)
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  Note: 'Optional persistence target: store primarily for low-confidence or user-review-required OCR cases.'
 
   indexes {
     (ocr_result_id, block_index) [name: 'idx_ocr_raw_blocks_result_index', unique]
@@ -582,71 +557,6 @@ Table chat_guardrail_events {
   }
 }
 
-Table pill_analyses {
-  id bigint [pk, increment, not null]
-  user_id bigint [not null]
-  status pill_analysis_status_enum [not null, default: 'QUEUED']
-  temporary_image_path varchar(500)
-  image_sha256 char(64)
-  image_width int
-  image_height int
-  preprocess_version varchar(100)
-  model_version_id bigint
-  predicted_medication_id bigint
-  predicted_drug_name_snapshot varchar(255)
-  confidence decimal(5,4)
-  detected_object_count int
-  rejection_reason pill_rejection_reason_enum
-  message longtext
-  guidance json
-  error_code varchar(100)
-  error_message longtext
-  requested_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-  started_at datetime(6)
-  completed_at datetime(6)
-  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-
-  indexes {
-    (user_id, requested_at) [name: 'idx_pill_analyses_user_requested_at']
-    (status, requested_at) [name: 'idx_pill_analyses_status_requested_at']
-  }
-}
-
-Table pill_analysis_candidates {
-  id bigint [pk, increment, not null]
-  analysis_id bigint [not null]
-  medication_id bigint [not null]
-  rank_order int [not null]
-  score decimal(6,4) [not null]
-  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-
-  indexes {
-    (analysis_id, rank_order) [name: 'idx_pill_candidates_analysis_rank', unique]
-    (analysis_id, medication_id) [name: 'idx_pill_candidates_analysis_medication', unique]
-  }
-}
-
-Table pill_misclassification_reports {
-  id bigint [pk, increment, not null]
-  analysis_id bigint [not null]
-  reported_by_user_id bigint [not null]
-  correct_medication_id bigint
-  correct_drug_name varchar(255)
-  reason varchar(255)
-  comment longtext
-  status misclassification_status_enum [not null, default: 'RECEIVED']
-  reviewed_by_user_id bigint
-  reviewed_at datetime(6)
-  reflected_at datetime(6)
-  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-
-  indexes {
-    (analysis_id, created_at) [name: 'idx_pill_misreports_analysis_created_at']
-    (status, created_at) [name: 'idx_pill_misreports_status_created_at']
-  }
-}
-
 Table notifications {
   id bigint [pk, increment, not null]
   user_id bigint [not null]
@@ -776,7 +686,6 @@ Table inference_audits {
   ocr_job_id bigint
   guide_job_id bigint
   chat_message_id bigint
-  pill_analysis_id bigint
   model_version_id bigint
   prompt_version_id bigint
   input_tokens int
@@ -857,17 +766,6 @@ Ref: knowledge_chunks.id < chat_message_references.knowledge_chunk_id
 Ref: chat_sessions.id < chat_guardrail_events.session_id [delete: cascade]
 Ref: chat_messages.id < chat_guardrail_events.message_id [delete: cascade]
 
-// Pill analysis
-Ref: users.id < pill_analyses.user_id [delete: cascade]
-Ref: model_versions.id < pill_analyses.model_version_id
-Ref: medications.id < pill_analyses.predicted_medication_id
-Ref: pill_analyses.id < pill_analysis_candidates.analysis_id [delete: cascade]
-Ref: medications.id < pill_analysis_candidates.medication_id
-Ref: pill_analyses.id < pill_misclassification_reports.analysis_id [delete: cascade]
-Ref: users.id < pill_misclassification_reports.reported_by_user_id [delete: cascade]
-Ref: users.id < pill_misclassification_reports.reviewed_by_user_id
-Ref: medications.id < pill_misclassification_reports.correct_medication_id
-
 // Reminder / D-day
 Ref: users.id < medication_reminders.user_id [delete: cascade]
 Ref: medications.id < medication_reminders.medication_id
@@ -885,7 +783,6 @@ Ref: users.id < inference_audits.user_id
 Ref: ocr_jobs.id < inference_audits.ocr_job_id
 Ref: guide_jobs.id < inference_audits.guide_job_id
 Ref: chat_messages.id < inference_audits.chat_message_id
-Ref: pill_analyses.id < inference_audits.pill_analysis_id
 Ref: model_versions.id < inference_audits.model_version_id
 Ref: prompt_versions.id < inference_audits.prompt_version_id
 Ref: inference_audits.id < external_api_call_logs.inference_audit_id [delete: set null]

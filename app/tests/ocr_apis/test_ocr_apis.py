@@ -1,6 +1,6 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from httpx import ASGITransport, AsyncClient
 from starlette import status
@@ -8,7 +8,7 @@ from tortoise.contrib.test import TestCase
 
 from app.core import config
 from app.main import app
-from app.models.ocr import Document, OcrJob, OcrJobStatus, OcrResult
+from app.models.ocr import Document, OcrFailureCode, OcrJob, OcrJobStatus, OcrResult
 
 
 class TestOcrApis(TestCase):
@@ -16,8 +16,14 @@ class TestOcrApis(TestCase):
         self._tmp_media_dir = TemporaryDirectory()
         self._media_dir_patcher = patch.object(config, "MEDIA_DIR", self._tmp_media_dir.name)
         self._media_dir_patcher.start()
+        self._queue_patcher = patch(
+            "app.services.ocr.OcrQueuePublisher.enqueue_job",
+            new=AsyncMock(return_value=None),
+        )
+        self._queue_patcher.start()
 
     def tearDown(self) -> None:
+        self._queue_patcher.stop()
         self._media_dir_patcher.stop()
         self._tmp_media_dir.cleanup()
 
@@ -137,6 +143,37 @@ class TestOcrApis(TestCase):
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.json()["detail"] == "문서를 찾을 수 없습니다."
+
+    async def test_create_ocr_job_queue_publish_failure_marks_job_failed(self):
+        email = "ocr_queue_failure@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01012001211")
+            document = await self._upload_document(client, access_token=access_token)
+            headers = {"Authorization": f"Bearer {access_token}"}
+
+            with patch(
+                "app.services.ocr.OcrQueuePublisher.enqueue_job",
+                new=AsyncMock(side_effect=RuntimeError("redis unavailable")),
+            ):
+                response = await client.post(
+                    "/api/v1/ocr/jobs",
+                    headers=headers,
+                    json={"document_id": document["id"]},
+                )
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert response.json()["detail"] == "OCR 작업 큐 등록에 실패했습니다. 잠시 후 다시 시도해주세요."
+
+        failed_job = await OcrJob.filter(document_id=document["id"]).order_by("-id").first()
+        assert failed_job is not None
+        assert failed_job.status == OcrJobStatus.FAILED
+        assert failed_job.failure_code == OcrFailureCode.PROCESSING_ERROR
+        assert failed_job.completed_at is not None
+        assert failed_job.error_message == "[PROCESSING_ERROR] OCR queue publish failed."
+
+        document_record = await Document.get(id=document["id"])
+        stored_path = Path(config.MEDIA_DIR) / document_record.file_path
+        assert stored_path.exists() is False
 
     async def test_get_ocr_job_of_other_user_fails(self):
         owner_email = "ocr_job_owner@example.com"

@@ -1,8 +1,10 @@
+from datetime import datetime
+
 from fastapi import HTTPException, status
 from tortoise.transactions import in_transaction
 
 from app.core import config, default_logger
-from app.models.guides import GuideJob, GuideJobStatus, GuideResult
+from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult
 from app.models.ocr import OcrJobStatus
 from app.models.users import User
 from app.repositories.guide_repository import GuideRepository
@@ -31,8 +33,19 @@ class GuideService:
 
         try:
             await self.queue_publisher.enqueue_job(job.id)
-        except RuntimeError:
-            default_logger.warning("guide queue publish failed (job_id=%s)", job.id)
+        except RuntimeError as err:
+            failed_at = datetime.now(config.TIMEZONE)
+            await GuideJob.filter(id=job.id, status=GuideJobStatus.QUEUED).update(
+                status=GuideJobStatus.FAILED,
+                failure_code=GuideFailureCode.PROCESSING_ERROR,
+                error_message="[PROCESSING_ERROR] guide queue publish failed.",
+                completed_at=failed_at,
+            )
+            default_logger.exception("guide queue publish failed (job_id=%s)", job.id)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="가이드 작업 큐 등록에 실패했습니다. 잠시 후 다시 시도해주세요.",
+            ) from err
 
         return job
 

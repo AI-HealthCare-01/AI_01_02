@@ -1,13 +1,18 @@
 # AI Health Project 팀 개발 가이드라인
 
-문서 버전: v2.1  
-작성일: 2026-02-23  
+문서 버전: v2.6  
+작성일: 2026-02-24  
 기준 문서:
-- `docs/REQUIREMENTS_DEFINITION.md` (v1.7)
-- `docs/API_SPECIFICATION.md` (v1.2)
+- `docs/REQUIREMENTS_DEFINITION.md` (v1.10)
+- `docs/API_SPECIFICATION.md` (v1.7)
 - `docs/PROJECT_MEMORY.md`
 
 문서 변경 이력:
+- v2.6 (2026-02-24): 구현 API 실사 정합화 반영(알림 v2 capability 조회, dev 알림 플레이그라운드 내부 API 명시)
+- v2.5 (2026-02-24): OCR 원본 폐기 경로(큐 실패 포함) 및 raw blocks 선택 저장 정책 동기화
+- v2.4 (2026-02-24): API 명세 v1.5 동기화 반영(작업 생성 큐 실패 처리 정책 정합화)
+- v2.3 (2026-02-24): API 명세 v1.4 동기화 반영(구현 응답 스키마/오류 응답 메모 정합화)
+- v2.2 (2026-02-24): `알약 이미지 분류 기반 복약 분석` 기능 제외 반영(핵심 기능/매핑/우선순위/역할 정리)
 - v2.1 (2026-02-23): API 명세 v1.2 동기화 반영(객체/상태/정책 메모 정합성)
 - v2.0 (2026-02-23): 5대 주요 구현 기능 중심으로 전면 개편(요구사항-ID 매핑, API 매핑, 상세 로직, DoD/QA 기준 강화)
 - v1.0 (2026-02-23): 초기 팀 가이드 작성
@@ -19,13 +24,12 @@
 
 ## 2. 프로젝트 핵심 구현 기능
 
-본 프로젝트의 주요 구현 기능은 아래 5가지다.
+본 프로젝트의 주요 구현 기능은 아래 4가지다.
 
 1. LLM 기반 안내 가이드 생성
 2. 실시간 챗봇
 3. OCR 기반 의료정보 인식
-4. 이미지 분류 기반 복약 분석
-5. 알림 기능
+4. 알림 기능
 
 ## 3. 기능별 한눈에 보기
 
@@ -34,8 +38,7 @@
 | 1. LLM 기반 안내 가이드 생성 | 프로필+처방+지식을 결합한 개인화 복약/생활 가이드 | REQ-010~013, REQ-050~057 | `POST /api/v1/guides/jobs`, `GET /api/v1/guides/jobs/{job_id}`, `GET /api/v1/guides/jobs/{job_id}/result` | 베이스라인 구현, 품질 고도화 필요 |
 | 2. 실시간 챗봇 | 안전 가드레일 + 하이브리드 검색 + SSE 스트리밍 | REQ-014~017, REQ-027~032, REQ-058~061 | `POST /api/v1/chat/sessions`, `POST /api/v1/chat/sessions/{session_id}/stream` | 계획 단계 |
 | 3. OCR 기반 의료정보 인식 | 처방/약봉투 텍스트 구조화 + 신뢰도 검증 + 사용자 확인 | REQ-005~009, REQ-039~049, REQ-127 | `POST /api/v1/ocr/documents/upload`, `POST /api/v1/ocr/jobs`, `GET /api/v1/ocr/jobs/{job_id}/result`, `PATCH /api/v1/ocr/jobs/{job_id}/confirm` | 업로드/작업/결과 구현, 확인 단계 고도화 필요 |
-| 4. 이미지 분류 기반 복약 분석 | 단일 알약 인식 + 판독불가 보호 + 오분류 신고 | REQ-033~038, REQ-062~064 | `POST /api/v1/pill-analysis`, `GET /api/v1/pill-analysis/{analysis_id}`, `POST /api/v1/pill-analysis/{analysis_id}/misclassifications` | 계획 단계 |
-| 5. 알림 기능 | 가이드 완료/읽음 처리/리마인더/D-day 안내 | REQ-018~023, REQ-051, REQ-126 | `GET/PATCH /api/v1/notifications*`, `POST/GET/PATCH/DELETE /api/v1/reminders*` | 읽음/목록 구현, 리마인더/D-day 확장 필요 |
+| 4. 알림 기능 | 가이드 완료/읽음 처리/리마인더/D-day 안내 | REQ-018~023, REQ-051, REQ-126 | `GET/PATCH /api/v1/notifications*`, `GET /api/v2/notifications/capabilities`, `POST/GET/PATCH/DELETE /api/v1/reminders*` | 읽음/목록 구현, v2 capability 안내 구현, 리마인더/D-day 확장 필요 |
 
 ## 4. 전체 서비스 흐름 (E2E)
 
@@ -45,7 +48,7 @@
 4. OCR -> 파싱/정제 -> 신뢰도 검증
 5. 사용자 확인/수정(저신뢰 시)
 6. 가이드 생성(비동기 작업)
-7. 챗봇/이미지분석 기능 사용
+7. 챗봇 기능 사용
 8. 알림/리마인더/D-day 수신
 
 비동기 공통 원칙:
@@ -136,7 +139,7 @@ DoD:
 
 핵심 로직:
 1. 파일 업로드(PDF/JPG/PNG)
-2. OCR 텍스트/좌표 추출
+2. OCR 텍스트/좌표 추출 (좌표는 저신뢰/검수 케이스 선택 저장)
 3. 파싱: 약품명/용량/횟수/복용개수/조제일/총처방일
 4. ADHD 약물 사전 매핑
 5. 필드별 신뢰도 검증
@@ -156,46 +159,15 @@ API:
 - 작업 소유권 및 상태 전이 강제
 - OCR 저신뢰 필드의 사용자 수정 루프 구현
 - 처리 완료 후 원본 파일 삭제 경로 검증
+- 큐 등록 실패 시 job `FAILED` 처리와 원본 파일 즉시 폐기 경로 검증
 
 DoD:
 - OCR 결과가 지정 스키마(`raw_text`, `extracted_medications[]`)를 만족
 - 원본 이미지가 DB/클라우드에 남지 않음
+- 좌표(raw blocks)는 저신뢰/검수 필요 케이스에 한해 선택 저장 정책이 적용됨
 - 저신뢰 결과가 사용자 확인 플로우로 정상 전환
 
-### 5.4 이미지 분류 기반 복약 분석
-
-목표:
-- 단일 알약 이미지에서 약물을 식별하고 복약 가이드를 제공한다.
-
-요구사항:
-- 기능: `REQ-033~038`, `REQ-062~064`
-- 비기능: `REQ-101`, `REQ-116`, `REQ-117`
-
-핵심 로직:
-1. 단일 이미지 입력
-2. 전처리(리사이즈/정규화 + ROI/중앙크롭 + 배경 노이즈 제거)
-3. 다중 객체 감지 시 분석 중단
-4. CNN 분류 추론
-5. 확률 임계값(`<60%`) 또는 OOD 시 판독불가 반환
-6. 성공 시 약물정보 매핑 반환
-7. 오분류 신고 접수
-
-API:
-- 계획: `POST /api/v1/pill-analysis`
-- 계획: `GET /api/v1/pill-analysis/{analysis_id}`
-- 계획: `POST /api/v1/pill-analysis/{analysis_id}/misclassifications`
-
-개발 체크리스트:
-- 다중 알약 검출 모델/규칙 정의
-- 판독불가 기준(품질/OOD/확률) 통일
-- 오분류 신고 데이터의 재학습 파이프라인 연계 설계
-
-DoD:
-- 단일 객체 원칙 위반 시 안내 메시지 반환
-- 오진 방지 정책(판독불가 처리)이 경계값 테스트를 통과
-- 오분류 신고 API 계약이 저장/추적까지 연결
-
-### 5.5 알림 기능
+### 5.4 알림 기능
 
 목표:
 - 사용자 작업 완료와 복약 일정 변화에 대해 적시에 안내한다.
@@ -215,6 +187,7 @@ API:
 - 구현: `GET /api/v1/notifications/unread-count`
 - 구현: `PATCH /api/v1/notifications/{notification_id}/read`
 - 구현: `PATCH /api/v1/notifications/read-all`
+- 구현: `GET /api/v2/notifications/capabilities` (v2 확장 준비 상태 조회)
 - 계획: `POST/GET/PATCH/DELETE /api/v1/reminders*`
 - 계획: `GET /api/v1/reminders/medication-dday`
 
@@ -231,7 +204,7 @@ DoD:
 ## 6. 공통 비기능 요구사항 운영 기준
 
 성능:
-- 챗봇 TTFT/이미지분석 응답 P95 3초 목표 (`REQ-101`)
+- 챗봇 TTFT P95 3초 목표 (`REQ-101`)
 - OCR 처리 권장 5초 이내 (`REQ-120`)
 
 보안/프라이버시:
@@ -239,7 +212,7 @@ DoD:
 - 학습 재사용 금지 및 원본 이미지 즉시 폐기 (`REQ-113`, `REQ-127`)
 
 품질/운영:
-- 프롬프트/모델/전처리 버전 관리 (`REQ-106`, `REQ-116`)
+- 프롬프트/모델 버전 관리 (`REQ-106`)
 - request_id/job_id/user_id 기반 추적 (`REQ-107`)
 - 외부 API 타임아웃/재시도/오류코드 표준화 (`REQ-124`)
 
@@ -253,10 +226,10 @@ Backend:
 - API 계약 준수, 권한 검증, 상태 전이 강제, 오류 코드 표준화
 
 AI/Worker:
-- OCR/가이드/챗봇/이미지분석 추론 파이프라인, 재시도/모니터링 정책 구현
+- OCR/가이드/챗봇 추론 파이프라인, 재시도/모니터링 정책 구현
 
 Frontend:
-- 모바일 촬영 UX, OCR 수정 UX, 챗봇 스트리밍 UX, 판독불가 안내 UX
+- 모바일 촬영 UX, OCR 수정 UX, 챗봇 스트리밍 UX, 알림 UX
 
 QA:
 - 요구사항 ID 기반 테스트 설계/회귀 자동화, 성능/안전성 검증
@@ -264,11 +237,10 @@ QA:
 ## 8. 개발 우선순위 (권장)
 
 1. 챗봇 본 기능 (`REQ-014~017`, `REQ-027~032`, `REQ-056~061`)
-2. 이미지분석 파이프라인 (`REQ-033~038`, `REQ-062~064`)
-3. OCR 고도화 (`REQ-039~045`, `REQ-048~049`, `REQ-127`)
-4. 프로필/개인화 분석 (`REQ-046~047`, `REQ-050~055`)
-5. 알림 확장 (`REQ-023`, `REQ-051`, `REQ-126`)
-6. 운영 품질 보강 (`REQ-101`, `REQ-106`, `REQ-113~125`)
+2. OCR 고도화 (`REQ-039~045`, `REQ-048~049`, `REQ-127`)
+3. 프로필/개인화 분석 (`REQ-046~047`, `REQ-050~055`)
+4. 알림 확장 (`REQ-023`, `REQ-051`, `REQ-126`)
+5. 운영 품질 보강 (`REQ-101`, `REQ-106`, `REQ-113~115`, `REQ-117~125`)
 
 ## 9. PR/리뷰 운영 규칙
 
@@ -287,3 +259,8 @@ QA:
 4. `ruff`, `mypy`, `pytest`가 통과한다.
 5. 운영 로그로 장애/재현/감사가 가능하다.
 6. 문서 4종(`요구사항`, `API`, `팀가이드`, `메모`)이 최신 상태다.
+
+## 11. 개발 지원 API(내부)
+
+- `GET /api/v1/dev/notifications-playground`: 알림 템플릿/동작을 브라우저에서 빠르게 검증하는 내부 페이지.
+- 운영 환경 노출 여부는 배포 환경 정책(라우팅/인증)에 따라 제한한다.

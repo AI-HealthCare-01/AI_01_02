@@ -88,6 +88,13 @@ class TestUserMeApis(TestCase):
             response = await client.get("/api/v1/users/me")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
+    async def test_get_user_me_invalid_token(self):
+        headers = {"Authorization": "Bearer invalid-token"}
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/v1/users/me", headers=headers)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.json()["detail"] == "Provided invalid token."
+
     async def test_update_user_me_creates_notification(self):
         email = "update_notification@example.com"
         signup_data = {

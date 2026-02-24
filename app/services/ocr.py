@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -5,7 +6,7 @@ from fastapi import HTTPException, UploadFile, status
 from tortoise.transactions import in_transaction
 
 from app.core import config, default_logger
-from app.models.ocr import Document, DocumentType, OcrJob, OcrJobStatus, OcrResult
+from app.models.ocr import Document, DocumentType, OcrFailureCode, OcrJob, OcrJobStatus, OcrResult
 from app.models.users import User
 from app.repositories.ocr_repository import OcrRepository
 from app.services.ocr_queue import OcrQueuePublisher
@@ -63,6 +64,15 @@ class OcrService:
             target_path.unlink(missing_ok=True)
             raise
 
+    def _dispose_uploaded_document_file(self, *, relative_path: str, job_id: int) -> None:
+        absolute_file_path = Path(config.MEDIA_DIR).resolve() / relative_path
+        try:
+            absolute_file_path.unlink(missing_ok=True)
+        except OSError:
+            default_logger.warning(
+                "failed to dispose raw ocr file on queue failure (job_id=%s path=%s)", job_id, absolute_file_path
+            )
+
     async def create_ocr_job(self, *, user: User, document_id: int) -> OcrJob:
         document = await self.repo.get_user_document(document_id=document_id, user_id=user.id)
         if not document:
@@ -77,8 +87,20 @@ class OcrService:
 
         try:
             await self.queue_publisher.enqueue_job(job.id)
-        except RuntimeError:
-            default_logger.warning("ocr queue publish failed (job_id=%s)", job.id)
+        except RuntimeError as err:
+            failed_at = datetime.now(config.TIMEZONE)
+            await OcrJob.filter(id=job.id, status=OcrJobStatus.QUEUED).update(
+                status=OcrJobStatus.FAILED,
+                failure_code=OcrFailureCode.PROCESSING_ERROR,
+                error_message="[PROCESSING_ERROR] OCR queue publish failed.",
+                completed_at=failed_at,
+            )
+            self._dispose_uploaded_document_file(relative_path=document.file_path, job_id=job.id)
+            default_logger.exception("ocr queue publish failed (job_id=%s)", job.id)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="OCR 작업 큐 등록에 실패했습니다. 잠시 후 다시 시도해주세요.",
+            ) from err
 
         return job
 

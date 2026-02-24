@@ -1,12 +1,17 @@
 # AI Health Project API 명세서
 
-문서 버전: v1.2  
-작성일: 2026-02-23  
+문서 버전: v1.7  
+작성일: 2026-02-24  
 원본: `docs/REQUIREMENTS_DEFINITION.md`의 기존 섹션 11~12  
 문서 목적: 객체 모델 명세와 API 계약 명세를 독립 문서로 관리한다.
 문서 변경 이력:
-- v1.2 (2026-02-23): 챗봇/이미지분석/OCR 계약 정합성 보강(출처 객체, 저유사도 재질문 플래그, 자동 세션 종료 메타, 알약 다중객체/품질 실패 상태, OCR 원본 이미지 폐기 정책 명시)
-- v1.1 (2026-02-23): REQ-064 반영(이미지분석 오분류 신고 객체 및 API 계약 추가)
+- v1.7 (2026-02-24): 구현 API 실사 기반 정합화(알림 v2 capability 조회, dev 알림 플레이그라운드 경로 명시)
+- v1.6 (2026-02-24): OCR 좌표(`raw_blocks`) 선택 저장 정책(저신뢰 우선) 명시 및 큐 실패 시 원본 즉시 폐기 경로 반영
+- v1.5 (2026-02-24): 작업 생성 큐 등록 실패 시 503/FAILED 처리 정책 반영(정책 메모/에러 코드 매핑)
+- v1.4 (2026-02-24): 구현 API 응답 스키마 정합화 반영(OCR/가이드 결과 객체, 실패 응답 형식 메모 보강)
+- v1.3 (2026-02-24): `알약 이미지 분류 기반 복약 분석` 기능 제외 반영(객체/API/에러코드 정리)
+- v1.2 (2026-02-23): 챗봇/OCR 계약 정합성 보강(출처 객체, 저유사도 재질문 플래그, 자동 세션 종료 메타, OCR 원본 이미지 폐기 정책 명시)
+- v1.1 (2026-02-23): 객체 모델 및 API 계약 명세 보강
 
 ## 11. 객체 모델 명세 (필수/선택)
 
@@ -27,6 +32,10 @@
 | PaginationMeta | limit | int | 필수 | 페이지 크기 |
 | PaginationMeta | offset | int | 필수 | 시작 오프셋 |
 | PaginationMeta | total | int | 필수 | 전체 개수 |
+
+정책 메모:
+- 현재 구현(v1) 실패 응답은 FastAPI 기본 형식(`{"detail":"..."}`)을 사용한다.
+- `ApiError` 객체 표준화는 목표 계약이며, 점진 반영한다.
 
 ### 11.2 인증/사용자 객체
 
@@ -86,6 +95,7 @@
 | OcrDocument | id | int | 필수 | 업로드 문서 ID |
 | OcrDocument | document_type | enum | 필수 | 문서 타입 |
 | OcrDocument | file_name | string | 필수 | 업로드 파일명 |
+| OcrDocument | file_path | string | 선택 | 현재 구현 응답에 포함되는 저장 상대경로 |
 | OcrDocument | mime_type | string | 필수 | 파일 MIME 타입 |
 | OcrDocument | file_size | int | 필수 | 파일 크기(byte) |
 | OcrDocument | uploaded_at | string(datetime) | 필수 | 업로드 시각 |
@@ -97,9 +107,13 @@
 | OcrJobStatus | retry_count/max_retries | int | 필수 | 재시도 정보 |
 | OcrJobStatus | failure_code/error_message | string \| null | 선택(nullable) | 실패 정보 |
 | OcrJobStatus | queued_at/started_at/completed_at | string(datetime) \| null | 선택(nullable) | 작업 시각 메타데이터 |
-| OcrRawBlock | text | string | 필수 | OCR 원문 블록 |
-| OcrRawBlock | bbox | number[] | 필수 | 좌표 |
-| OcrRawBlock | confidence | float | 선택 | OCR 블록 신뢰도 |
+| OcrJobResult | job_id | int | 필수 | OCR job ID |
+| OcrJobResult | extracted_text | string | 필수 | OCR 추출 원문(베이스라인 구현) |
+| OcrJobResult | structured_data | object | 필수 | 베이스라인 구조화 결과(JSON) |
+| OcrJobResult | created_at/updated_at | string(datetime) | 필수 | 결과 생성/수정 시각 |
+| OcrRawBlock | text | string | 필수 | OCR 원문 블록(선택 저장 대상) |
+| OcrRawBlock | bbox | number[] | 필수 | 좌표(선택 저장 대상) |
+| OcrRawBlock | confidence | float | 선택 | OCR 블록 신뢰도(선택 저장 대상) |
 | OcrMedicationItem | drug_name | string | 필수 | 약물명 |
 | OcrMedicationItem | dose | float | 선택 | 용량 |
 | OcrMedicationItem | frequency_per_day | int | 선택 | 1일 복용 횟수 |
@@ -109,11 +123,11 @@
 | OcrMedicationItem | dispensed_date | string(date) | 선택 | 조제일 |
 | OcrMedicationItem | total_days | int | 선택 | 총 처방일 |
 | OcrMedicationItem | confidence | float | 선택 | 필드 신뢰도 |
-| OcrResult | raw_text | string | 필수 | OCR 원문 |
-| OcrResult | raw_blocks | OcrRawBlock[] | 선택 | 블록 정보 |
-| OcrResult | extracted_medications | OcrMedicationItem[] | 필수 | 구조화 약물 결과 |
-| OcrResult | overall_confidence | float | 선택 | 전체 신뢰도 |
-| OcrResult | needs_user_review | bool | 필수 | 사용자 검토 필요 여부 |
+| OcrResult(계획) | raw_text | string | 필수 | OCR 원문 |
+| OcrResult(계획) | raw_blocks | OcrRawBlock[] | 선택 | 블록 정보(저신뢰/사용자 검토 케이스 우선 저장) |
+| OcrResult(계획) | extracted_medications | OcrMedicationItem[] | 필수 | 구조화 약물 결과 |
+| OcrResult(계획) | overall_confidence | float | 선택 | 전체 신뢰도 |
+| OcrResult(계획) | needs_user_review | bool | 필수 | 사용자 검토 필요 여부 |
 | OcrReviewConfirmRequest | confirmed | bool | 필수 | 자동 인식 결과 확정 여부 |
 | OcrReviewConfirmRequest | corrected_medications | OcrMedicationItem[] | 선택 | 사용자 수정값 |
 | OcrReviewConfirmRequest | comment | string | 선택 | 수정 사유/메모 |
@@ -128,10 +142,16 @@
 | GuideJobStatus | failure_code/error_message | string \| null | 선택(nullable) | 실패 정보 |
 | GuideJobStatus | queued_at/started_at/completed_at | string(datetime) \| null | 선택(nullable) | 작업 시각 메타데이터 |
 | GuideJobCreateRequest | ocr_job_id | int | 필수 | 가이드 원천 OCR job |
-| GuideResult | medication_guide | object | 필수 | 복약 안내 |
-| GuideResult | health_coaching | object | 필수 | 생활습관 코칭 |
-| GuideResult | risk_flags | object | 필수 | 위험 플래그 |
-| GuideResult | safety_notice | string | 필수 | 의료진 상담 고지 |
+| GuideJobResult | job_id | int | 필수 | 가이드 job ID |
+| GuideJobResult | medication_guidance/lifestyle_guidance | string | 필수 | 베이스라인 가이드 텍스트 |
+| GuideJobResult | risk_level | enum(`LOW`,`MEDIUM`,`HIGH`) | 필수 | 가이드 위험도 |
+| GuideJobResult | safety_notice | string | 필수 | 의료진 상담 고지 |
+| GuideJobResult | structured_data | object | 필수 | 생성 메타데이터(JSON) |
+| GuideJobResult | created_at/updated_at | string(datetime) | 필수 | 결과 생성/수정 시각 |
+| GuideResult(계획) | medication_guide | object | 필수 | 복약 안내 |
+| GuideResult(계획) | health_coaching | object | 필수 | 생활습관 코칭 |
+| GuideResult(계획) | risk_flags | object | 필수 | 위험 플래그 |
+| GuideResult(계획) | safety_notice | string | 필수 | 의료진 상담 고지 |
 | AnalysisSummary | basic_info/lifestyle_analysis/sleep_analysis/nutrition_analysis | object | 필수 | 지표 분석 결과 |
 
 ### 11.6 챗봇 객체
@@ -158,7 +178,7 @@
 | ChatStreamEvent | event | string | 필수 | `token`, `reference`, `done`, `error` |
 | ChatStreamEvent | data | object | 필수 | 이벤트 payload |
 
-### 11.7 알림/리마인더/이미지분석 객체
+### 11.7 알림/리마인더 객체
 
 | 객체명 | 필드 | 타입 | 필수/선택 | 설명 |
 |---|---|---|---|---|
@@ -179,24 +199,6 @@
 | DdayReminder | medication_name | string | 필수 | 약물명 |
 | DdayReminder | remaining_days | int | 필수 | 소진까지 남은 일수 |
 | DdayReminder | estimated_depletion_date | string(date) | 필수 | 소진 예상일 |
-| PillAnalysisRequest | image | file | 필수 | 알약 이미지 |
-| PillAnalysisResult | analysis_id | int | 필수 | 분석 ID |
-| PillAnalysisResult | status | enum(`QUEUED`,`PROCESSING`,`SUCCEEDED`,`UNREADABLE`,`OOD`,`MULTI_OBJECT`,`FAILED`) | 필수 | 판독 상태 |
-| PillAnalysisResult | predicted_drug_id/predicted_drug_name | mixed | 선택 | 예측 약물 |
-| PillAnalysisResult | confidence | float | 선택 | 예측 신뢰도 |
-| PillAnalysisResult | detected_object_count | int | 선택 | 감지된 알약 객체 수 |
-| PillAnalysisResult | rejection_reason | enum(`LOW_CONFIDENCE`,`BLUR`,`CROPPED`,`OOD`,`MULTI_OBJECT`) | 선택 | 판독불가/중단 사유 |
-| PillAnalysisResult | message | string | 선택 | 사용자 안내 문구 |
-| PillAnalysisResult | guidance | object | 선택 | 복약 가이드 매핑 |
-| PillMisclassificationReportRequest | correct_drug_id | int | 선택 | 내부 약물 사전에서 선택한 올바른 약물 ID |
-| PillMisclassificationReportRequest | correct_drug_name | string | 선택 | 내부 사전에 없는 경우 사용자가 입력한 약물명 |
-| PillMisclassificationReportRequest | reason | string | 선택 | 오분류 신고 사유 |
-| PillMisclassificationReportRequest | comment | string | 선택 | 추가 메모 |
-| PillMisclassificationReport | report_id | int | 필수 | 오분류 신고 ID |
-| PillMisclassificationReport | analysis_id | int | 필수 | 대상 분석 ID |
-| PillMisclassificationReport | status | enum(`RECEIVED`,`REVIEWED`,`REFLECTED`,`REJECTED`) | 필수 | 신고 처리 상태 |
-| PillMisclassificationReport | corrected_drug_id/corrected_drug_name | mixed | 선택 | 신고된 정답 약물 정보 |
-| PillMisclassificationReport | created_at | string(datetime) | 필수 | 신고 생성 시각 |
 
 ## 12. API 계약 명세 (Request/Response)
 
@@ -208,7 +210,8 @@
   - 파일 업로드: `multipart/form-data`
   - 스트리밍: `text/event-stream`
 - 성공 응답: HTTP 표준코드 + 객체 본문
-- 실패 응답: `ApiError` 객체
+- 실패 응답(현재 구현): FastAPI 기본 오류 객체 `{"detail":"..."}` 중심
+- 실패 응답(목표 계약): `ApiError` 객체 표준화
 
 ### 12.2 인증/사용자 API
 
@@ -229,15 +232,17 @@
 | POST | `/api/v1/ocr/documents/upload` | 구현 | multipart: `document_type`(필수), `file`(필수) | `201 OcrDocument` |
 | POST | `/api/v1/ocr/jobs` | 구현 | `{"document_id": int}` (필수) | `202 OcrJobStatus` |
 | GET | `/api/v1/ocr/jobs/{job_id}` | 구현 | path `job_id`(필수) | `200 OcrJobStatus` |
-| GET | `/api/v1/ocr/jobs/{job_id}/result` | 구현 | path `job_id`(필수) | `200 OcrResult` |
-| PATCH | `/api/v1/ocr/jobs/{job_id}/confirm` | 계획 | `OcrReviewConfirmRequest` (`confirmed` 필수) | `200 OcrResult` |
+| GET | `/api/v1/ocr/jobs/{job_id}/result` | 구현 | path `job_id`(필수) | `200 OcrJobResult` |
+| PATCH | `/api/v1/ocr/jobs/{job_id}/confirm` | 계획 | `OcrReviewConfirmRequest` (`confirmed` 필수) | `200 OcrResult(계획)` |
 | POST | `/api/v1/guides/jobs` | 구현 | `{"ocr_job_id": int}` (필수) | `202 GuideJobStatus` |
 | GET | `/api/v1/guides/jobs/{job_id}` | 구현 | path `job_id`(필수) | `200 GuideJobStatus` |
-| GET | `/api/v1/guides/jobs/{job_id}/result` | 구현 | path `job_id`(필수) | `200 GuideResult` |
+| GET | `/api/v1/guides/jobs/{job_id}/result` | 구현 | path `job_id`(필수) | `200 GuideJobResult` |
 | GET | `/api/v1/analysis/summary` | 계획 | query: `date_from,date_to`(선택) | `200 AnalysisSummary` |
 
 정책 메모:
 - OCR/파싱 완료 후 원본 업로드 이미지는 즉시 폐기하며, DB/클라우드 스토리지에 파일 형태로 보관하지 않는다 (`REQ-127`).
+- OCR/가이드 작업 생성 시 큐 등록 실패가 발생하면 서버는 `503`을 반환하고 해당 job을 `FAILED`로 마킹한다(고착 방지).
+- OCR 블록 좌표(`raw_blocks`)는 필수 영속 저장 대상이 아니며, 저신뢰/검수 필요 케이스 중심으로 선택 저장할 수 있다.
 
 ### 12.4 챗봇 API
 
@@ -252,19 +257,7 @@
 - 검색 유사도가 임계값 미만이면 `needs_clarification=true` 메시지로 재질문을 유도할 수 있다 (`REQ-060`).
 - 세션은 비활성 10~30분 경과 시 자동 `CLOSED` 처리될 수 있다 (`REQ-061`).
 
-### 12.5 이미지분석 API
-
-| Method | Path | 상태 | Request (필수/선택) | Success Response |
-|---|---|---|---|---|
-| POST | `/api/v1/pill-analysis` | 계획 | multipart: `image`(필수) | `202 {"analysis_id": int, "status":"QUEUED"}` |
-| GET | `/api/v1/pill-analysis/{analysis_id}` | 계획 | path `analysis_id`(필수) | `200 PillAnalysisResult` |
-| POST | `/api/v1/pill-analysis/{analysis_id}/misclassifications` | 계획 | path `analysis_id`(필수), `PillMisclassificationReportRequest` (`correct_drug_id` 또는 `correct_drug_name` 중 1개 필수) | `202 PillMisclassificationReport` |
-
-정책 메모:
-- 다중 알약 감지 시 `status=MULTI_OBJECT`로 처리하고 재촬영 안내 메시지를 반환한다 (`REQ-063`).
-- 확률 임계값 미달/품질불량/OOD는 `UNREADABLE` 또는 `OOD` 상태로 반환한다 (`REQ-036`).
-
-### 12.6 알림/리마인더 API
+### 12.5 알림/리마인더 API
 
 | Method | Path | 상태 | Request (필수/선택) | Success Response |
 |---|---|---|---|---|
@@ -272,13 +265,28 @@
 | GET | `/api/v1/notifications/unread-count` | 구현 | 없음 | `200 {"unread_count": int}` |
 | PATCH | `/api/v1/notifications/{notification_id}/read` | 구현 | path `notification_id`(필수) | `200 Notification` |
 | PATCH | `/api/v1/notifications/read-all` | 구현 | 없음 | `200 {"updated_count": int}` |
+| GET | `/api/v2/notifications/capabilities` | 구현 | 없음 | `200 {"version":"v2","status":"planned","features":[string...]}` |
 | POST | `/api/v1/reminders` | 계획 | `MedicationReminderUpsertRequest` (`medication_name,schedule_times` 필수) | `201 Reminder` |
 | GET | `/api/v1/reminders` | 계획 | query `enabled`(선택) | `200 {"items": Reminder[]}` |
 | PATCH | `/api/v1/reminders/{reminder_id}` | 계획 | `MedicationReminderUpsertRequest` (모든 필드 선택) | `200 Reminder` |
 | DELETE | `/api/v1/reminders/{reminder_id}` | 계획 | path `reminder_id`(필수) | `204` |
 | GET | `/api/v1/reminders/medication-dday` | 계획 | query `days`(선택, 기본 7) | `200 {"items": DdayReminder[]}` |
 
+### 12.6 개발/운영 지원 API
+
+| Method | Path | 상태 | Request (필수/선택) | Success Response |
+|---|---|---|---|---|
+| GET | `/api/v1/dev/notifications-playground` | 구현 | 없음(내부 지원 API) | `200 text/html` |
+
+정책 메모:
+- `/api/v1/dev/*` 경로는 팀 내 테스트/데모 목적의 내부 지원 API로 운영한다.
+- `/api/docs`, `/api/redoc`, `/api/openapi.json`은 FastAPI 기본 문서 라우트로 별도 계약 표에서 제외한다.
+
 ### 12.7 대표 에러 코드 매핑
+
+정책 메모:
+- 현재 구현(v1) 다수 엔드포인트는 `detail` 문자열 기반 오류 응답을 사용한다.
+- 아래 `code` 매핑은 표준화 목표 코드이며, 구현 범위에 따라 단계적으로 반영한다.
 
 | HTTP | code 예시 | 발생 상황 |
 |---|---|---|
@@ -289,9 +297,8 @@
 | 409 | `STATE_CONFLICT` | 처리 상태 미충족(예: OCR 미완료 상태에서 가이드 요청) |
 | 413 | `FILE_TOO_LARGE` | 파일 크기 제한 초과 |
 | 422 | `OCR_LOW_CONFIDENCE` | OCR 신뢰도 임계값 미달 |
-| 422 | `PILL_MULTI_OBJECT` | 이미지에서 복수 알약 감지 |
-| 422 | `PILL_UNREADABLE` | 흐림/잘림/저품질 등으로 판독 불가 |
 | 429 | `RATE_LIMITED` | 요청 과다 |
+| 503 | `QUEUE_UNAVAILABLE` | 비동기 작업 큐 등록 실패(서비스 일시 불가) |
 | 500 | `INTERNAL_ERROR` | 서버 내부 오류 |
 | 502 | `UPSTREAM_OCR_ERROR` | 외부 OCR API 실패 |
 | 504 | `UPSTREAM_TIMEOUT` | 외부 LLM/OCR 타임아웃 |
