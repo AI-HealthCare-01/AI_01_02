@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Path, Query, status
 from fastapi.responses import ORJSONResponse as Response
 
 from app.dependencies.security import get_request_user
@@ -10,10 +10,24 @@ from app.dtos.notifications import (
     ReadAllNotificationsResponse,
     UnreadCountResponse,
 )
+from app.models.notifications import Notification
 from app.models.users import User
 from app.services.notifications import NotificationService
 
 notification_router = APIRouter(prefix="/notifications", tags=["notifications"])
+
+
+def _serialize_notification(notification: Notification) -> NotificationInfoResponse:
+    return NotificationInfoResponse(
+        id=str(notification.id),
+        type=notification.type,
+        title=notification.title,
+        message=notification.message,
+        is_read=notification.is_read,
+        read_at=notification.read_at,
+        payload=notification.payload,
+        created_at=notification.created_at,
+    )
 
 
 @notification_router.get("", response_model=NotificationListResponse, status_code=status.HTTP_200_OK)
@@ -32,7 +46,7 @@ async def list_notifications(
     )
     return Response(
         NotificationListResponse(
-            items=[NotificationInfoResponse.model_validate(notification) for notification in notifications],
+            items=[_serialize_notification(notification) for notification in notifications],
             unread_count=unread_count,
         ).model_dump(),
         status_code=status.HTTP_200_OK,
@@ -52,12 +66,12 @@ async def get_unread_count(
     "/{notification_id}/read", response_model=NotificationInfoResponse, status_code=status.HTTP_200_OK
 )
 async def mark_notification_as_read(
-    notification_id: int,
+    notification_id: Annotated[str, Path(pattern=r"^\d+$")],
     user: Annotated[User, Depends(get_request_user)],
     notification_service: Annotated[NotificationService, Depends(NotificationService)],
 ) -> Response:
-    notification = await notification_service.mark_as_read(user=user, notification_id=notification_id)
-    return Response(NotificationInfoResponse.model_validate(notification).model_dump(), status_code=status.HTTP_200_OK)
+    notification = await notification_service.mark_as_read(user=user, notification_id=int(notification_id))
+    return Response(_serialize_notification(notification).model_dump(), status_code=status.HTTP_200_OK)
 
 
 @notification_router.patch("/read-all", response_model=ReadAllNotificationsResponse, status_code=status.HTTP_200_OK)

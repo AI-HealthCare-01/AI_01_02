@@ -7,7 +7,24 @@ COLOR_NC=$(tput sgr0)
 
 cd "$(dirname "$0")/../.."
 
-source .env
+if [ -f .env ]; then
+  set -a
+  # .env created on Windows can contain CRLF, which breaks `source` in bash.
+  source <(sed -e 's/\r$//' .env)
+  set +a
+fi
+
+UV_CMD=
+if command -v uv >/dev/null 2>&1; then
+  UV_CMD=uv
+elif command -v uv.exe >/dev/null 2>&1; then
+  UV_CMD=uv.exe
+fi
+
+if [ -z "$UV_CMD" ] || ! "$UV_CMD" --version >/dev/null 2>&1; then
+  echo "${COLOR_RED}✖ uv command not found or not executable.${COLOR_NC}"
+  exit 1
+fi
 
 echo "${COLOR_BLUE}Find Tests${COLOR_NC}"
 
@@ -32,7 +49,7 @@ EOF
 
     echo "${COLOR_BLUE}Run Pytest with Coverage${COLOR_NC}"
 
-    if ! uv run coverage run -m pytest app; then
+    if ! "$UV_CMD" run coverage run -m pytest app; then
       echo ""
       echo "${COLOR_RED}✖ Pytest failed.${COLOR_NC}"
       echo "${COLOR_RED}→ Fix the test failures above and re-run.${COLOR_NC}"
@@ -40,7 +57,7 @@ EOF
     fi
 
     echo "${COLOR_BLUE}Coverage Report${COLOR_NC}"
-    if ! uv run coverage report -m ; then
+    if ! "$UV_CMD" run coverage report -m ; then
       echo "${COLOR_RED}✖ Coverage check failed.${COLOR_NC}"
       exit 1
     fi

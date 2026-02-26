@@ -1,6 +1,6 @@
 # Project Memory (Living Baseline)
 
-Last updated: 2026-02-24
+Last updated: 2026-02-26
 Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.mypy_cache`, IDE cache).
 
 ## 1) Current Product State
@@ -11,10 +11,11 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - `ADHD Care Web App Design/`: Figma wireframe React app for UX prototyping (not production API runtime).
 - Infra includes MySQL, Redis, Nginx, Docker Compose, CI workflow, and deployment scripts.
 - Notification feature appears recently added and partially versioned (`v1` real API, `v2` capability placeholder).
+- External API identifier contract is string-based (`id`, `*_id`, path params), while internal DB keys remain bigint.
 - Canonical planning docs are split and versioned:
 - `docs/REQUIREMENTS_DEFINITION.md` (v1.10)
-- `docs/API_SPECIFICATION.md` (v1.7)
-- `docs/TEAM_DEVELOPMENT_GUIDELINE.md` (v2.6)
+- `docs/API_SPECIFICATION.md` (v1.11)
+- `docs/TEAM_DEVELOPMENT_GUIDELINE.md` (v2.8)
 
 ## 2) Repository Map (Meaningful Files)
 
@@ -100,6 +101,7 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - Dependency chain for protected APIs:
 - `Authorization: Bearer <access_token>`
 - `get_request_user` -> `JwtService.verify_jwt(access)` -> user lookup.
+- Protected APIs do not receive `user_id` as request input; identity is derived from access-token payload.
 - Auth flow:
 - Signup validates input, checks uniqueness, hashes password, inserts user.
 - Login verifies password and active status, updates `last_login`, returns access token.
@@ -233,12 +235,19 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - `.venv\Scripts\mypy.exe app ai_worker`
 - `.venv\Scripts\python.exe -m pytest app/tests -q`
 - `npm run build` (workdir: `ADHD Care Web App Design`)
+- `npm audit --json` (workdir: `ADHD Care Web App Design`)
+- `docker compose -f docker-compose.yml config`
+- `docker compose -f docker-compose.prod.yml config`
+- `docker compose -f docker-compose.yml build fastapi ai-worker`
 - Result at analysis time:
-- `ruff check`: passed
-- `ruff format --check`: passed
-- `mypy`: passed
-- `46 passed in 15.95s`
-- `vite build` 성공 (`1619 modules transformed`, output: `dist/assets/index-BGiojbbD.js`)
+- `ruff check`: passed (2026-02-26)
+- `ruff format --check`: passed (2026-02-26)
+- `mypy`: passed (2026-02-26)
+- `pytest`: `46 passed in 15.92s` (2026-02-26)
+- `vite build` 성공 (`vite v6.4.1`, `1619 modules transformed`, output: `dist/assets/index-BGiojbbD.js`) (baseline: 2026-02-24)
+- `npm audit`: `0 vulnerabilities` (baseline: 2026-02-24)
+- `docker compose config`(dev/prod): passed (baseline: 2026-02-24)
+- `docker compose build fastapi ai-worker`: passed (baseline: 2026-02-24)
 - Covered suites:
 - auth signup/login/refresh
 - user me read/update
@@ -351,3 +360,14 @@ Scope: Full repository scan excluding generated/vendor directories (`.venv`, `.m
 - 2026-02-24: OCR/Guide 작업 생성 시 큐 publish 실패 고착을 방지하도록 `503 + FAILED` 처리로 보강하고(`app/services/ocr.py`, `app/services/guides.py`), 가이드 워커에 재시도/지연큐/데드레터를 추가했다(`ai_worker/tasks/guide.py`, `ai_worker/main.py`, `ai_worker/core/config.py`), API/워커 회귀 테스트 4건을 확장했다(`app/tests/ocr_apis/test_ocr_apis.py`, `app/tests/guide_apis/test_guide_apis.py`, `app/tests/guide_worker/test_guide_worker_tasks.py`), 문서 동기화 및 검증 재실행 완료(`ruff`, `mypy`, `pytest 46 passed`, `npm run build`).
 - 2026-02-24: OCR 큐 등록 실패 시 원본 파일까지 즉시 폐기하도록 보강하고(`app/services/ocr.py`), API 회귀 테스트에 파일 폐기 검증을 추가했으며(`app/tests/ocr_apis/test_ocr_apis.py`), 요구사항/API/팀가이드에 raw blocks 선택 저장 정책을 명시했다(`docs/REQUIREMENTS_DEFINITION.md`, `docs/API_SPECIFICATION.md`, `docs/TEAM_DEVELOPMENT_GUIDELINE.md`).
 - 2026-02-24: 삭제된 `docs/ERD_DBDIAGRAM.dbml` 반영 후 문서-코드 정합성 재검수로 API 명세(v1.7)에 구현 보조 엔드포인트(`/api/v2/notifications/capabilities`, `/api/v1/dev/notifications-playground`)를 명시하고 팀 가이드(v2.6)와 파일 인덱스를 동기화했으며, 검증 재실행(`ruff check`, `ruff format --check`, `mypy`, `pytest 46 passed`, `npm run build`)을 완료했다.
+- 2026-02-24: ERD를 현재 구현 기준 As-Is로 재작성하여 비구현/과설계 테이블 24개를 제거하고, 운영 데이터 흐름 핵심 7개 비즈니스 테이블(`users`, `notifications`, `documents`, `ocr_jobs`, `ocr_results`, `guide_jobs`, `guide_results`)만 유지했다(`docs/ERD_DBDIAGRAM_TOBE.dbml`, 이후 같은 날 개발 기준 베이스라인으로 확장 반영됨).
+- 2026-02-24: ERD를 개발 기준(구현 + 직접 구현 예정 기능)으로 다시 정리해 챗봇/프로필/OCR 정규화/리마인더 확장 테이블만 추가하고, 지식문서 저장소/모델카탈로그/외부호출로그 등 연기 가능 영역은 제외한 최소 개발 베이스라인으로 확정했다(`docs/ERD_DBDIAGRAM_TOBE.dbml`).
+- 2026-02-24: 문서 정합성 전수 점검을 수행해 ERD 제외 범위를 명시하고(`docs/ERD_DBDIAGRAM_TOBE.dbml`), 파일 인덱스를 생성 산출물 제외 기준으로 재생성해 실제 라인 수와 일치하도록 동기화했다(`docs/PROJECT_FILE_INDEX.md`).
+- 2026-02-24: 문서-구현 정합성 재점검으로 API 명세를 v1.8로 갱신해 로그인/OCR/가이드 DTO 응답 객체를 코드와 일치시켰고(`docs/API_SPECIFICATION.md`), 팀 가이드를 v2.7로 동기화했으며(`docs/TEAM_DEVELOPMENT_GUIDELINE.md`), 파일 인덱스를 최신 워크트리 기준으로 재생성했다(`docs/PROJECT_FILE_INDEX.md`), 프런트 보안 패치(vite 6.4.1)와 검증 결과(`npm audit 0 vulnerabilities`, `docker compose build`)를 메모에 반영했다(`docs/PROJECT_MEMORY.md`).
+- 2026-02-24: 문서 전수 재점검 2차로 ERD 구현영역을 현재 모델/마이그레이션에 맞춰 정밀 동기화했다(알림/OCR/가이드 실패 enum 초과값 제거, `ocr_results` 계획 컬럼 분리 메모화) (`docs/ERD_DBDIAGRAM_TOBE.dbml`), 파일 인덱스를 실제 라인 수 기준으로 재생성하고 경로 표기를 `/`로 정규화했다(`docs/PROJECT_FILE_INDEX.md`), 재검증 결과 `route_only_code=0`, `route_only_doc=0`, `PROJECT_FILE_INDEX missing=0/mismatch=0`, `ERD impl mismatch=0`를 확인했다.
+- 2026-02-26: API 식별자 string 계약을 구현 코드에 반영했다(`app/dtos/*`, `app/apis/v1/*`). 외부 요청/응답 경계에서 `id`, `*_id`, path 파라미터를 string으로 통일하고 내부 서비스/DB는 bigint(int) 변환 경계를 유지했다.
+- 2026-02-26: API 명세를 v1.11로 갱신해 `/users/me` Bearer 필수 인증과 토큰 payload 기반 사용자 식별 원칙을 명시했다(`docs/API_SPECIFICATION.md`), 팀 가이드를 v2.8로 동기화했다(`docs/TEAM_DEVELOPMENT_GUIDELINE.md`).
+- 2026-02-26: 문서-코드 정합성 자동 점검 재실행 결과 `DOC_IMPL=18`, `APP_IMPL=18`, `DOC_ONLY=0`, `APP_ONLY=0`를 확인했고, OpenAPI 핵심 식별자 스키마가 string 계약으로 출력됨을 검증했다.
+- 2026-02-26: 검증 재실행 완료(`ruff check`, `ruff format --check`, `mypy`, `pytest 46 passed in 15.82s`).
+- 2026-02-26: 문서 정합성 재점검 중 비정상 확장된 파일 인덱스를 제외 규칙 기준으로 재생성해 `indexed_rows=313`, `actual_files=313`, `missing_in_index=0`, `missing_in_fs=0`, `mismatch=0`을 확인했고, 검증을 재실행해 `pytest 46 passed in 17.22s`를 확인했다(`docs/PROJECT_FILE_INDEX.md`).
+- 2026-02-26: 최종 검증 재실행으로 `ruff check`, `ruff format --check`, `mypy`, `pytest 46 passed in 15.92s`를 확인했다.

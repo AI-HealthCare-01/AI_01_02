@@ -50,7 +50,7 @@ class TestGuideApis(TestCase):
         assert login_response.status_code == status.HTTP_200_OK
         return login_response.json()["access_token"]
 
-    async def _create_ocr_job(self, client: AsyncClient, *, access_token: str) -> int:
+    async def _create_ocr_job(self, client: AsyncClient, *, access_token: str) -> str:
         headers = {"Authorization": f"Bearer {access_token}"}
         upload_response = await client.post(
             "/api/v1/ocr/documents/upload",
@@ -69,8 +69,8 @@ class TestGuideApis(TestCase):
         assert create_response.status_code == status.HTTP_202_ACCEPTED
         return create_response.json()["job_id"]
 
-    async def _mark_ocr_succeeded(self, *, ocr_job_id: int) -> None:
-        ocr_job = await OcrJob.get(id=ocr_job_id)
+    async def _mark_ocr_succeeded(self, *, ocr_job_id: str) -> None:
+        ocr_job = await OcrJob.get(id=int(ocr_job_id))
         ocr_job.status = OcrJobStatus.SUCCEEDED
         await ocr_job.save(update_fields=["status"])
         await OcrResult.create(
@@ -153,7 +153,7 @@ class TestGuideApis(TestCase):
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
         assert response.json()["detail"] == "가이드 작업 큐 등록에 실패했습니다. 잠시 후 다시 시도해주세요."
 
-        failed_job = await GuideJob.filter(ocr_job_id=ocr_job_id).order_by("-id").first()
+        failed_job = await GuideJob.filter(ocr_job_id=int(ocr_job_id)).order_by("-id").first()
         assert failed_job is not None
         assert failed_job.status == GuideJobStatus.FAILED
         assert failed_job.failure_code == GuideFailureCode.PROCESSING_ERROR
@@ -188,7 +188,7 @@ class TestGuideApis(TestCase):
             create_response = await client.post("/api/v1/guides/jobs", headers=headers, json={"ocr_job_id": ocr_job_id})
             guide_job_id = create_response.json()["job_id"]
 
-            guide_job = await GuideJob.get(id=guide_job_id)
+            guide_job = await GuideJob.get(id=int(guide_job_id))
             guide_job.status = GuideJobStatus.SUCCEEDED
             await guide_job.save(update_fields=["status"])
             await GuideResult.create(

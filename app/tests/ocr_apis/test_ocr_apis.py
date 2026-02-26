@@ -164,14 +164,14 @@ class TestOcrApis(TestCase):
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
         assert response.json()["detail"] == "OCR 작업 큐 등록에 실패했습니다. 잠시 후 다시 시도해주세요."
 
-        failed_job = await OcrJob.filter(document_id=document["id"]).order_by("-id").first()
+        failed_job = await OcrJob.filter(document_id=int(document["id"])).order_by("-id").first()
         assert failed_job is not None
         assert failed_job.status == OcrJobStatus.FAILED
         assert failed_job.failure_code == OcrFailureCode.PROCESSING_ERROR
         assert failed_job.completed_at is not None
         assert failed_job.error_message == "[PROCESSING_ERROR] OCR queue publish failed."
 
-        document_record = await Document.get(id=document["id"])
+        document_record = await Document.get(id=int(document["id"]))
         stored_path = Path(config.MEDIA_DIR) / document_record.file_path
         assert stored_path.exists() is False
 
@@ -210,8 +210,8 @@ class TestOcrApis(TestCase):
             )
 
         job_id = create_response.json()["job_id"]
-        db_document = await Document.get(id=document["id"])
-        db_job = await OcrJob.get(id=job_id)
+        db_document = await Document.get(id=int(document["id"]))
+        db_job = await OcrJob.get(id=int(job_id))
         assert db_document.file_name == "test.png"
         assert db_job.document_id == db_document.id
 
@@ -245,7 +245,7 @@ class TestOcrApis(TestCase):
             )
             job_id = create_response.json()["job_id"]
 
-            job = await OcrJob.get(id=job_id)
+            job = await OcrJob.get(id=int(job_id))
             job.status = OcrJobStatus.SUCCEEDED
             await job.save(update_fields=["status"])
             await OcrResult.create(

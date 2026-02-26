@@ -61,8 +61,8 @@ class TestNotificationApis(TestCase):
             body = response.json()
             assert body["unread_count"] == 2
             assert len(body["items"]) == 3
-            assert body["items"][0]["id"] == latest.id
-            assert any(item["id"] == first.id for item in body["items"])
+            assert body["items"][0]["id"] == str(latest.id)
+            assert any(item["id"] == str(first.id) for item in body["items"])
 
             unread_response = await client.get("/api/v1/notifications?is_read=false", headers=headers)
             assert unread_response.status_code == status.HTTP_200_OK

@@ -1,10 +1,14 @@
 # AI Health Project API 명세서
 
-문서 버전: v1.7  
-작성일: 2026-02-24  
+문서 버전: v1.11  
+작성일: 2026-02-26  
 원본: `docs/REQUIREMENTS_DEFINITION.md`의 기존 섹션 11~12  
 문서 목적: 객체 모델 명세와 API 계약 명세를 독립 문서로 관리한다.
 문서 변경 이력:
+- v1.11 (2026-02-26): 인증/사용자 API 표 보강(`/users/me` 요청에 Bearer 토큰 필수 명시, 사용자 식별 근거 추가)
+- v1.10 (2026-02-26): 외부 API 식별자 계약 일괄 string 전환(`id`, `*_id`, path 파라미터)
+- v1.9 (2026-02-26): 구현 정합성 패치(`birth_date/birthday` 명명 규칙 메모, `OcrDocument.file_path` 필수화, Job 상태 타임스탬프 nullable 분리, 실패 응답 규칙 명시 강화)
+- v1.8 (2026-02-24): 구현 DTO 정합화 반영(로그인 응답 필드, OCR/가이드 작업 생성 응답 객체, 상태 응답 보조 필드)
 - v1.7 (2026-02-24): 구현 API 실사 기반 정합화(알림 v2 capability 조회, dev 알림 플레이그라운드 경로 명시)
 - v1.6 (2026-02-24): OCR 좌표(`raw_blocks`) 선택 저장 정책(저신뢰 우선) 명시 및 큐 실패 시 원본 즉시 폐기 경로 반영
 - v1.5 (2026-02-24): 작업 생성 큐 등록 실패 시 503/FAILED 처리 정책 반영(정책 메모/에러 코드 매핑)
@@ -36,6 +40,7 @@
 정책 메모:
 - 현재 구현(v1) 실패 응답은 FastAPI 기본 형식(`{"detail":"..."}`)을 사용한다.
 - `ApiError` 객체 표준화는 목표 계약이며, 점진 반영한다.
+- 외부 API 식별자(`id`, `*_id`, path 파라미터)는 언어/플랫폼 정밀도 이슈를 피하기 위해 string으로 계약한다.
 
 ### 11.2 인증/사용자 객체
 
@@ -47,13 +52,10 @@
 | SignUpRequest | gender | enum(`MALE`,`FEMALE`) | 필수 | 성별 |
 | SignUpRequest | birth_date | string(date) | 필수 | 생년월일 |
 | SignUpRequest | phone_number | string | 필수 | 휴대폰 번호 |
-| SignUpRequest | nickname | string | 선택 | 별칭 |
 | LoginRequest | email | string(email) | 필수 | 로그인 ID |
 | LoginRequest | password | string | 필수 | 비밀번호 |
 | LoginResponse | access_token | string | 필수 | JWT access token |
-| LoginResponse | token_type | string | 선택 | 기본 `Bearer` |
-| LoginResponse | expires_in | int | 선택 | access token 만료(초) |
-| UserInfo | id | int | 필수 | 사용자 ID |
+| UserInfo | id | string | 필수 | 사용자 ID |
 | UserInfo | name | string | 필수 | 이름 |
 | UserInfo | email | string | 필수 | 이메일 |
 | UserInfo | phone_number | string | 필수 | 휴대폰 번호 |
@@ -61,6 +63,10 @@
 | UserInfo | gender | enum | 필수 | 성별 |
 | UserInfo | created_at | string(datetime) | 필수 | 가입시각 |
 | UserUpdateRequest | name/email/phone_number/birthday/gender | mixed | 선택 | 부분 업데이트(PATCH) |
+
+정책 메모:
+- 현재 구현(v1) 기준으로 회원가입 요청은 `birth_date`를 사용하고, 내 정보 조회/수정은 `birthday`를 사용한다.
+- 필드명 통합(예: `birth_date`)은 호환성 영향이 있어 차기 버전(v2)에서 일괄 반영한다.
 
 ### 11.3 건강 프로필 객체 (신규)
 
@@ -71,7 +77,7 @@
 | HealthProfileUpsertRequest | lifestyle_input | object | 선택 | 운동/디지털/기호품 |
 | HealthProfileUpsertRequest | sleep_input | object | 선택 | 수면 패턴 |
 | HealthProfileUpsertRequest | nutrition_input | object | 선택 | 영양/식사 정보 |
-| HealthProfile | id/user_id | mixed | 필수 | 건강 프로필 식별자 |
+| HealthProfile | id/user_id | string | 필수 | 건강 프로필 식별자 |
 | HealthProfile | basic_info/medical_history/lifestyle_input/sleep_input/nutrition_input | object | 필수 | 저장된 프로필 입력 구조 |
 | HealthProfile | created_at/updated_at | string(datetime) | 필수 | 생성/수정 시각 |
 | basic_info | height_cm | float | 필수 | 키(cm) |
@@ -92,22 +98,25 @@
 
 | 객체명 | 필드 | 타입 | 필수/선택 | 설명 |
 |---|---|---|---|---|
-| OcrDocument | id | int | 필수 | 업로드 문서 ID |
+| OcrDocument | id | string | 필수 | 업로드 문서 ID |
 | OcrDocument | document_type | enum | 필수 | 문서 타입 |
 | OcrDocument | file_name | string | 필수 | 업로드 파일명 |
-| OcrDocument | file_path | string | 선택 | 현재 구현 응답에 포함되는 저장 상대경로 |
+| OcrDocument | file_path | string | 필수 | 현재 구현 응답에 포함되는 저장 상대경로(원본 파일 폐기 이후에도 메타데이터로 유지) |
 | OcrDocument | mime_type | string | 필수 | 파일 MIME 타입 |
 | OcrDocument | file_size | int | 필수 | 파일 크기(byte) |
 | OcrDocument | uploaded_at | string(datetime) | 필수 | 업로드 시각 |
 | OcrDocumentUploadRequest | document_type | enum | 필수 | 문서 타입 |
 | OcrDocumentUploadRequest | file | file | 필수 | 업로드 파일 |
-| OcrJobCreateRequest | document_id | int | 필수 | OCR 대상 문서 ID |
-| OcrJobStatus | job_id | int | 필수 | OCR job ID |
+| OcrJobCreateRequest | document_id | string | 필수 | OCR 대상 문서 ID |
+| OcrJobCreateResponse | job_id/status/retry_count/max_retries/queued_at | mixed | 필수 | 작업 생성 직후 반환 메타데이터(`job_id`는 string) |
+| OcrJobStatus | job_id | string | 필수 | OCR job ID |
+| OcrJobStatus | document_id | string | 필수 | 원본 문서 ID |
 | OcrJobStatus | status | enum(`QUEUED`,`PROCESSING`,`SUCCEEDED`,`FAILED`) | 필수 | 상태 |
 | OcrJobStatus | retry_count/max_retries | int | 필수 | 재시도 정보 |
 | OcrJobStatus | failure_code/error_message | string \| null | 선택(nullable) | 실패 정보 |
-| OcrJobStatus | queued_at/started_at/completed_at | string(datetime) \| null | 선택(nullable) | 작업 시각 메타데이터 |
-| OcrJobResult | job_id | int | 필수 | OCR job ID |
+| OcrJobStatus | queued_at | string(datetime) | 필수 | 큐 등록 시각 |
+| OcrJobStatus | started_at/completed_at | string(datetime) \| null | 선택(nullable) | 처리 시작/완료 시각 메타데이터 |
+| OcrJobResult | job_id | string | 필수 | OCR job ID |
 | OcrJobResult | extracted_text | string | 필수 | OCR 추출 원문(베이스라인 구현) |
 | OcrJobResult | structured_data | object | 필수 | 베이스라인 구조화 결과(JSON) |
 | OcrJobResult | created_at/updated_at | string(datetime) | 필수 | 결과 생성/수정 시각 |
@@ -136,13 +145,16 @@
 
 | 객체명 | 필드 | 타입 | 필수/선택 | 설명 |
 |---|---|---|---|---|
-| GuideJobStatus | job_id | int | 필수 | 가이드 job ID |
+| GuideJobCreateResponse | job_id/status/retry_count/max_retries/queued_at | mixed | 필수 | 작업 생성 직후 반환 메타데이터(`job_id`는 string) |
+| GuideJobStatus | job_id | string | 필수 | 가이드 job ID |
+| GuideJobStatus | ocr_job_id | string | 필수 | 원천 OCR job ID |
 | GuideJobStatus | status | enum(`QUEUED`,`PROCESSING`,`SUCCEEDED`,`FAILED`) | 필수 | 상태 |
 | GuideJobStatus | retry_count/max_retries | int | 필수 | 재시도 정보 |
 | GuideJobStatus | failure_code/error_message | string \| null | 선택(nullable) | 실패 정보 |
-| GuideJobStatus | queued_at/started_at/completed_at | string(datetime) \| null | 선택(nullable) | 작업 시각 메타데이터 |
-| GuideJobCreateRequest | ocr_job_id | int | 필수 | 가이드 원천 OCR job |
-| GuideJobResult | job_id | int | 필수 | 가이드 job ID |
+| GuideJobStatus | queued_at | string(datetime) | 필수 | 큐 등록 시각 |
+| GuideJobStatus | started_at/completed_at | string(datetime) \| null | 선택(nullable) | 처리 시작/완료 시각 메타데이터 |
+| GuideJobCreateRequest | ocr_job_id | string | 필수 | 가이드 원천 OCR job |
+| GuideJobResult | job_id | string | 필수 | 가이드 job ID |
 | GuideJobResult | medication_guidance/lifestyle_guidance | string | 필수 | 베이스라인 가이드 텍스트 |
 | GuideJobResult | risk_level | enum(`LOW`,`MEDIUM`,`HIGH`) | 필수 | 가이드 위험도 |
 | GuideJobResult | safety_notice | string | 필수 | 의료진 상담 고지 |
@@ -159,18 +171,18 @@
 | 객체명 | 필드 | 타입 | 필수/선택 | 설명 |
 |---|---|---|---|---|
 | ChatSessionCreateRequest | title | string | 선택 | 세션 제목 |
-| ChatSession | id | int | 필수 | 세션 ID |
+| ChatSession | id | string | 필수 | 세션 ID |
 | ChatSession | status | enum(`ACTIVE`,`CLOSED`) | 필수 | 세션 상태 |
 | ChatSession | last_activity_at | string(datetime) | 선택 | 마지막 활동 시각 |
 | ChatSession | auto_close_after_minutes | int | 선택 | 자동 종료 기준(분) |
 | ChatMessageSendRequest | message | string | 필수 | 사용자 질문 |
 | ChatMessageSendRequest | stream | bool | 선택 | SSE 여부(기본 true) |
-| ChatReference | document_id | string \| int | 필수 | 근거 문서 식별자 |
+| ChatReference | document_id | string | 필수 | 근거 문서 식별자 |
 | ChatReference | title | string | 필수 | 근거 문서 제목 |
 | ChatReference | source | string | 필수 | 출처명(기관/사이트) |
 | ChatReference | url | string | 선택 | 근거 링크 |
 | ChatReference | score | float | 선택 | 검색 유사도/랭킹 점수 |
-| ChatMessage | id | int | 필수 | 메시지 ID |
+| ChatMessage | id | string | 필수 | 메시지 ID |
 | ChatMessage | role | enum(`USER`,`ASSISTANT`,`SYSTEM`) | 필수 | 역할 |
 | ChatMessage | content | string | 필수 | 메시지 본문 |
 | ChatMessage | references | ChatReference[] | 선택 | RAG 근거 문서(근거가 있을 때만 포함) |
@@ -182,14 +194,14 @@
 
 | 객체명 | 필드 | 타입 | 필수/선택 | 설명 |
 |---|---|---|---|---|
-| Notification | id/type/title/message/is_read/created_at | mixed | 필수 | 알림 기본 필드 |
+| Notification | id/type/title/message/is_read/created_at | mixed | 필수 | 알림 기본 필드(`id`는 string) |
 | Notification | read_at/payload | mixed | 선택(nullable) | 읽음 시각/부가정보 |
 | MedicationReminderUpsertRequest | medication_name | string | 필수 | 약물명 |
 | MedicationReminderUpsertRequest | dose | string | 선택 | 복용량 텍스트 |
 | MedicationReminderUpsertRequest | schedule_times | string[](`HH:MM`) | 필수 | 알림 시각 배열 |
 | MedicationReminderUpsertRequest | start_date/end_date | string(date) | 선택 | 적용 기간 |
 | MedicationReminderUpsertRequest | enabled | bool | 선택 | 알림 활성화 |
-| Reminder | id | int | 필수 | 리마인더 ID |
+| Reminder | id | string | 필수 | 리마인더 ID |
 | Reminder | medication_name | string | 필수 | 약물명 |
 | Reminder | dose | string | 선택 | 복용량 텍스트 |
 | Reminder | schedule_times | string[](`HH:MM`) | 필수 | 알림 시각 배열 |
@@ -205,13 +217,15 @@
 ### 12.1 공통 규칙
 
 - 인증: 보호 API는 `Authorization: Bearer <access_token>` 필수
+- 보호 API의 사용자 식별은 `access_token` payload의 `user_id`를 기준으로 수행한다(요청 파라미터로 `user_id`를 받지 않음).
 - Content-Type:
   - JSON API: `application/json`
   - 파일 업로드: `multipart/form-data`
   - 스트리밍: `text/event-stream`
 - 성공 응답: HTTP 표준코드 + 객체 본문
-- 실패 응답(현재 구현): FastAPI 기본 오류 객체 `{"detail":"..."}` 중심
+- 실패 응답(현재 구현): FastAPI 기본 오류 객체 `{"detail":"..."}` 중심(엔드포인트별 HTTP 상태코드를 우선 계약으로 본다)
 - 실패 응답(목표 계약): `ApiError` 객체 표준화
+- 외부 API의 식별자(`id`, `*_id`, path 파라미터)는 string 계약을 따른다.
 
 ### 12.2 인증/사용자 API
 
@@ -220,23 +234,26 @@
 | POST | `/api/v1/auth/signup` | 구현 | `SignUpRequest` (필수: `email,password,name,gender,birth_date,phone_number`) | `201 {"detail":"회원가입이 성공적으로 완료되었습니다."}` |
 | POST | `/api/v1/auth/login` | 구현 | `LoginRequest` (필수: `email,password`) | `200 LoginResponse` + `refresh_token` 쿠키 |
 | GET | `/api/v1/auth/token/refresh` | 구현 | 쿠키 `refresh_token` (필수) | `200 {"access_token":"..."}` |
-| GET | `/api/v1/users/me` | 구현 | 없음 | `200 UserInfo` |
-| PATCH | `/api/v1/users/me` | 구현 | `UserUpdateRequest` (모든 필드 선택) | `200 UserInfo` |
+| GET | `/api/v1/users/me` | 구현 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 UserInfo` |
+| PATCH | `/api/v1/users/me` | 구현 | 헤더 `Authorization: Bearer <access_token>` (필수), `UserUpdateRequest` (모든 필드 선택) | `200 UserInfo` |
 | PUT | `/api/v1/profiles/health` | 계획 | `HealthProfileUpsertRequest` (`basic_info` 필수) | `200 HealthProfile` |
 | GET | `/api/v1/profiles/health` | 계획 | 없음 | `200 HealthProfile` |
+
+정책 메모:
+- 현재 구현(v1)에서 `signup`은 `birth_date`를, `users/me` 조회/수정은 `birthday`를 사용한다.
 
 ### 12.3 OCR/가이드 API
 
 | Method | Path | 상태 | Request (필수/선택) | Success Response |
 |---|---|---|---|---|
 | POST | `/api/v1/ocr/documents/upload` | 구현 | multipart: `document_type`(필수), `file`(필수) | `201 OcrDocument` |
-| POST | `/api/v1/ocr/jobs` | 구현 | `{"document_id": int}` (필수) | `202 OcrJobStatus` |
-| GET | `/api/v1/ocr/jobs/{job_id}` | 구현 | path `job_id`(필수) | `200 OcrJobStatus` |
-| GET | `/api/v1/ocr/jobs/{job_id}/result` | 구현 | path `job_id`(필수) | `200 OcrJobResult` |
-| PATCH | `/api/v1/ocr/jobs/{job_id}/confirm` | 계획 | `OcrReviewConfirmRequest` (`confirmed` 필수) | `200 OcrResult(계획)` |
-| POST | `/api/v1/guides/jobs` | 구현 | `{"ocr_job_id": int}` (필수) | `202 GuideJobStatus` |
-| GET | `/api/v1/guides/jobs/{job_id}` | 구현 | path `job_id`(필수) | `200 GuideJobStatus` |
-| GET | `/api/v1/guides/jobs/{job_id}/result` | 구현 | path `job_id`(필수) | `200 GuideJobResult` |
+| POST | `/api/v1/ocr/jobs` | 구현 | `{"document_id": string}` (필수) | `202 OcrJobCreateResponse` |
+| GET | `/api/v1/ocr/jobs/{job_id}` | 구현 | path `job_id`(string, 필수) | `200 OcrJobStatus` |
+| GET | `/api/v1/ocr/jobs/{job_id}/result` | 구현 | path `job_id`(string, 필수) | `200 OcrJobResult` |
+| PATCH | `/api/v1/ocr/jobs/{job_id}/confirm` | 계획 | path `job_id`(string, 필수), `OcrReviewConfirmRequest` (`confirmed` 필수) | `200 OcrResult(계획)` |
+| POST | `/api/v1/guides/jobs` | 구현 | `{"ocr_job_id": string}` (필수) | `202 GuideJobCreateResponse` |
+| GET | `/api/v1/guides/jobs/{job_id}` | 구현 | path `job_id`(string, 필수) | `200 GuideJobStatus` |
+| GET | `/api/v1/guides/jobs/{job_id}/result` | 구현 | path `job_id`(string, 필수) | `200 GuideJobResult` |
 | GET | `/api/v1/analysis/summary` | 계획 | query: `date_from,date_to`(선택) | `200 AnalysisSummary` |
 
 정책 메모:
@@ -249,7 +266,7 @@
 | Method | Path | 상태 | Request (필수/선택) | Success Response |
 |---|---|---|---|---|
 | POST | `/api/v1/chat/sessions` | 계획 | `{"title": string}` (선택) | `201 ChatSession` |
-| GET | `/api/v1/chat/sessions/{session_id}/messages` | 계획 | path `session_id`(필수), query `limit,offset`(선택) | `200 {"items": ChatMessage[], "meta": PaginationMeta}` |
+| GET | `/api/v1/chat/sessions/{session_id}/messages` | 계획 | path `session_id`(string, 필수), query `limit,offset`(선택) | `200 {"items": ChatMessage[], "meta": PaginationMeta}` |
 | POST | `/api/v1/chat/sessions/{session_id}/messages` | 계획 | `ChatMessageSendRequest` (`message` 필수, `stream` 선택) | `200 ChatMessage` |
 | POST | `/api/v1/chat/sessions/{session_id}/stream` | 계획 | `ChatMessageSendRequest` (`message` 필수) | `200 text/event-stream (ChatStreamEvent)` |
 
@@ -263,13 +280,13 @@
 |---|---|---|---|---|
 | GET | `/api/v1/notifications` | 구현 | query `limit,offset,is_read`(선택) | `200 {"items": Notification[], "unread_count": int}` |
 | GET | `/api/v1/notifications/unread-count` | 구현 | 없음 | `200 {"unread_count": int}` |
-| PATCH | `/api/v1/notifications/{notification_id}/read` | 구현 | path `notification_id`(필수) | `200 Notification` |
+| PATCH | `/api/v1/notifications/{notification_id}/read` | 구현 | path `notification_id`(string, 필수) | `200 Notification` |
 | PATCH | `/api/v1/notifications/read-all` | 구현 | 없음 | `200 {"updated_count": int}` |
 | GET | `/api/v2/notifications/capabilities` | 구현 | 없음 | `200 {"version":"v2","status":"planned","features":[string...]}` |
 | POST | `/api/v1/reminders` | 계획 | `MedicationReminderUpsertRequest` (`medication_name,schedule_times` 필수) | `201 Reminder` |
 | GET | `/api/v1/reminders` | 계획 | query `enabled`(선택) | `200 {"items": Reminder[]}` |
-| PATCH | `/api/v1/reminders/{reminder_id}` | 계획 | `MedicationReminderUpsertRequest` (모든 필드 선택) | `200 Reminder` |
-| DELETE | `/api/v1/reminders/{reminder_id}` | 계획 | path `reminder_id`(필수) | `204` |
+| PATCH | `/api/v1/reminders/{reminder_id}` | 계획 | path `reminder_id`(string, 필수), `MedicationReminderUpsertRequest` (모든 필드 선택) | `200 Reminder` |
+| DELETE | `/api/v1/reminders/{reminder_id}` | 계획 | path `reminder_id`(string, 필수) | `204` |
 | GET | `/api/v1/reminders/medication-dday` | 계획 | query `days`(선택, 기본 7) | `200 {"items": DdayReminder[]}` |
 
 ### 12.6 개발/운영 지원 API

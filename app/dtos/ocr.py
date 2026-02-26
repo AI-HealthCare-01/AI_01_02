@@ -1,13 +1,13 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.dtos.base import BaseSerializerModel
 from app.models.ocr import DocumentType, OcrFailureCode, OcrJobStatus
 
 
 class DocumentUploadResponse(BaseSerializerModel):
-    id: int
+    id: str
     document_type: DocumentType
     file_name: str
     file_path: str
@@ -17,11 +17,11 @@ class DocumentUploadResponse(BaseSerializerModel):
 
 
 class OcrJobCreateRequest(BaseModel):
-    document_id: int
+    document_id: str = Field(pattern=r"^\d+$")
 
 
 class OcrJobCreateResponse(BaseModel):
-    job_id: int
+    job_id: str
     status: OcrJobStatus
     retry_count: int
     max_retries: int
@@ -29,8 +29,8 @@ class OcrJobCreateResponse(BaseModel):
 
 
 class OcrJobStatusResponse(BaseModel):
-    job_id: int
-    document_id: int
+    job_id: str
+    document_id: str
     status: OcrJobStatus
     retry_count: int
     max_retries: int
@@ -42,7 +42,7 @@ class OcrJobStatusResponse(BaseModel):
 
 
 class OcrJobResultResponse(BaseModel):
-    job_id: int
+    job_id: str
     extracted_text: str
     structured_data: dict
     created_at: datetime

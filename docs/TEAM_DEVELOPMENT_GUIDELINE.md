@@ -1,13 +1,15 @@
 # AI Health Project 팀 개발 가이드라인
 
-문서 버전: v2.6  
-작성일: 2026-02-24  
+문서 버전: v2.8  
+작성일: 2026-02-26  
 기준 문서:
 - `docs/REQUIREMENTS_DEFINITION.md` (v1.10)
-- `docs/API_SPECIFICATION.md` (v1.7)
+- `docs/API_SPECIFICATION.md` (v1.11)
 - `docs/PROJECT_MEMORY.md`
 
 문서 변경 이력:
+- v2.8 (2026-02-26): API 명세 v1.11 동기화 반영(`/users/me` Bearer 인증 명시, 외부 식별자 string 계약 반영)
+- v2.7 (2026-02-24): API 명세 v1.8 동기화 반영(작업 생성 응답 객체/로그인 응답 필드 정합화)
 - v2.6 (2026-02-24): 구현 API 실사 정합화 반영(알림 v2 capability 조회, dev 알림 플레이그라운드 내부 API 명시)
 - v2.5 (2026-02-24): OCR 원본 폐기 경로(큐 실패 포함) 및 raw blocks 선택 저장 정책 동기화
 - v2.4 (2026-02-24): API 명세 v1.5 동기화 반영(작업 생성 큐 실패 처리 정책 정합화)
@@ -210,6 +212,8 @@ DoD:
 보안/프라이버시:
 - JWT 인증, 비밀번호 해시, HTTPS/TLS (`REQ-104`, `REQ-114`)
 - 학습 재사용 금지 및 원본 이미지 즉시 폐기 (`REQ-113`, `REQ-127`)
+- 보호 API는 `Authorization: Bearer <access_token>`로 사용자 식별(`user_id`는 토큰 payload 기준)
+- 외부 API 식별자(`id`, `*_id`, path 파라미터)는 string 계약을 따른다.
 
 품질/운영:
 - 프롬프트/모델 버전 관리 (`REQ-106`)

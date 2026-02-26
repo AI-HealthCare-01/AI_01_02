@@ -7,12 +7,24 @@ COLOR_NC=$(tput sgr0)
 
 cd "$(dirname "$0")/../.."
 
+UV_CMD=
+if command -v uv >/dev/null 2>&1; then
+  UV_CMD=uv
+elif command -v uv.exe >/dev/null 2>&1; then
+  UV_CMD=uv.exe
+fi
+
+if [ -z "$UV_CMD" ] || ! "$UV_CMD" --version >/dev/null 2>&1; then
+  echo "${COLOR_RED}✖ uv command not found or not executable.${COLOR_NC}"
+  exit 1
+fi
+
 echo "${COLOR_BLUE}Start Ruff Auto Fix${COLOR_NC}"
-uv run ruff check . --fix || true
+"$UV_CMD" run ruff check . --fix || true
 echo "${COLOR_GREEN}Auto-fix Done${COLOR_NC}"
 
 echo "${COLOR_BLUE}Check remaining issues${COLOR_NC}"
-if ! uv run ruff check .; then
+if ! "$UV_CMD" run ruff check .; then
   echo ""
   echo "${COLOR_RED}✖ Ruff found issues that could NOT be auto-fixed.${COLOR_NC}"
   echo "${COLOR_RED}→ Please fix the issues above manually and re-run the command.${COLOR_NC}"
@@ -20,6 +32,6 @@ if ! uv run ruff check .; then
 fi
 
 echo "${COLOR_BLUE}Start Formatting${COLOR_NC}"
-uv run ruff format .
+"$UV_CMD" run ruff format .
 
 echo "${COLOR_GREEN}Code formatting successfully!${COLOR_NC}"

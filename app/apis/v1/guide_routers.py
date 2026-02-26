@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Path, status
 from fastapi.responses import ORJSONResponse as Response
 
 from app.dependencies.security import get_request_user
@@ -22,10 +22,10 @@ async def create_guide_job(
     user: Annotated[User, Depends(get_request_user)],
     guide_service: Annotated[GuideService, Depends(GuideService)],
 ) -> Response:
-    job = await guide_service.create_guide_job(user=user, ocr_job_id=request.ocr_job_id)
+    job = await guide_service.create_guide_job(user=user, ocr_job_id=int(request.ocr_job_id))
     return Response(
         GuideJobCreateResponse(
-            job_id=job.id,
+            job_id=str(job.id),
             status=job.status,
             retry_count=job.retry_count,
             max_retries=job.max_retries,
@@ -37,15 +37,15 @@ async def create_guide_job(
 
 @guide_router.get("/jobs/{job_id}", response_model=GuideJobStatusResponse, status_code=status.HTTP_200_OK)
 async def get_guide_job_status(
-    job_id: int,
+    job_id: Annotated[str, Path(pattern=r"^\d+$")],
     user: Annotated[User, Depends(get_request_user)],
     guide_service: Annotated[GuideService, Depends(GuideService)],
 ) -> Response:
-    job = await guide_service.get_guide_job(user=user, job_id=job_id)
+    job = await guide_service.get_guide_job(user=user, job_id=int(job_id))
     return Response(
         GuideJobStatusResponse(
-            job_id=job.id,
-            ocr_job_id=job.ocr_job_id,
+            job_id=str(job.id),
+            ocr_job_id=str(job.ocr_job_id),
             status=job.status,
             retry_count=job.retry_count,
             max_retries=job.max_retries,
@@ -61,14 +61,14 @@ async def get_guide_job_status(
 
 @guide_router.get("/jobs/{job_id}/result", response_model=GuideJobResultResponse, status_code=status.HTTP_200_OK)
 async def get_guide_job_result(
-    job_id: int,
+    job_id: Annotated[str, Path(pattern=r"^\d+$")],
     user: Annotated[User, Depends(get_request_user)],
     guide_service: Annotated[GuideService, Depends(GuideService)],
 ) -> Response:
-    result = await guide_service.get_guide_result(user=user, job_id=job_id)
+    result = await guide_service.get_guide_result(user=user, job_id=int(job_id))
     return Response(
         GuideJobResultResponse(
-            job_id=result.job_id,
+            job_id=str(result.job_id),
             medication_guidance=result.medication_guidance,
             lifestyle_guidance=result.lifestyle_guidance,
             risk_level=result.risk_level,

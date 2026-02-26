@@ -32,7 +32,7 @@ class UserUpdateRequest(BaseModel):
 
 
 class UserInfoResponse(BaseSerializerModel):
-    id: int
+    id: str
     name: str
     email: str
     phone_number: str

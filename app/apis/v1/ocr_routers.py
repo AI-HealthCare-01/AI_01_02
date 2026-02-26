@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Path, UploadFile, status
 from fastapi.responses import ORJSONResponse as Response
 
 from app.dependencies.security import get_request_user
@@ -26,7 +26,18 @@ async def upload_document(
     file: Annotated[UploadFile, File()],
 ) -> Response:
     document = await ocr_service.upload_document(user=user, document_type=document_type, file=file)
-    return Response(DocumentUploadResponse.model_validate(document).model_dump(), status_code=status.HTTP_201_CREATED)
+    return Response(
+        DocumentUploadResponse(
+            id=str(document.id),
+            document_type=document.document_type,
+            file_name=document.file_name,
+            file_path=document.file_path,
+            file_size=document.file_size,
+            mime_type=document.mime_type,
+            uploaded_at=document.uploaded_at,
+        ).model_dump(),
+        status_code=status.HTTP_201_CREATED,
+    )
 
 
 @ocr_router.post("/jobs", response_model=OcrJobCreateResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -35,10 +46,10 @@ async def create_ocr_job(
     user: Annotated[User, Depends(get_request_user)],
     ocr_service: Annotated[OcrService, Depends(OcrService)],
 ) -> Response:
-    job = await ocr_service.create_ocr_job(user=user, document_id=request.document_id)
+    job = await ocr_service.create_ocr_job(user=user, document_id=int(request.document_id))
     return Response(
         OcrJobCreateResponse(
-            job_id=job.id,
+            job_id=str(job.id),
             status=job.status,
             retry_count=job.retry_count,
             max_retries=job.max_retries,
@@ -50,15 +61,15 @@ async def create_ocr_job(
 
 @ocr_router.get("/jobs/{job_id}", response_model=OcrJobStatusResponse, status_code=status.HTTP_200_OK)
 async def get_ocr_job_status(
-    job_id: int,
+    job_id: Annotated[str, Path(pattern=r"^\d+$")],
     user: Annotated[User, Depends(get_request_user)],
     ocr_service: Annotated[OcrService, Depends(OcrService)],
 ) -> Response:
-    job = await ocr_service.get_ocr_job(user=user, job_id=job_id)
+    job = await ocr_service.get_ocr_job(user=user, job_id=int(job_id))
     return Response(
         OcrJobStatusResponse(
-            job_id=job.id,
-            document_id=job.document_id,
+            job_id=str(job.id),
+            document_id=str(job.document_id),
             status=job.status,
             retry_count=job.retry_count,
             max_retries=job.max_retries,
@@ -74,14 +85,14 @@ async def get_ocr_job_status(
 
 @ocr_router.get("/jobs/{job_id}/result", response_model=OcrJobResultResponse, status_code=status.HTTP_200_OK)
 async def get_ocr_job_result(
-    job_id: int,
+    job_id: Annotated[str, Path(pattern=r"^\d+$")],
     user: Annotated[User, Depends(get_request_user)],
     ocr_service: Annotated[OcrService, Depends(OcrService)],
 ) -> Response:
-    result = await ocr_service.get_ocr_result(user=user, job_id=job_id)
+    result = await ocr_service.get_ocr_result(user=user, job_id=int(job_id))
     return Response(
         OcrJobResultResponse(
-            job_id=result.job_id,
+            job_id=str(result.job_id),
             extracted_text=result.extracted_text,
             structured_data=result.structured_data,
             created_at=result.created_at,

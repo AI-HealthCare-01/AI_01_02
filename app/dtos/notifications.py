@@ -8,7 +8,7 @@ from app.models.notifications import NotificationType
 
 
 class NotificationInfoResponse(BaseSerializerModel):
-    id: int
+    id: str
     type: NotificationType
     title: str
     message: str
