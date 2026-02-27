@@ -1,23 +1,24 @@
-Project AI_Health_Development_Baseline {
+Project AI_Health_Core_Baseline {
   database_type: "MySQL"
-  Note: 'Development ERD (2026-02-24). Includes only implemented tables and directly planned tables for next milestones. Deferred domains are intentionally excluded to avoid design noise.'
+  Note: 'Simplified ERD for first web service project (2026-02-27). Aligned with latest requirements and API spreadsheets. Focuses on minimum tables needed to implement current API contract (36 endpoints).'
 }
 
-// Excluded intentionally in this baseline:
+// ----------------------------------------------------------------------
+// Scope and simplification policy
+// ----------------------------------------------------------------------
+// Included: only core tables directly mapped to API_명세서.xlsx endpoints.
+// Deferred (intentionally excluded):
 // - knowledge_sources / knowledge_documents / knowledge_chunks / vector_index_mappings
 // - prompt_versions / model_versions / inference_audits / external_api_call_logs
-// - reminder_schedule_times / reminder_delivery_logs / medication_supply_states
+// - chat_message_references / chat_guardrail_events / ocr_results / ocr_medications / guide_results
+// Reason: keep first-project schema easy to understand and implement.
 
+// ----------------------------------------------------------------------
+// Enums (minimal)
+// ----------------------------------------------------------------------
 Enum gender_enum {
   MALE
   FEMALE
-}
-
-Enum notification_type_enum {
-  SYSTEM
-  HEALTH_ALERT
-  REPORT_READY
-  GUIDE_READY
 }
 
 Enum document_type_enum {
@@ -26,58 +27,11 @@ Enum document_type_enum {
   MEDICATION_BAG
 }
 
-Enum ocr_job_status_enum {
+Enum async_job_status_enum {
   QUEUED
   PROCESSING
   SUCCEEDED
   FAILED
-}
-
-Enum ocr_failure_code_enum {
-  FILE_NOT_FOUND
-  INVALID_STATE_TRANSITION
-  PROCESSING_ERROR
-}
-
-Enum ocr_review_status_enum {
-  PENDING
-  CONFIRMED
-  CORRECTED
-}
-
-Enum intake_time_enum {
-  MORNING
-  LUNCH
-  DINNER
-  BEDTIME
-  PRN
-}
-
-Enum administration_timing_enum {
-  BEFORE_MEAL
-  AFTER_MEAL
-  WITH_MEAL
-  IRRELEVANT
-}
-
-Enum guide_job_status_enum {
-  QUEUED
-  PROCESSING
-  SUCCEEDED
-  FAILED
-}
-
-Enum guide_failure_code_enum {
-  OCR_NOT_READY
-  OCR_RESULT_NOT_FOUND
-  INVALID_STATE_TRANSITION
-  PROCESSING_ERROR
-}
-
-Enum guide_risk_level_enum {
-  LOW
-  MEDIUM
-  HIGH
 }
 
 Enum chat_session_status_enum {
@@ -91,58 +45,71 @@ Enum chat_role_enum {
   SYSTEM
 }
 
-Enum chat_intent_enum {
-  SMALLTALK
-  MEDICAL
-  CRISIS
+Enum chat_message_status_enum {
+  PENDING
+  STREAMING
+  COMPLETED
+  FAILED
+  CANCELLED
 }
 
-Enum guardrail_type_enum {
-  SUICIDE
-  SELF_HARM
-  CRIME
-  DRUG_ABUSE
+Enum notification_type_enum {
+  SYSTEM
+  HEALTH_ALERT
+  REPORT_READY
+  GUIDE_READY
 }
 
-Enum guardrail_action_enum {
-  BLOCK_AND_EMERGENCY_MESSAGE
-  ALLOW
+Enum schedule_item_category_enum {
+  MEDICATION
+  MEAL
+  SLEEP
+}
+
+Enum schedule_item_status_enum {
+  PENDING
+  DONE
+  SKIPPED
 }
 
 // ----------------------------------------------------------------------
-// Account and profile domain
+// 1) Account and profile
 // ----------------------------------------------------------------------
-// [Implemented]
 Table users {
   id bigint [pk, increment, not null]
-  email varchar(40) [not null]
-  hashed_password varchar(128) [not null]
-  name varchar(20) [not null]
+  email varchar(120) [not null, unique]
+  hashed_password varchar(255) [not null]
+  name varchar(50) [not null]
   gender gender_enum [not null]
   birthday date [not null]
-  phone_number varchar(11) [not null]
+  phone_number varchar(20) [not null, unique]
   is_active boolean [not null, default: true]
-  is_admin boolean [not null, default: false]
-  last_login datetime(6)
+  withdrawn_at datetime(6)
+  token_version int [not null, default: 0]
+  last_login_at datetime(6)
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
 
-  Note: 'Core account table. Duplicate email/phone currently guarded in application logic.'
+  Note: 'Core account table for signup/login/profile APIs. Account withdrawal uses soft delete (is_active=false), withdrawn_at timestamp, and token_version bump for immediate token invalidation. Supports REQ-024~028.'
+
+  indexes {
+    (email) [name: 'idx_users_email', unique]
+    (phone_number) [name: 'idx_users_phone_number', unique]
+    (is_active) [name: 'idx_users_is_active']
+  }
 }
 
-// [Planned]
 Table health_profiles {
   id bigint [pk, increment, not null]
   user_id bigint [not null, unique]
   basic_info json [not null]
-  medical_history json [not null]
-  lifestyle_input json [not null]
-  sleep_input json [not null]
-  nutrition_input json [not null]
+  lifestyle_input json
+  sleep_input json
+  nutrition_input json
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
 
-  Note: 'Used by REQ-046/047 and guide personalization context.'
+  Note: 'Single profile aggregate for PUT/GET /profiles/health. Uses JSON blocks to keep schema simple for first project. Supports REQ-045~047.'
 
   indexes {
     (user_id) [name: 'idx_health_profiles_user_id', unique]
@@ -150,159 +117,107 @@ Table health_profiles {
 }
 
 // ----------------------------------------------------------------------
-// OCR domain
+// 2) OCR and medication dictionary
 // ----------------------------------------------------------------------
-// [Implemented]
 Table documents {
   id bigint [pk, increment, not null]
   user_id bigint [not null]
   document_type document_type_enum [not null]
   file_name varchar(255) [not null]
-  file_path varchar(500) [not null]
-  file_size bigint [not null]
   mime_type varchar(100) [not null]
+  file_size bigint [not null]
+  temp_storage_key varchar(500) [not null]
   uploaded_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  disposed_at datetime(6)
 
-  Note: 'Upload metadata only. Raw file is temporary and must be disposed after OCR completion/final failure and queue publish failure.'
+  Note: 'Upload metadata table for /ocr/documents/upload. Raw file is temporary and must be disposed after OCR completion/failure (REQ-050, REQ-051, REQ-055, REQ-126).'
 
   indexes {
     (user_id, uploaded_at) [name: 'idx_documents_user_uploaded_at']
-    (document_type) [name: 'idx_documents_document_type']
   }
 }
 
-// [Implemented]
 Table ocr_jobs {
   id bigint [pk, increment, not null]
   user_id bigint [not null]
   document_id bigint [not null]
-  status ocr_job_status_enum [not null, default: 'QUEUED']
-  retry_count int [not null, default: 0]
-  max_retries int [not null, default: 3]
-  failure_code ocr_failure_code_enum
+  status async_job_status_enum [not null, default: 'QUEUED']
+  failure_code varchar(50)
   error_message longtext
+  raw_text longtext
+  text_blocks_json json
+  structured_result json
+  confirmed_result json
+  needs_user_review boolean [not null, default: false]
+  field_confidences_json json
+  ocr_engine_version varchar(50)
+  parser_version varchar(50)
   queued_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   started_at datetime(6)
   completed_at datetime(6)
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
 
+  Note: 'Unified OCR job+result table for /ocr/jobs, /ocr/jobs/{job_id}, /ocr/jobs/{job_id}/result, /ocr/jobs/{job_id}/confirm. Includes text block coordinates and field confidence policy data (REQ-053~062, REQ-124) without extra child tables.'
+
   indexes {
     (user_id, status) [name: 'idx_ocr_jobs_user_status']
-    (document_id, created_at) [name: 'idx_ocr_jobs_document_created_at']
-    (status, retry_count) [name: 'idx_ocr_jobs_status_retry_count']
+    (document_id) [name: 'idx_ocr_jobs_document_id']
   }
 }
 
-// [Implemented]
-Table ocr_results {
-  id bigint [pk, increment, not null]
-  job_id bigint [not null, unique]
-  extracted_text longtext [not null]
-  structured_data json [not null]
-  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-
-  Note: 'Review metadata columns (confidence/review status/comment) are planned for a later migration and are not in the current schema.'
-}
-
-// [Planned]
 Table medications {
   id bigint [pk, increment, not null]
   drug_code varchar(100) [not null, unique]
   name_ko varchar(255) [not null]
-  name_en varchar(255)
-  ingredient varchar(255) [not null]
+  ingredient varchar(255)
+  aliases json
   is_adhd_target boolean [not null, default: true]
-  guidance json
-  side_effects json
   is_active boolean [not null, default: true]
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
 
-  Note: 'ADHD medication dictionary for REQ-041 validation/mapping.'
+  Note: 'Medication dictionary used by OCR mapping validation and autocomplete search API (REQ-057, REQ-062).'
 
   indexes {
     (name_ko) [name: 'idx_medications_name_ko']
-    (ingredient) [name: 'idx_medications_ingredient']
-  }
-}
-
-// [Planned]
-Table ocr_medications {
-  id bigint [pk, increment, not null]
-  ocr_result_id bigint [not null]
-  line_index int [not null]
-  raw_drug_name varchar(255) [not null]
-  normalized_drug_name varchar(255)
-  medication_id bigint
-  dose_mg decimal(8,3)
-  frequency_per_day int
-  dosage_per_once decimal(6,2)
-  intake_time intake_time_enum
-  administration_timing administration_timing_enum
-  dispensed_date date
-  total_days int
-  confidence decimal(5,4)
-  field_confidence json
-  is_user_corrected boolean [not null, default: false]
-  is_confirmed boolean [not null, default: false]
-  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-
-  Note: 'Normalized OCR medication rows for confirm/edit flow and D-day calculation.'
-
-  indexes {
-    (ocr_result_id, line_index) [name: 'idx_ocr_medications_result_line', unique]
-    (medication_id) [name: 'idx_ocr_medications_medication_id']
+    (is_active) [name: 'idx_medications_is_active']
   }
 }
 
 // ----------------------------------------------------------------------
-// Guide domain
+// 3) Guide and analysis
 // ----------------------------------------------------------------------
-// [Implemented]
 Table guide_jobs {
   id bigint [pk, increment, not null]
   user_id bigint [not null]
   ocr_job_id bigint [not null]
-  status guide_job_status_enum [not null, default: 'QUEUED']
-  retry_count int [not null, default: 0]
-  max_retries int [not null, default: 3]
-  failure_code guide_failure_code_enum
+  status async_job_status_enum [not null, default: 'QUEUED']
+  failure_code varchar(50)
   error_message longtext
+  risk_level varchar(20)
+  guide_result json
+  input_trace_json json
+  prompt_version varchar(50)
+  model_version varchar(50)
+  model_params_json json
   queued_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   started_at datetime(6)
   completed_at datetime(6)
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
 
+  Note: 'Unified guide job+result table for /guides/jobs, /guides/jobs/{job_id}, /guides/jobs/{job_id}/result, /guides/jobs/{job_id}/refresh. Stores prompt/model versions and input trace for explainability/reproducibility (REQ-112, REQ-123).'
+
   indexes {
     (user_id, status) [name: 'idx_guide_jobs_user_status']
-    (ocr_job_id, created_at) [name: 'idx_guide_jobs_ocr_job_created_at']
-    (status, retry_count) [name: 'idx_guide_jobs_status_retry_count']
+    (ocr_job_id) [name: 'idx_guide_jobs_ocr_job_id']
   }
 }
 
-// [Implemented]
-Table guide_results {
-  id bigint [pk, increment, not null]
-  job_id bigint [not null, unique]
-  medication_guidance longtext [not null]
-  lifestyle_guidance longtext [not null]
-  risk_level guide_risk_level_enum [not null, default: 'MEDIUM']
-  safety_notice longtext [not null]
-  structured_data json [not null]
-  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-
-  Note: 'Structured guide fields, trace metadata, and analysis summary can be stored in structured_data JSON.'
-}
-
 // ----------------------------------------------------------------------
-// Chat domain
+// 4) Chat
 // ----------------------------------------------------------------------
-// [Planned]
 Table chat_sessions {
   id bigint [pk, increment, not null]
   user_id bigint [not null]
@@ -310,82 +225,61 @@ Table chat_sessions {
   status chat_session_status_enum [not null, default: 'ACTIVE']
   auto_close_after_minutes smallint [not null, default: 20]
   last_activity_at datetime(6)
-  closed_at datetime(6)
+  deleted_at datetime(6)
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
 
+  Note: 'Chat session aggregate for create/listen/send/stream/delete lifecycle. deleted_at is used to hide deleted sessions from user queries (REQ-029~044).'
+
   indexes {
     (user_id, status) [name: 'idx_chat_sessions_user_status']
-    (status, last_activity_at) [name: 'idx_chat_sessions_status_last_activity']
+    (user_id, deleted_at) [name: 'idx_chat_sessions_user_deleted_at']
   }
 }
 
-// [Planned]
 Table chat_messages {
   id bigint [pk, increment, not null]
   session_id bigint [not null]
   role chat_role_enum [not null]
-  intent chat_intent_enum
+  status chat_message_status_enum [not null, default: 'PENDING']
   content longtext [not null]
   needs_clarification boolean [not null, default: false]
-  similarity_top_score decimal(6,4)
-  model_version_tag varchar(100)
-  prompt_version_tag varchar(100)
+  intent_label varchar(20)
+  references_json json
+  retrieved_doc_ids json
+  guardrail_blocked boolean [not null, default: false]
+  guardrail_reason varchar(200)
+  last_token_seq int [not null, default: 0]
+  prompt_version varchar(50)
+  model_version varchar(50)
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  Note: 'Chat message log. Stores streaming lifecycle status and last token sequence for partial-response recovery view (without full generation resume), plus reference/audit metadata (REQ-031~042, REQ-039, REQ-117, REQ-123).'
 
   indexes {
     (session_id, created_at) [name: 'idx_chat_messages_session_created_at']
-    (role) [name: 'idx_chat_messages_role']
-  }
-}
-
-// [Planned]
-Table chat_message_references {
-  id bigint [pk, increment, not null]
-  message_id bigint [not null]
-  external_document_id varchar(255)
-  title varchar(500) [not null]
-  source varchar(255) [not null]
-  url varchar(1000)
-  score decimal(6,4)
-  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-
-  indexes {
-    (message_id, score) [name: 'idx_chat_message_references_message_score']
-  }
-}
-
-// [Planned]
-Table chat_guardrail_events {
-  id bigint [pk, increment, not null]
-  session_id bigint [not null]
-  message_id bigint
-  guardrail_type guardrail_type_enum [not null]
-  action guardrail_action_enum [not null]
-  trigger_terms json
-  emergency_message longtext
-  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-
-  indexes {
-    (session_id, created_at) [name: 'idx_chat_guardrail_events_session_created_at']
-    (guardrail_type, created_at) [name: 'idx_chat_guardrail_events_type_created_at']
+    (session_id, updated_at) [name: 'idx_chat_messages_session_updated_at']
+    (session_id, status) [name: 'idx_chat_messages_session_status']
+    (session_id, guardrail_blocked) [name: 'idx_chat_messages_session_guardrail']
   }
 }
 
 // ----------------------------------------------------------------------
-// Notification and reminder domain
+// 5) Notification, reminder, and daily schedules
 // ----------------------------------------------------------------------
-// [Implemented]
 Table notifications {
   id bigint [pk, increment, not null]
   user_id bigint [not null]
   type notification_type_enum [not null, default: 'SYSTEM']
-  title varchar(100) [not null]
+  title varchar(120) [not null]
   message longtext [not null]
+  payload json
   is_read boolean [not null, default: false]
   read_at datetime(6)
-  payload json [not null]
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  Note: 'Notification inbox for list/unread-count/read/read-all APIs (REQ-016~019).'
 
   indexes {
     (user_id, is_read) [name: 'idx_notifications_user_is_read']
@@ -393,26 +287,49 @@ Table notifications {
   }
 }
 
-// [Planned]
 Table medication_reminders {
   id bigint [pk, increment, not null]
   user_id bigint [not null]
-  source_ocr_medication_id bigint
-  medication_name_snapshot varchar(255) [not null]
+  medication_id bigint
+  medication_name varchar(255) [not null]
   dose_text varchar(100)
   schedule_times json [not null]
   start_date date
   end_date date
+  dispensed_date date
+  total_days int
+  daily_intake_count decimal(6,2)
   enabled boolean [not null, default: true]
-  last_sent_at datetime(6)
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
 
-  Note: 'Single-table reminder design (schedule_times JSON) to support CRUD without split schedule tables.'
+  Note: 'Single reminder table for CRUD and medication D-day calculation. Optional supply fields support REQ-020, REQ-021, REQ-121 without extra supply tables.'
 
   indexes {
-    (user_id, enabled) [name: 'idx_medication_reminders_user_enabled']
-    (user_id, medication_name_snapshot) [name: 'idx_medication_reminders_user_med_name']
+    (user_id, enabled) [name: 'idx_reminders_user_enabled']
+    (user_id, medication_name) [name: 'idx_reminders_user_medication_name']
+    (user_id, medication_id) [name: 'idx_reminders_user_medication_id']
+  }
+}
+
+Table schedule_items {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  reminder_id bigint
+  category schedule_item_category_enum [not null]
+  title varchar(255) [not null]
+  scheduled_at datetime(6) [not null]
+  status schedule_item_status_enum [not null, default: 'PENDING']
+  completed_at datetime(6)
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  Note: 'Timeline schedule item table for GET /schedules/daily and PATCH /schedules/items/{item_id}/status. Stores per-item completion state for medication/meal/sleep timeline (REQ-010).'
+
+  indexes {
+    (user_id, scheduled_at) [name: 'idx_schedule_items_user_scheduled_at']
+    (user_id, status) [name: 'idx_schedule_items_user_status']
+    (reminder_id) [name: 'idx_schedule_items_reminder_id']
   }
 }
 
@@ -423,17 +340,12 @@ Ref: users.id - health_profiles.user_id [delete: cascade]
 Ref: users.id < documents.user_id [delete: cascade]
 Ref: users.id < ocr_jobs.user_id [delete: cascade]
 Ref: documents.id < ocr_jobs.document_id [delete: cascade]
-Ref: ocr_jobs.id - ocr_results.job_id [delete: cascade]
-Ref: ocr_results.id < ocr_medications.ocr_result_id [delete: cascade]
-Ref: medications.id < ocr_medications.medication_id
 Ref: users.id < guide_jobs.user_id [delete: cascade]
 Ref: ocr_jobs.id < guide_jobs.ocr_job_id [delete: cascade]
-Ref: guide_jobs.id - guide_results.job_id [delete: cascade]
 Ref: users.id < chat_sessions.user_id [delete: cascade]
 Ref: chat_sessions.id < chat_messages.session_id [delete: cascade]
-Ref: chat_messages.id < chat_message_references.message_id [delete: cascade]
-Ref: chat_sessions.id < chat_guardrail_events.session_id [delete: cascade]
-Ref: chat_messages.id < chat_guardrail_events.message_id [delete: set null]
 Ref: users.id < notifications.user_id [delete: cascade]
 Ref: users.id < medication_reminders.user_id [delete: cascade]
-Ref: ocr_medications.id < medication_reminders.source_ocr_medication_id [delete: set null]
+Ref: medications.id < medication_reminders.medication_id [delete: set null]
+Ref: users.id < schedule_items.user_id [delete: cascade]
+Ref: medication_reminders.id < schedule_items.reminder_id [delete: set null]

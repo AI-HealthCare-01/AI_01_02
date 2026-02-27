@@ -8,9 +8,8 @@ AI Health Final은 ADHD 환자/보호자 지원을 위한 백엔드 프로젝트
 - 요구사항 정의서: `docs/REQUIREMENTS_DEFINITION.md`
 - API 명세서: `docs/API_SPECIFICATION.md`
 - 팀 개발 가이드라인: `docs/TEAM_DEVELOPMENT_GUIDELINE.md`
-- 서비스 설계 블루프린트: `docs/ADHD_CARE_SERVICE_BLUEPRINT.md`
-- 프로젝트 메모(현 상태 요약): `docs/PROJECT_MEMORY.md`
-- 파일 인덱스: `docs/PROJECT_FILE_INDEX.md`
+- 요구사항 원본 산출물: `docs/요구사항_정의서.xlsx`
+- API 명세 원본 산출물: `docs/API_명세서.xlsx`
 
 ## 현재 구현 상태 요약
 
@@ -101,4 +100,4 @@ Linux/macOS(스크립트):
 
 - 요구사항 변경 시 `docs/REQUIREMENTS_DEFINITION.md`를 먼저 갱신한다.
 - API 계약 영향이 있으면 `docs/API_SPECIFICATION.md`를 함께 갱신한다.
-- 구현 PR에는 관련 REQ ID를 명시한다. 예: `REQ-060`, `REQ-127`
+- 구현 PR에는 관련 REQ ID를 명시한다. 예: `REQ-075`, `REQ-083`
