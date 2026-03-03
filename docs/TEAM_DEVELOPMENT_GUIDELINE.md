@@ -268,6 +268,10 @@ DoD:
 - 학습 데이터 재사용 금지 (`REQ-125`): 사용자 채팅 로그와 업로드 이미지는 모델 학습 데이터로 재사용하지 않는다. OpenAI API 호출 시 `training` 목적 데이터 제출을 하지 않는다.
 - OCR 필드별 신뢰도 정책 운영값 관리 (`REQ-124`)
 
+확장성:
+- OCR/가이드/챗봇 모델 교체 시 API 계약 변경 없이 워커 레이어에서 교체 가능해야 한다 (`REQ-127`): `ai_worker/tasks/ocr.py`의 `_call_clova_ocr`, `_parse_medications_with_llm`과 `ai_worker/tasks/guide.py`의 `_call_guide_llm`이 교체 단위다. 새 모델/엔진 도입 시 해당 함수만 교체하고 큐/상태 전이/API 계약은 유지한다.
+- 의학 지식 문서 추가/수정 시 서비스 중단 없이 인덱스를 갱신할 수 있어야 한다 (`REQ-128`): `app/services/knowledge/adhd_docs.py`에 문서를 추가한 뒤 `python -m app.services.knowledge.adhd_docs`를 실행하면 기존 ID는 건너뛰고 신규 문서만 ChromaDB에 추가된다. 서비스 재시작 없이 적용된다.
+
 ## 7. 팀 역할과 책임
 
 Backend:
