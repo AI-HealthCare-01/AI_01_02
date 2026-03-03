@@ -1,7 +1,7 @@
 # AI Health Project API 명세서
 
-문서 버전: v1.35  
-작성일: 2026-03-03  
+문서 버전: v1.36  
+작성일: 2026-03-13  
 원본:
 - `docs/요구사항_정의서.xlsx`
 - `docs/API_명세서.xlsx`
@@ -10,6 +10,8 @@
 문서 목적: 객체 모델 명세와 API 계약 명세를 독립 문서로 관리한다.
 
 문서 변경 이력:
+- v1.36 (2026-03-13): 코드 실사 기반 동기화 — 12.3(OCR/가이드/분석/일정), 12.4(챗봇), 12.5(알림/리마인더) API 상태를 "대기중"에서 "개발완료"로 일괄 갱신; 12.8 동기화 목록과 실제 구현 상태 일치 확인
+- v1.35 (2026-03-03): 문서 정합성 점검 반영으로 변경 이력의 과거 REQ 번호 표기를 현행 번호와 함께 명시해 혼동을 줄이고 기준 문서 버전을 최신으로 갱신
 - v1.34 (2026-03-03): 문서 정합성 점검 반영으로 변경 이력의 과거 REQ 번호 표기를 현행 번호와 함께 명시해 혼동을 줄이고 기준 문서 버전을 최신으로 갱신
 - v1.33 (2026-02-27): 최신 `API_명세서.xlsx`(36건) 기준으로 schedules API 2건을 계약 표/동기화 목록에 반영하고, 미등록 API 갭(12.9)을 재정리
 - v1.32 (2026-02-27): 비기능 요구사항 ID 재번호화(`REQ-101~REQ-128`)를 반영해 정책 메모/참조 REQ를 동기화하고 기준 요구사항 문서 버전을 v1.28로 갱신
@@ -319,19 +321,19 @@
 
 | Method | Path | 상태 | Request (필수/선택) | Success Response |
 |---|---|---|---|---|
-| POST | `/api/v1/ocr/documents/upload` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), multipart: `document_type`(필수), `file`(필수) | `201 OcrDocument` |
-| POST | `/api/v1/ocr/jobs` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), `{"document_id": string}` (필수) | `202 OcrJobCreateResponse` |
-| GET | `/api/v1/ocr/jobs/{job_id}` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 OcrJobStatus` |
-| GET | `/api/v1/ocr/jobs/{job_id}/result` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 OcrJobResult` |
-| PATCH | `/api/v1/ocr/jobs/{job_id}/confirm` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수), `OcrReviewConfirmRequest` (`confirmed` 필수) | `200 OcrResult(계획)` |
-| GET | `/api/v1/medications/search` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), query `q`(필수), `limit`(선택, 기본 10) | `200 MedicationSearchResponse` |
-| POST | `/api/v1/guides/jobs` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), `{"ocr_job_id": string}` (필수) | `202 GuideJobCreateResponse` |
-| GET | `/api/v1/guides/jobs/{job_id}` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 GuideJobStatus` |
-| GET | `/api/v1/guides/jobs/{job_id}/result` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 GuideJobResult` |
-| POST | `/api/v1/guides/jobs/{job_id}/refresh` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수), `GuideRefreshRequest`(선택) | `202 GuideRefreshResponse` |
-| GET | `/api/v1/analysis/summary` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), query: `date_from,date_to`(선택) | `200 AnalysisSummary` |
-| GET | `/api/v1/schedules/daily` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), query `date`(필수), `timezone`(선택) | `200 DailyScheduleResponse` |
-| PATCH | `/api/v1/schedules/items/{item_id}/status` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `item_id`(string, 필수), `ScheduleItemStatusUpdateRequest` (`status` 필수) | `200 ScheduleItem` |
+| POST | `/api/v1/ocr/documents/upload` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), multipart: `document_type`(필수), `file`(필수) | `201 OcrDocument` |
+| POST | `/api/v1/ocr/jobs` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `{"document_id": string}` (필수) | `202 OcrJobCreateResponse` |
+| GET | `/api/v1/ocr/jobs/{job_id}` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 OcrJobStatus` |
+| GET | `/api/v1/ocr/jobs/{job_id}/result` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 OcrJobResult` |
+| PATCH | `/api/v1/ocr/jobs/{job_id}/confirm` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수), `OcrReviewConfirmRequest` (`confirmed` 필수) | `200 OcrResult(계획)` |
+| GET | `/api/v1/medications/search` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `q`(필수), `limit`(선택, 기본 10) | `200 MedicationSearchResponse` |
+| POST | `/api/v1/guides/jobs` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `{"ocr_job_id": string}` (필수) | `202 GuideJobCreateResponse` |
+| GET | `/api/v1/guides/jobs/{job_id}` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 GuideJobStatus` |
+| GET | `/api/v1/guides/jobs/{job_id}/result` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 GuideJobResult` |
+| POST | `/api/v1/guides/jobs/{job_id}/refresh` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수), `GuideRefreshRequest`(선택) | `202 GuideRefreshResponse` |
+| GET | `/api/v1/analysis/summary` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query: `date_from,date_to`(선택) | `200 AnalysisSummary` |
+| GET | `/api/v1/schedules/daily` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `date`(필수), `timezone`(선택) | `200 DailyScheduleResponse` |
+| PATCH | `/api/v1/schedules/items/{item_id}/status` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `item_id`(string, 필수), `ScheduleItemStatusUpdateRequest` (`status` 필수) | `200 ScheduleItem` |
 
 정책 메모:
 - OCR/파싱 완료 후 원본 업로드 이미지는 즉시 폐기하며, DB/클라우드 스토리지에 파일 형태로 보관하지 않는다 (`REQ-126`).
@@ -345,12 +347,12 @@
 
 | Method | Path | 상태 | Request (필수/선택) | Success Response |
 |---|---|---|---|---|
-| GET | `/api/v1/chat/prompt-options` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 ChatPromptOptionsResponse` |
-| POST | `/api/v1/chat/sessions` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), `{"title": string}` (선택) | `201 ChatSession` |
-| GET | `/api/v1/chat/sessions/{session_id}/messages` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `session_id`(string, 필수), query `limit,offset`(선택) | `200 {"items": ChatMessage[], "meta": PaginationMeta}` |
-| POST | `/api/v1/chat/sessions/{session_id}/messages` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), `ChatMessageSendRequest` (`message` 필수, `stream` 선택) | `200 ChatMessage` |
-| POST | `/api/v1/chat/sessions/{session_id}/stream` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), `ChatMessageSendRequest` (`message` 필수) | `200 text/event-stream (ChatStreamEvent)` |
-| DELETE | `/api/v1/chat/sessions/{session_id}` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `session_id`(string, 필수) | `204` |
+| GET | `/api/v1/chat/prompt-options` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 ChatPromptOptionsResponse` |
+| POST | `/api/v1/chat/sessions` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `{"title": string}` (선택) | `201 ChatSession` |
+| GET | `/api/v1/chat/sessions/{session_id}/messages` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `session_id`(string, 필수), query `limit,offset`(선택) | `200 {"items": ChatMessage[], "meta": PaginationMeta}` |
+| POST | `/api/v1/chat/sessions/{session_id}/messages` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `ChatMessageSendRequest` (`message` 필수, `stream` 선택) | `200 ChatMessage` |
+| POST | `/api/v1/chat/sessions/{session_id}/stream` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `ChatMessageSendRequest` (`message` 필수) | `200 text/event-stream (ChatStreamEvent)` |
+| DELETE | `/api/v1/chat/sessions/{session_id}` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `session_id`(string, 필수) | `204` |
 
 정책 메모:
 - 챗봇 진입 시 객관식 대화 프롬프트를 제공한다 (`REQ-030`).
@@ -368,15 +370,15 @@
 
 | Method | Path | 상태 | Request (필수/선택) | Success Response |
 |---|---|---|---|---|
-| GET | `/api/v1/notifications` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), query `limit,offset,is_read`(선택) | `200 {"items": Notification[], "unread_count": int}` |
-| GET | `/api/v1/notifications/unread-count` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 {"unread_count": int}` |
-| PATCH | `/api/v1/notifications/{notification_id}/read` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `notification_id`(string, 필수) | `200 Notification` |
-| PATCH | `/api/v1/notifications/read-all` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 {"updated_count": int}` |
-| POST | `/api/v1/reminders` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), `MedicationReminderUpsertRequest` (`medication_name,schedule_times` 필수) | `201 Reminder` |
-| GET | `/api/v1/reminders` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), query `enabled`(선택) | `200 {"items": Reminder[]}` |
-| PATCH | `/api/v1/reminders/{reminder_id}` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `reminder_id`(string, 필수), `MedicationReminderUpsertRequest` (모든 필드 선택) | `200 Reminder` |
-| DELETE | `/api/v1/reminders/{reminder_id}` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `reminder_id`(string, 필수) | `204` |
-| GET | `/api/v1/reminders/medication-dday` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), query `days`(선택, 기본 7) | `200 {"items": DdayReminder[]}` |
+| GET | `/api/v1/notifications` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `limit,offset,is_read`(선택) | `200 {"items": Notification[], "unread_count": int}` |
+| GET | `/api/v1/notifications/unread-count` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 {"unread_count": int}` |
+| PATCH | `/api/v1/notifications/{notification_id}/read` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `notification_id`(string, 필수) | `200 Notification` |
+| PATCH | `/api/v1/notifications/read-all` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 {"updated_count": int}` |
+| POST | `/api/v1/reminders` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `MedicationReminderUpsertRequest` (`medication_name,schedule_times` 필수) | `201 Reminder` |
+| GET | `/api/v1/reminders` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `enabled`(선택) | `200 {"items": Reminder[]}` |
+| PATCH | `/api/v1/reminders/{reminder_id}` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `reminder_id`(string, 필수), `MedicationReminderUpsertRequest` (모든 필드 선택) | `200 Reminder` |
+| DELETE | `/api/v1/reminders/{reminder_id}` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `reminder_id`(string, 필수) | `204` |
+| GET | `/api/v1/reminders/medication-dday` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `days`(선택, 기본 7) | `200 {"items": DdayReminder[]}` |
 
 정책 메모:
 - 약 소진 D-day 계산은 조제일/복용주기/복용개수 기준으로 오차 없이 수행해야 한다 (`REQ-021`, `REQ-121`).

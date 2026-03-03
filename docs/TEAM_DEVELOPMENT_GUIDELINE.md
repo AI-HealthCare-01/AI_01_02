@@ -1,14 +1,15 @@
 # AI Health Project 팀 개발 가이드라인
 
-문서 버전: v2.29  
-작성일: 2026-03-03  
+문서 버전: v2.30  
+작성일: 2026-03-13  
 기준 문서:
-- `docs/REQUIREMENTS_DEFINITION.md` (v1.28)
-- `docs/API_SPECIFICATION.md` (v1.34)
+- `docs/REQUIREMENTS_DEFINITION.md` (v1.29)
+- `docs/API_SPECIFICATION.md` (v1.36)
 - `docs/요구사항_정의서.xlsx`
 - `docs/API_명세서.xlsx`
 
 문서 변경 이력:
+- v2.30 (2026-03-13): 코드 실사 기반 동기화 — 3장 기능별 한눈에 보기 표의 모든 기능 상태를 "대기중 (명세 기준)"에서 "개발완료"로 일괄 갱신; 기준 문서 버전을 REQUIREMENTS_DEFINITION.md v1.29, API_SPECIFICATION.md v1.36으로 동기화
 - v2.29 (2026-03-03): 문서 정합성 점검 결과를 반영해 알림 API 표기를 축약(`*`)에서 명세 경로 단위로 명확화하고, 과거 변경 이력의 구 REQ 체계 표기를 혼동 없도록 정리
 - v2.28 (2026-02-27): 최신 `API_명세서.xlsx`(36건) 반영으로 schedules API를 가이드 기능 범위에 편입하고 API 상태 표기를 명세 기준으로 정리
 - v2.27 (2026-02-27): 비기능 요구사항 ID 재번호화(`REQ-101~REQ-128`) 반영에 맞춰 REQ 참조와 기준 문서 버전(v1.28/v1.32)을 동기화
@@ -59,10 +60,10 @@
 
 | 기능 | 핵심 목표 | 주요 요구사항 ID | 핵심 API(명세 기준) | 현재 상태 |
 |---|---|---|---|---|
-| 1. LLM 기반 안내 가이드 생성 | 프로필+처방+지식을 결합한 개인화 복약/생활 가이드 | REQ-001~010, REQ-012~015, REQ-045~049 | `POST /api/v1/guides/jobs`, `GET /api/v1/guides/jobs/{job_id}`, `GET /api/v1/guides/jobs/{job_id}/result`, `POST /api/v1/guides/jobs/{job_id}/refresh`, `GET /api/v1/analysis/summary`, `GET /api/v1/schedules/daily`, `PATCH /api/v1/schedules/items/{item_id}/status` | 대기중 (명세 기준) |
-| 2. 실시간 챗봇 | 안전 가드레일 + 하이브리드 검색 + SSE 스트리밍 | REQ-029~044 | `GET /api/v1/chat/prompt-options`, `POST /api/v1/chat/sessions`, `DELETE /api/v1/chat/sessions/{session_id}`, `POST /api/v1/chat/sessions/{session_id}/stream` | 대기중 (명세 기준) |
-| 3. OCR 기반 의료정보 인식 | 처방/약봉투 텍스트 구조화 + 신뢰도 검증 + 사용자 확인 | REQ-050~062 | `POST /api/v1/ocr/documents/upload`, `POST /api/v1/ocr/jobs`, `GET /api/v1/ocr/jobs/{job_id}/result`, `PATCH /api/v1/ocr/jobs/{job_id}/confirm`, `GET /api/v1/medications/search` | 대기중 (명세 기준) |
-| 4. 알림 기능 | 가이드 완료/읽음 처리/리마인더/D-day 안내 | REQ-016~021 | `GET /api/v1/notifications`, `GET /api/v1/notifications/unread-count`, `PATCH /api/v1/notifications/{notification_id}/read`, `PATCH /api/v1/notifications/read-all`, `POST /api/v1/reminders`, `GET /api/v1/reminders`, `PATCH /api/v1/reminders/{reminder_id}`, `DELETE /api/v1/reminders/{reminder_id}`, `GET /api/v1/reminders/medication-dday` | 대기중 (명세 기준) |
+| 1. LLM 기반 안내 가이드 생성 | 프로필+처방+지식을 결합한 개인화 복약/생활 가이드 | REQ-001~010, REQ-012~015, REQ-045~049 | `POST /api/v1/guides/jobs`, `GET /api/v1/guides/jobs/{job_id}`, `GET /api/v1/guides/jobs/{job_id}/result`, `POST /api/v1/guides/jobs/{job_id}/refresh`, `GET /api/v1/analysis/summary`, `GET /api/v1/schedules/daily`, `PATCH /api/v1/schedules/items/{item_id}/status` | 개발완료 |
+| 2. 실시간 챗봇 | 안전 가드레일 + 하이브리드 검색 + SSE 스트리밍 | REQ-029~044 | `GET /api/v1/chat/prompt-options`, `POST /api/v1/chat/sessions`, `DELETE /api/v1/chat/sessions/{session_id}`, `POST /api/v1/chat/sessions/{session_id}/stream` | 개발완료 |
+| 3. OCR 기반 의료정보 인식 | 처방/약봉투 텍스트 구조화 + 신뢰도 검증 + 사용자 확인 | REQ-050~062 | `POST /api/v1/ocr/documents/upload`, `POST /api/v1/ocr/jobs`, `GET /api/v1/ocr/jobs/{job_id}/result`, `PATCH /api/v1/ocr/jobs/{job_id}/confirm`, `GET /api/v1/medications/search` | 개발완료 |
+| 4. 알림 기능 | 가이드 완료/읽음 처리/리마인더/D-day 안내 | REQ-016~021 | `GET /api/v1/notifications`, `GET /api/v1/notifications/unread-count`, `PATCH /api/v1/notifications/{notification_id}/read`, `PATCH /api/v1/notifications/read-all`, `POST /api/v1/reminders`, `GET /api/v1/reminders`, `PATCH /api/v1/reminders/{reminder_id}`, `DELETE /api/v1/reminders/{reminder_id}`, `GET /api/v1/reminders/medication-dday` | 개발완료 |
 
 ## 4. 전체 서비스 흐름 (E2E)
 
