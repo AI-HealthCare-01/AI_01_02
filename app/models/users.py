@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from enum import StrEnum
 
 from tortoise import fields, models
@@ -6,6 +8,13 @@ from tortoise import fields, models
 class Gender(StrEnum):
     MALE = "MALE"
     FEMALE = "FEMALE"
+
+    @classmethod
+    def _missing_(cls, value: object) -> "Gender" | None:
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip().upper()
+        return cls.__members__.get(normalized)
 
 
 class User(models.Model):

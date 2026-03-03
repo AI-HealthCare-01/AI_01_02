@@ -6,6 +6,7 @@ from fastapi.responses import ORJSONResponse as Response
 from app.dependencies.security import get_request_user
 from app.dtos.ocr import (
     DocumentUploadResponse,
+    OcrResultConfirmRequest,
     OcrJobCreateRequest,
     OcrJobCreateResponse,
     OcrJobResultResponse,
@@ -90,6 +91,26 @@ async def get_ocr_job_result(
     ocr_service: Annotated[OcrService, Depends(OcrService)],
 ) -> Response:
     result = await ocr_service.get_ocr_result(user=user, job_id=int(job_id))
+    return Response(
+        OcrJobResultResponse(
+            job_id=str(result.job_id),
+            extracted_text=result.extracted_text,
+            structured_data=result.structured_data,
+            created_at=result.created_at,
+            updated_at=result.updated_at,
+        ).model_dump(),
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@ocr_router.put("/jobs/{job_id}/result/confirm", response_model=OcrJobResultResponse, status_code=status.HTTP_200_OK)
+async def confirm_ocr_job_result(
+    job_id: Annotated[str, Path(pattern=r"^\d+$")],
+    request: OcrResultConfirmRequest,
+    user: Annotated[User, Depends(get_request_user)],
+    ocr_service: Annotated[OcrService, Depends(OcrService)],
+) -> Response:
+    result = await ocr_service.confirm_ocr_result(user=user, job_id=int(job_id), request=request)
     return Response(
         OcrJobResultResponse(
             job_id=str(result.job_id),

@@ -2,11 +2,19 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.dtos.health_profiles import HealthProfileUpsertRequest
+from app.dtos.ocr import OcrResultConfirmRequest
 from app.models.guides import GuideFailureCode, GuideJobStatus, GuideRiskLevel
 
 
 class GuideJobCreateRequest(BaseModel):
     ocr_job_id: str = Field(pattern=r"^\d+$")
+
+
+class GuideJobCreateFromSnapshotRequest(BaseModel):
+    ocr_job_id: str = Field(pattern=r"^\d+$")
+    health_profile: HealthProfileUpsertRequest
+    ocr_result: OcrResultConfirmRequest
 
 
 class GuideJobCreateResponse(BaseModel):
@@ -36,6 +44,9 @@ class GuideJobResultResponse(BaseModel):
     lifestyle_guidance: str
     risk_level: GuideRiskLevel
     safety_notice: str
+    personalized_guides: dict | None = None
+    source_attributions: list[str] | None = None
+    weekly_adherence_rate: float | None = None
     structured_data: dict
     created_at: datetime
     updated_at: datetime
