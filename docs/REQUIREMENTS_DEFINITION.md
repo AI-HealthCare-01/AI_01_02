@@ -7,6 +7,7 @@
 문서 목적: 프로젝트 범위, 구현 대상, 검수 기준을 명확히 합의한다.
 
 문서 변경 이력:
+- v1.29 (2026-03-13): feature/ops-infra 작업 반영 — REQ-101, REQ-103, REQ-105~REQ-106, REQ-117, REQ-120~REQ-121, REQ-125, REQ-127~REQ-128 개발완료 처리 및 8절 반영 상태 동기화
 - v1.28 (2026-02-27): 비기능 요구사항 ID 재번호화(기존 비기능 63~90번 -> `REQ-101~REQ-128`)를 반영해 본문 표/요약/체크리스트 참조를 동기화하고, 재검증 기준으로 구현 예시/권장 소스 과다 서술을 정리
 - v1.27 (2026-02-27): 데이터 구축 섹션의 OCR 원본 폐기 기준 REQ 참조를 정정
 - v1.26 (2026-02-27): 최신 `요구사항_정의서.xlsx` 반영으로 요구사항 90건(기능 62, 비기능 28)을 재동기화하고 기능/집계/체크리스트 참조를 갱신
@@ -216,8 +217,8 @@
 - 최종 요구사항 정의서 원본: `docs/요구사항_정의서.xlsx`
 - 요구사항 총계: 90건 (기능 62건, 비기능 28건)
 - ID 체계 메모: 기능은 `REQ-001~REQ-062`, 비기능은 `REQ-101~REQ-128` 체계를 사용한다.
-- 개발완료 (77건):
-  - 기능(64건): REQ-001~REQ-058, REQ-061~REQ-062
+- 개발완료 (87건):
+  - 기능(62건): REQ-001~REQ-058, REQ-061~REQ-062
     - REQ-010 (일일 일정 상태 관리 — `/api/v1/schedules/*` 구현)
     - REQ-012 (예외 처리 — `AppException`/`ErrorCode` 기반 `ApiError` 응답 구조 구현)
     - REQ-013 (생활패턴 지표 분석 — `AnalysisService` 구현)
@@ -230,9 +231,17 @@
     - REQ-045~REQ-047 (건강 프로필 입력/확인/구조화 — `/api/v1/profiles/health` 구현)
     - REQ-048~REQ-049 (LLM 구조화 출력 강제/역할 프롬프트 버전 관리 구현)
     - REQ-056 (Clova OCR 엔진 연동 + LLM 파싱 구현)
-  - 비기능(13건): REQ-102, REQ-104, REQ-107~REQ-108, REQ-112, REQ-118, REQ-122~REQ-124, REQ-126
+  - 비기능(25건): REQ-101~REQ-108, REQ-112, REQ-117~REQ-118, REQ-120~REQ-128
+    - REQ-101 (`docs/ROLLBACK_RUNBOOK.md` 작성)
+    - REQ-103, REQ-125 (`docs/TEAM_DEVELOPMENT_GUIDELINE.md` 정책 명시)
+    - REQ-105 (`RequestIDMiddleware` + nginx `X-Request-ID` 헤더 전달)
+    - REQ-106 (`docs/DEPLOYMENT_CHECKLIST.md` 작성)
+    - REQ-117 (가드레일 차단 시 `logger.warning` 감사 로그)
+    - REQ-120 (LLM 클라이언트 `timeout=30s` + `APITimeoutError` 로깅)
+    - REQ-121 (`app/tests/reminder_service/test_dday_calculation.py` 4개 테스트 통과)
+    - REQ-127, REQ-128 (`docs/TEAM_DEVELOPMENT_GUIDELINE.md` 확장성 정책 명시)
 - 진행중 (0건)
-- 대기중 (13건): REQ-059~REQ-060, REQ-101, REQ-103, REQ-105~REQ-106, REQ-109~REQ-111, REQ-113~REQ-117, REQ-119~REQ-121, REQ-125, REQ-127~REQ-128
+- 대기중 (3건): REQ-059~REQ-060 (프론트엔드 영역), REQ-109 (EC2 실서버 배포 후 적용), REQ-110~REQ-111 (프론트엔드 영역), REQ-113~REQ-116 (배포 후 성능 측정), REQ-119 (SENTRY_DSN 환경변수 입력 후 활성화)
 
 ## 9. 범위 제외(Out of Scope)
 
