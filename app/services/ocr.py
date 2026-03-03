@@ -9,6 +9,7 @@ from app.core import config, default_logger
 from app.core.exceptions import AppException, ErrorCode
 from app.models.ocr import Document, DocumentType, OcrFailureCode, OcrJob, OcrJobStatus, OcrResult
 from app.models.users import User
+from app.dtos.ocr import OcrResultConfirmRequest
 from app.repositories.ocr_repository import OcrRepository
 from app.services.ocr_queue import OcrQueuePublisher
 
@@ -113,7 +114,7 @@ class OcrService:
             raise AppException(ErrorCode.RESOURCE_NOT_FOUND, developer_message="OCR 결과를 찾을 수 없습니다.")
         return result
 
-    async def confirm_ocr_result(
+    async def confirm_ocr_review(
         self,
         *,
         user: User,
@@ -132,3 +133,26 @@ class OcrService:
             result.structured_data = structured
             await result.save(update_fields=["structured_data", "updated_at"])
         return result
+
+    async def confirm_ocr_result(self, *, user: User, job_id: int, request: OcrResultConfirmRequest) -> OcrResult:
+        job = await self.get_ocr_job(user=user, job_id=job_id)
+        if job.status != OcrJobStatus.SUCCEEDED:
+            raise AppException(ErrorCode.STATE_CONFLICT, developer_message="OCR 작업이 아직 완료되지 않았습니다.")
+
+        existing = await OcrResult.get_or_none(job_id=job.id)
+        existing_structured = existing.structured_data if existing else {}
+        confirmed_payload = {
+            "raw_text": request.raw_text,
+            "extracted_medications": [item.model_dump() for item in request.extracted_medications],
+            "confirmed_at": datetime.now(config.TIMEZONE).isoformat(),
+            "confirmed_by_user_id": user.id,
+        }
+        merged_structured = {
+            **existing_structured,
+            "confirmed_ocr": confirmed_payload,
+        }
+        return await self.repo.upsert_result(
+            job_id=job.id,
+            extracted_text=request.raw_text,
+            structured_data=merged_structured,
+        )

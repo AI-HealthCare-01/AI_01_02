@@ -6,6 +6,7 @@ from app.core import config
 
 TORTOISE_APP_MODELS = [
     "aerich.models",
+    "app.models.health_profiles",
     "app.models.guides",
     "app.models.ocr",
     "app.models.notifications",

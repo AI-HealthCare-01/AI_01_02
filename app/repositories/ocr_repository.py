@@ -1,4 +1,6 @@
-from app.models.ocr import Document, DocumentType, OcrJob
+from typing import Any
+
+from app.models.ocr import Document, DocumentType, OcrJob, OcrResult
 
 
 class OcrRepository:
@@ -29,3 +31,16 @@ class OcrRepository:
 
     async def get_user_job(self, *, job_id: int, user_id: int) -> OcrJob | None:
         return await OcrJob.get_or_none(id=job_id, user_id=user_id)
+
+    async def upsert_result(self, *, job_id: int, extracted_text: str, structured_data: dict[str, Any]) -> OcrResult:
+        await OcrResult.update_or_create(
+            job_id=job_id,
+            defaults={
+                "extracted_text": extracted_text,
+                "structured_data": structured_data,
+            },
+        )
+        result = await OcrResult.get_or_none(job_id=job_id)
+        if result is None:
+            raise RuntimeError("Failed to upsert OCR result.")
+        return result

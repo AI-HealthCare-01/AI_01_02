@@ -46,6 +46,9 @@ class Config(BaseSettings):
     REDIS_DB: int = 0
     REDIS_PASSWORD: str | None = None
     REDIS_SOCKET_TIMEOUT_SECONDS: float = 1.0
-
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    GUIDE_LLM_TIMEOUT_SECONDS: float = 20.0

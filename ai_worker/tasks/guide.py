@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 from collections.abc import Awaitable, Callable
-from datetime import datetime
+from datetime import date, datetime
 from logging import Logger
 from typing import Any, cast
 
@@ -12,6 +12,7 @@ from redis.exceptions import RedisError
 from tortoise.transactions import in_transaction
 
 from ai_worker.core import config
+from app.models.health_profiles import UserHealthProfile
 from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult, GuideRiskLevel
 from app.models.notifications import Notification, NotificationType
 from app.models.ocr import OcrJobStatus, OcrResult
@@ -20,35 +21,18 @@ from app.models.ocr import OcrJobStatus, OcrResult
 GUIDE_PROMPT_VERSION = "v1.1"
 
 _GUIDE_SYSTEM_PROMPT = (
-    "당신은 ADHD 환자를 위한 맞춤형 건강 가이드를 생성하는 AI입니다. "
-    "OCR로 추출된 처방 정보를 바탕으로 복약 안내와 생활습관 가이드를 작성합니다. "
-    "반드시 JSON 형식으로만 응답하세요: "
-    '{"medication_guidance": "...", "lifestyle_guidance": "...", "risk_level": "LOW|MEDIUM|HIGH"}'
+    "너는 ADHD 환자 생활습관 코치다. 출력은 JSON object로만 반환한다. "
+    "키는 nutrition_guide, exercise_guide, concentration_strategy, sleep_guide, "
+    "caffeine_guide, smoking_guide, drinking_guide, general_health_guide 이다."
 )
 
-
-async def _call_guide_llm(extracted_text: str) -> tuple[str, str, GuideRiskLevel]:
-    client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
-    user_prompt = f"다음 처방 정보를 바탕으로 가이드를 생성하세요:\n\n{extracted_text[:2000]}"
-    response = await client.chat.completions.create(
-        model=config.OPENAI_GUIDE_MODEL,
-        messages=[
-            {"role": "system", "content": _GUIDE_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.3,
-        response_format={"type": "json_object"},
-    )
-    raw = response.choices[0].message.content or "{}"
-    data = json.loads(raw)
-    medication_guidance = data.get("medication_guidance", "복약 안내를 생성할 수 없습니다.")
-    lifestyle_guidance = data.get("lifestyle_guidance", "생활습관 가이드를 생성할 수 없습니다.")
-    risk_str = data.get("risk_level", "MEDIUM").upper()
-    risk_level = GuideRiskLevel(risk_str) if risk_str in GuideRiskLevel._value2member_map_ else GuideRiskLevel.MEDIUM
-    return medication_guidance, lifestyle_guidance, risk_level
-
-
-GUIDE_SAFETY_NOTICE = "본 가이드는 의료진 진료를 대체할 수 없습니다."
+GUIDE_SAFETY_NOTICE = (
+    "본 서비스에서 제공되는 약물 및 생활 관리 안내는 참고용 정보이며, 의료진의 진단·치료·처방을 대체하지 않습니다."
+)
+DEFAULT_LLM_FALLBACK = (
+    "최근 프로필과 처방 정보를 기준으로 복약/생활습관 가이드를 업데이트했습니다. "
+    "수면과 식사 시간을 일정하게 유지하고, 복약 누락 시 임의 증량 없이 의료진 지침을 우선하세요."
+)
 
 ALLOWED_STATUS_TRANSITIONS: dict[GuideJobStatus, set[GuideJobStatus]] = {
     GuideJobStatus.QUEUED: {GuideJobStatus.PROCESSING},
@@ -176,6 +160,139 @@ def _format_error_message(*, failure_code: GuideFailureCode, detail: str) -> str
     return f"[{failure_code.value}] {detail}"[:1000]
 
 
+def _parse_date_or_none(raw_value: Any) -> date | None:
+    if not isinstance(raw_value, str):
+        return None
+    try:
+        return date.fromisoformat(raw_value)
+    except ValueError:
+        return None
+
+
+def _compute_remaining_days(*, dispensed_date: date | None, total_days: int) -> int:
+    if not dispensed_date:
+        return total_days
+    elapsed = (datetime.now(config.TIMEZONE).date() - dispensed_date).days
+    return max(total_days - max(elapsed, 0), 0)
+
+
+def _build_medication_guide(confirmed_ocr: dict[str, Any]) -> list[dict[str, Any]]:
+    medications = confirmed_ocr.get("extracted_medications")
+    if not isinstance(medications, list):
+        return []
+
+    guide_items: list[dict[str, Any]] = []
+    for medication in medications:
+        if not isinstance(medication, dict):
+            continue
+        total_days = int(medication.get("total_days", 0) or 0)
+        dispensed_date = _parse_date_or_none(medication.get("dispensed_date"))
+        days_left = _compute_remaining_days(dispensed_date=dispensed_date, total_days=max(total_days, 0))
+        guide_items.append(
+            {
+                "drug_name": medication.get("drug_name"),
+                "dose": medication.get("dose"),
+                "dosage_per_once": medication.get("dosage_per_once"),
+                "frequency_per_day": medication.get("frequency_per_day"),
+                "intake_time": medication.get("intake_time", []),
+                "administration_timing": medication.get("administration_timing"),
+                "side_effect": medication.get("side_effect"),
+                "refill_reminder_days_before": f"약 떨어지기 {days_left}일전",
+            }
+        )
+    return guide_items
+
+
+def _build_lifestyle_flags(profile: UserHealthProfile) -> dict[str, bool]:
+    return {
+        "nutrition_guide": profile.bmi < 18.5 or profile.appetite_level <= 3,
+        "exercise_guide": profile.bmi >= 25 or profile.exercise_frequency_per_week <= 1,
+        "concentration_strategy": profile.digital_time_hours >= 8,
+        "sleep_guide": profile.sleep_time_hours < 6 or profile.sleep_latency_minutes >= 30,
+        "caffeine_guide": profile.caffeine_mg >= 300,
+        "smoking_guide": profile.smoking > 0,
+        "drinking_guide": profile.alcohol_frequency_per_week >= 3,
+    }
+
+
+def _derive_risk_level(profile: UserHealthProfile) -> GuideRiskLevel:
+    risk_score = 0
+    if profile.sleep_time_hours < 6:
+        risk_score += 1
+    if profile.digital_time_hours >= 8:
+        risk_score += 1
+    if profile.caffeine_mg >= 300:
+        risk_score += 1
+    if profile.smoking > 0:
+        risk_score += 1
+    if profile.alcohol_frequency_per_week >= 3:
+        risk_score += 1
+    if risk_score >= 4:
+        return GuideRiskLevel.HIGH
+    if risk_score >= 2:
+        return GuideRiskLevel.MEDIUM
+    return GuideRiskLevel.LOW
+
+
+async def _generate_lifestyle_guide_with_llm(
+    *,
+    profile: UserHealthProfile,
+    confirmed_ocr: dict[str, Any],
+    flags: dict[str, bool],
+) -> dict[str, str]:
+    fallback = {
+        "nutrition_guide": "식욕 저하나 저체중 경향이 있으면 단백질과 수분 섭취를 우선 보강하세요.",
+        "exercise_guide": "주 3회 이상 20~30분 유산소 운동을 권장합니다.",
+        "concentration_strategy": "연속 스크린타임은 50분 이내로 제한하고 10분 휴식을 추가하세요.",
+        "sleep_guide": "취침/기상 시간을 고정하고 카페인은 취침 8시간 전부터 제한하세요.",
+        "caffeine_guide": "하루 카페인 총량을 200mg 이하로 줄여보세요.",
+        "smoking_guide": "흡연량을 단계적으로 줄이고 금연 클리닉 상담을 권장합니다.",
+        "drinking_guide": "음주 빈도를 주 1회 이하로 제한하세요.",
+        "general_health_guide": DEFAULT_LLM_FALLBACK,
+    }
+    if not config.OPENAI_API_KEY:
+        return fallback
+
+    prompt_context = {
+        "profile": {
+            "bmi": profile.bmi,
+            "sleep_time_hours": profile.sleep_time_hours,
+            "caffeine_mg": profile.caffeine_mg,
+            "digital_time_hours": profile.digital_time_hours,
+            "exercise_frequency_per_week": profile.exercise_frequency_per_week,
+            "smoking": profile.smoking,
+            "alcohol_frequency_per_week": profile.alcohol_frequency_per_week,
+            "appetite_level": profile.appetite_level,
+        },
+        "flags": flags,
+        "confirmed_ocr": confirmed_ocr,
+    }
+    user_prompt = (
+        "다음 환자 데이터를 바탕으로 간결하고 실행 가능한 한국어 가이드를 작성해라. "
+        f"조건 데이터: {json.dumps(prompt_context, ensure_ascii=False)}"
+    )
+    try:
+        client = AsyncOpenAI(api_key=config.OPENAI_API_KEY, base_url=config.OPENAI_BASE_URL)
+        response = await client.chat.completions.create(
+            model=config.OPENAI_GUIDE_MODEL,
+            messages=[
+                {"role": "system", "content": _GUIDE_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.2,
+            response_format={"type": "json_object"},
+        )
+        raw = response.choices[0].message.content or "{}"
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            for key, value in fallback.items():
+                parsed.setdefault(key, value)
+            return {key: str(value) for key, value in parsed.items()}
+    except Exception:
+        return fallback
+    return fallback
+
+
 async def _handle_guide_job_failure(
     *,
     job_id: int,
@@ -269,7 +386,27 @@ async def process_guide_job(
         if not ocr_result:
             raise ValueError(f"OCR result not found: {job.ocr_job_id}")
 
-        medication_guidance, lifestyle_guidance, risk_level = await _call_guide_llm(ocr_result.extracted_text)
+        profile = await UserHealthProfile.get_or_none(user_id=job.user_id)
+        if not profile:
+            raise ValueError(f"User health profile not found: {job.user_id}")
+
+        confirmed_ocr = {}
+        if isinstance(ocr_result.structured_data, dict):
+            confirmed_ocr = cast(dict[str, Any], ocr_result.structured_data.get("confirmed_ocr", {}))
+
+        medication_guide = _build_medication_guide(confirmed_ocr)
+        flags = _build_lifestyle_flags(profile)
+        lifestyle_guidance_map = await _generate_lifestyle_guide_with_llm(
+            profile=profile, confirmed_ocr=confirmed_ocr, flags=flags
+        )
+        risk_level = _derive_risk_level(profile)
+        active_sections = [name for name, enabled in flags.items() if enabled]
+        if not active_sections:
+            active_sections = ["general_health_guide"]
+        medication_guidance = json.dumps(medication_guide, ensure_ascii=False)
+        lifestyle_guidance = "\n".join(
+            f"{section}: {lifestyle_guidance_map.get(section, DEFAULT_LLM_FALLBACK)}" for section in active_sections
+        )
         completed_at = datetime.now(config.TIMEZONE)
 
         async with in_transaction():
@@ -283,9 +420,24 @@ async def process_guide_job(
                     "structured_data": {
                         "source_ocr_job_id": job.ocr_job_id,
                         "source_ocr_result_id": ocr_result.id,
-                        "generator": f"openai-{config.OPENAI_GUIDE_MODEL}",
+                        "generator": f"openai-{config.OPENAI_GUIDE_MODEL}" if config.OPENAI_API_KEY else "guide-fallback",
                         "prompt_version": GUIDE_PROMPT_VERSION,
                         "model_version": config.OPENAI_GUIDE_MODEL,
+                        "source_attributions": [
+                            "사용자 건강 프로필 입력 데이터",
+                            "사용자 확인 OCR 처방 데이터",
+                            "RAG 지식 소스(연동 예정)",
+                        ],
+                        "weekly_adherence_rate": profile.weekly_adherence_rate,
+                        "active_lifestyle_sections": active_sections,
+                        "personalized_guides": {
+                            "medication_guide": medication_guide,
+                            "lifestyle_guidance": lifestyle_guidance_map,
+                        },
+                        "llm": {
+                            "model": config.OPENAI_GUIDE_MODEL,
+                            "enabled": bool(config.OPENAI_API_KEY),
+                        },
                     },
                     "updated_at": completed_at,
                 },
