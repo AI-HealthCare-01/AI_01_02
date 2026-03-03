@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
@@ -8,6 +9,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import ORJSONResponse
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from app.apis.v1 import v1_routers
 from app.apis.v2 import v2_routers
@@ -53,10 +56,22 @@ if config.SENTRY_DSN:
         environment=config.ENV,
     )
 
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """REQ-105: 모든 요청에 X-Request-ID를 생성/전파하고 응답 헤더에 포함."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[override]
+        request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
 app = FastAPI(
     lifespan=lifespan,
     default_response_class=ORJSONResponse, docs_url="/api/docs", redoc_url="/api/redoc", openapi_url="/api/openapi.json"
 )
+app.add_middleware(RequestIDMiddleware)
 initialize_tortoise(app)
 
 app.include_router(v1_routers)
@@ -87,6 +102,10 @@ def _error_response(
     )
 
 
+def _get_request_id(request: Request) -> str | None:
+    return getattr(request.state, "request_id", None) or request.headers.get("x-request-id")
+
+
 @app.exception_handler(AppException)
 async def app_exception_handler(request: Request, exc: AppException) -> ORJSONResponse:
     return _error_response(
@@ -96,7 +115,7 @@ async def app_exception_handler(request: Request, exc: AppException) -> ORJSONRe
         detail=exc.developer_message,
         action_hint=exc.action_hint,
         retryable=exc.retryable,
-        request_id=request.headers.get("x-request-id"),
+        request_id=_get_request_id(request),
     )
 
 
@@ -118,7 +137,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> ORJSON
         exc.status_code,
         code,
         message,
-        request_id=request.headers.get("x-request-id"),
+        request_id=_get_request_id(request),
     )
 
 
@@ -139,7 +158,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         "입력값 검증에 실패했습니다.",
         detail=[_safe(e) for e in exc.errors()],
         action_hint="입력 항목 수정 후 다시 시도",
-        request_id=request.headers.get("x-request-id"),
+        request_id=_get_request_id(request),
     )
 
 
@@ -150,5 +169,5 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> ORJSO
         ErrorCode.INTERNAL_ERROR,
         "서버 내부 오류가 발생했습니다.",
         retryable=True,
-        request_id=request.headers.get("x-request-id"),
+        request_id=_get_request_id(request),
     )
