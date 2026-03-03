@@ -3,9 +3,17 @@ import signal
 import time
 from contextlib import suppress
 
+import sentry_sdk
+
 from ai_worker.core import config, default_logger
 from ai_worker.db import close_database, initialize_database
 from ai_worker.tasks import GuideQueueConsumer, OcrQueueConsumer, process_guide_job, process_ocr_job, run_heartbeat
+
+if config.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=config.SENTRY_DSN,
+        traces_sample_rate=config.SENTRY_TRACES_SAMPLE_RATE,
+    )
 
 
 class Worker:

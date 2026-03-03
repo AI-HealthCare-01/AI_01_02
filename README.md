@@ -15,13 +15,20 @@ AI Health Final은 ADHD 환자/보호자 지원을 위한 백엔드 프로젝트
 
 - 구현됨:
   - 인증/인가 (`/api/v1/auth/*`, `/api/v1/users/me`)
-  - OCR 업로드/작업/상태/결과 (`/api/v1/ocr/*`)
-  - 가이드 작업/상태/결과 (`/api/v1/guides/*`)
-  - 알림 조회/읽음 처리 (`/api/v1/notifications*`)
+  - 건강 프로필 저장/조회 (`/api/v1/profiles/health`)
+  - OCR 업로드/작업/상태/결과/확정 (`/api/v1/ocr/*`)
+  - 약물명 자동완성 검색 (`/api/v1/medications/search`)
+  - 가이드 작업/상태/결과/갱신 (`/api/v1/guides/*`)
+  - 분석 요약 (`/api/v1/analysis/summary`)
+  - 일일 일정 조회/상태 업데이트 (`/api/v1/schedules/*`)
+  - 챗봇 세션/메시지/스트리밍/삭제 (`/api/v1/chat/*`)
+  - 알림 조회/읽음 처리 (`/api/v1/notifications/*`)
+  - 복약 리마인더 CRUD/D-day 조회 (`/api/v1/reminders/*`)
   - AI Worker 큐 소비, 재시도/실패 처리 기본 구조
 - 미구현 또는 고도화 예정:
-  - 실시간 챗봇 RAG 파이프라인
+  - 챗봇 RAG 파이프라인 (벡터 검색, 하이브리드 검색, 근거 출처 표기)
   - OCR/가이드 실제 모델 연동 고도화
+  - LLM 구조화 출력 강제 및 프롬프트 버전 관리
 
 ## 프로젝트 구조
 

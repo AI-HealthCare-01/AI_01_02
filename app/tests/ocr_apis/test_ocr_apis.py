@@ -81,7 +81,7 @@ class TestOcrApis(TestCase):
             )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "허용되지 않는 파일 형식" in response.json()["detail"]
+        assert "지원하지 않는 파일 형식" in response.json()["message"]
 
     async def test_upload_document_too_large(self):
         email = "ocr_upload_large@example.com"
@@ -142,7 +142,7 @@ class TestOcrApis(TestCase):
             )
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json()["detail"] == "문서를 찾을 수 없습니다."
+        assert response.json()["code"] == "RESOURCE_NOT_FOUND"
 
     async def test_create_ocr_job_queue_publish_failure_marks_job_failed(self):
         email = "ocr_queue_failure@example.com"
@@ -162,7 +162,7 @@ class TestOcrApis(TestCase):
                 )
 
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-        assert response.json()["detail"] == "OCR 작업 큐 등록에 실패했습니다. 잠시 후 다시 시도해주세요."
+        assert "OCR" in response.json()["message"]
 
         failed_job = await OcrJob.filter(document_id=int(document["id"])).order_by("-id").first()
         assert failed_job is not None
@@ -195,7 +195,7 @@ class TestOcrApis(TestCase):
             response = await client.get(f"/api/v1/ocr/jobs/{owner_job_id}", headers=other_headers)
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json()["detail"] == "OCR 작업을 찾을 수 없습니다."
+        assert response.json()["code"] == "RESOURCE_NOT_FOUND"
 
     async def test_ocr_resources_created_in_db(self):
         email = "ocr_db_resource@example.com"
@@ -230,7 +230,7 @@ class TestOcrApis(TestCase):
             response = await client.get(f"/api/v1/ocr/jobs/{job_id}/result", headers=headers)
 
         assert response.status_code == status.HTTP_409_CONFLICT
-        assert response.json()["detail"] == "OCR 작업이 아직 완료되지 않았습니다."
+        assert response.json()["code"] == "STATE_CONFLICT"
 
     async def test_get_ocr_result_success(self):
         email = "ocr_result_success@example.com"
