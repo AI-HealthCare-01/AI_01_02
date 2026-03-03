@@ -1,9 +1,9 @@
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from tortoise.contrib.test import TestCase
 
 from ai_worker.tasks.guide import GUIDE_SAFETY_NOTICE, compute_retry_delay_seconds, process_guide_job
-from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult
+from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult, GuideRiskLevel
 from app.models.notifications import Notification, NotificationType
 from app.models.ocr import Document, DocumentType, OcrJob, OcrJobStatus, OcrResult
 from app.models.users import Gender, User
@@ -51,12 +51,16 @@ class TestGuideWorkerTasks(TestCase):
         )
         guide_job = await GuideJob.create(user=user, ocr_job=ocr_job)
 
-        processed = await process_guide_job(
-            job_id=guide_job.id,
-            logger=logger,
-            schedule_retry=_schedule_retry,
-            send_to_dead_letter=_dead_letter,
-        )
+        with patch(
+            "ai_worker.tasks.guide._call_guide_llm",
+            new=AsyncMock(return_value=("복약 안내 텍스트", "생활습관 안내 텍스트", GuideRiskLevel.LOW)),
+        ):
+            processed = await process_guide_job(
+                job_id=guide_job.id,
+                logger=logger,
+                schedule_retry=_schedule_retry,
+                send_to_dead_letter=_dead_letter,
+            )
 
         await guide_job.refresh_from_db()
         result = await GuideResult.get(job_id=guide_job.id)

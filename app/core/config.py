@@ -43,6 +43,18 @@ class Config(BaseSettings):
     GUIDE_QUEUE_KEY: str = "guide:jobs"
     GUIDE_JOB_MAX_RETRIES: int = 3
 
+    OPENAI_API_KEY: str = ""
+    OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
+    OPENAI_GUIDE_MODEL: str = "gpt-4o-mini"
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+
+    CHROMA_HOST: str = "localhost"
+    CHROMA_PORT: int = 8001
+    CHROMA_COLLECTION: str = "adhd_knowledge"
+    RAG_TOP_K: int = 5
+    RAG_SIMILARITY_THRESHOLD: float = 0.4
+    RAG_BM25_WEIGHT: float = 0.3
+
     DB_HOST: str = "localhost"
     DB_PORT: int = 3306
     DB_USER: str = "root"
@@ -57,6 +69,9 @@ class Config(BaseSettings):
     REDIS_SOCKET_TIMEOUT_SECONDS: float = 0.2
 
     COOKIE_DOMAIN: str = "localhost"
+
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
 
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60

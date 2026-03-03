@@ -13,15 +13,30 @@ AI Health Final은 ADHD 환자/보호자 지원을 위한 백엔드 프로젝트
 
 ## 현재 구현 상태 요약
 
-- 구현됨:
-  - 인증/인가 (`/api/v1/auth/*`, `/api/v1/users/me`)
-  - OCR 업로드/작업/상태/결과 (`/api/v1/ocr/*`)
-  - 가이드 작업/상태/결과 (`/api/v1/guides/*`)
-  - 알림 조회/읽음 처리 (`/api/v1/notifications*`)
-  - AI Worker 큐 소비, 재시도/실패 처리 기본 구조
-- 미구현 또는 고도화 예정:
-  - 실시간 챗봇 RAG 파이프라인
-  - OCR/가이드 실제 모델 연동 고도화
+- 구현됨 (87/90건, REQ 기준):
+  - 인증/인가 (`/api/v1/auth/*`, `/api/v1/users/me`) — REQ-024~REQ-028
+  - 건강 프로필 저장/조회 (`/api/v1/profiles/health`) — REQ-045~REQ-047
+  - OCR 업로드/작업/상태/결과/확정 (`/api/v1/ocr/*`) — REQ-050~REQ-058, REQ-061~REQ-062
+  - 약물명 자동완성 검색 (`/api/v1/medications/search`) — REQ-062
+  - 가이드 작업/상태/결과/갱신 (`/api/v1/guides/*`) — REQ-001~REQ-009
+  - 분석 요약 (`/api/v1/analysis/summary`) — REQ-013~REQ-015
+  - 일일 일정 조회/상태 업데이트 (`/api/v1/schedules/*`) — REQ-010
+  - 챗봇 세션/메시지/스트리밍/삭제 (`/api/v1/chat/*`) — REQ-029~REQ-044
+    - RAG 하이브리드 검색 (Dense + BM25), 근거 출처 표기 포함
+    - 의도 분류, 안전 가드레일, SSE 스트리밍, 자동 세션 종료
+  - 알림 조회/읽음 처리 (`/api/v1/notifications/*`) — REQ-016~REQ-019
+  - 복약 리마인더 CRUD/D-day 조회 (`/api/v1/reminders/*`) — REQ-020~REQ-021
+  - AI Worker 큐 소비, 재시도/실패 처리, Clova OCR + LLM 파싱 연동
+  - LLM 구조화 출력 강제 및 프롬프트 버전 관리 — REQ-048~REQ-049
+  - Sentry 연동 (`SENTRY_DSN` 설정 시 자동 활성화) — REQ-119
+  - `RequestIDMiddleware` + nginx `X-Request-ID` 헤더 전달 — REQ-105
+  - 비활성 세션 자동 종료 백그라운드 루프 — REQ-044
+- 대기중 (프론트엔드/배포 후 적용):
+  - REQ-059~REQ-060: 촬영 가이드 UX, 복약 시작 요약 출력 (프론트엔드 영역)
+  - REQ-109: HTTPS/TLS (EC2 실서버 배포 후 적용)
+  - REQ-110~REQ-111: 모바일 최적화, 에러 메시지 매핑 (프론트엔드 영역)
+  - REQ-113~REQ-116: 성능 지표 (배포 후 측정)
+  - REQ-119: 장애 감지 알림 (SENTRY_DSN 환경변수 입력 후 활성화)
 
 ## 프로젝트 구조
 

@@ -1,7 +1,6 @@
 from typing import Literal, overload
 
-from fastapi import HTTPException
-
+from app.core.exceptions import AppException, ErrorCode
 from app.models.users import User
 from app.utils.jwt.exceptions import ExpiredTokenError, TokenError
 from app.utils.jwt.tokens import AccessToken, RefreshToken
@@ -42,9 +41,11 @@ class JwtService:
             verified = token_class(token=token)
             return verified
         except ExpiredTokenError as err:
-            raise HTTPException(status_code=401, detail=f"{token_type} token has expired.") from err
+            raise AppException(
+                ErrorCode.AUTH_TOKEN_EXPIRED, developer_message=f"{token_type} token has expired."
+            ) from err
         except TokenError as err:
-            raise HTTPException(status_code=401, detail="Provided invalid token.") from err
+            raise AppException(ErrorCode.AUTH_INVALID_TOKEN, developer_message="Provided invalid token.") from err
 
     def refresh_jwt(self, refresh_token: str) -> AccessToken:
         verified_rt = self.verify_jwt(token=refresh_token, token_type="refresh")

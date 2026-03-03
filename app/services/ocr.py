@@ -2,10 +2,11 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import HTTPException, UploadFile, status
+from fastapi import UploadFile
 from tortoise.transactions import in_transaction
 
 from app.core import config, default_logger
+from app.core.exceptions import AppException, ErrorCode
 from app.models.ocr import Document, DocumentType, OcrFailureCode, OcrJob, OcrJobStatus, OcrResult
 from app.models.users import User
 from app.repositories.ocr_repository import OcrRepository
@@ -19,19 +20,16 @@ class OcrService:
 
     async def upload_document(self, *, user: User, document_type: DocumentType, file: UploadFile) -> Document:
         if not file.filename:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="업로드 파일명이 필요합니다.")
+            raise AppException(ErrorCode.VALIDATION_ERROR, developer_message="업로드 파일명이 필요합니다.")
 
         extension = Path(file.filename).suffix.lstrip(".").lower()
         if extension not in set(config.OCR_ALLOWED_EXTENSIONS):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="허용되지 않는 파일 형식입니다. (pdf, jpg, jpeg, png)",
-            )
+            raise AppException(ErrorCode.FILE_INVALID_TYPE)
 
         content = await file.read()
         file_size = len(content)
         if file_size > config.OCR_MAX_FILE_SIZE_BYTES:
-            raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail="파일 크기 제한을 초과했습니다.")
+            raise AppException(ErrorCode.FILE_TOO_LARGE)
 
         media_root = Path(config.MEDIA_DIR).resolve()
         user_dir = media_root / "documents" / str(user.id)
@@ -45,9 +43,7 @@ class OcrService:
         try:
             target_path.write_bytes(content)
         except OSError as err:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="파일 저장에 실패했습니다."
-            ) from err
+            raise AppException(ErrorCode.INTERNAL_ERROR, developer_message="파일 저장에 실패했습니다.") from err
 
         try:
             async with in_transaction():
@@ -76,7 +72,7 @@ class OcrService:
     async def create_ocr_job(self, *, user: User, document_id: int) -> OcrJob:
         document = await self.repo.get_user_document(document_id=document_id, user_id=user.id)
         if not document:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="문서를 찾을 수 없습니다.")
+            raise AppException(ErrorCode.RESOURCE_NOT_FOUND, developer_message="문서를 찾을 수 없습니다.")
 
         async with in_transaction():
             job = await self.repo.create_job(
@@ -97,25 +93,42 @@ class OcrService:
             )
             self._dispose_uploaded_document_file(relative_path=document.file_path, job_id=job.id)
             default_logger.exception("ocr queue publish failed (job_id=%s)", job.id)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="OCR 작업 큐 등록에 실패했습니다. 잠시 후 다시 시도해주세요.",
-            ) from err
+            raise AppException(ErrorCode.OCR_QUEUE_UNAVAILABLE) from err
 
         return job
 
     async def get_ocr_job(self, *, user: User, job_id: int) -> OcrJob:
         job = await self.repo.get_user_job(job_id=job_id, user_id=user.id)
         if not job:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="OCR 작업을 찾을 수 없습니다.")
+            raise AppException(ErrorCode.RESOURCE_NOT_FOUND, developer_message="OCR 작업을 찾을 수 없습니다.")
         return job
 
     async def get_ocr_result(self, *, user: User, job_id: int) -> OcrResult:
         job = await self.get_ocr_job(user=user, job_id=job_id)
         if job.status != OcrJobStatus.SUCCEEDED:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="OCR 작업이 아직 완료되지 않았습니다.")
+            raise AppException(ErrorCode.STATE_CONFLICT, developer_message="OCR 작업이 아직 완료되지 않았습니다.")
 
         result = await OcrResult.get_or_none(job_id=job.id)
         if not result:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="OCR 결과를 찾을 수 없습니다.")
+            raise AppException(ErrorCode.RESOURCE_NOT_FOUND, developer_message="OCR 결과를 찾을 수 없습니다.")
+        return result
+
+    async def confirm_ocr_result(
+        self,
+        *,
+        user: User,
+        job_id: int,
+        confirmed: bool,
+        corrected_medications: list[dict],
+        comment: str | None,
+    ) -> OcrResult:
+        result = await self.get_ocr_result(user=user, job_id=job_id)
+        if corrected_medications:
+            structured = dict(result.structured_data)
+            structured["medications"] = corrected_medications
+            structured["user_confirmed"] = confirmed
+            if comment:
+                structured["confirm_comment"] = comment
+            result.structured_data = structured
+            await result.save(update_fields=["structured_data", "updated_at"])
         return result

@@ -50,7 +50,17 @@ class TestOcrWorkerTasks(TestCase):
             )
             job = await OcrJob.create(user=user, document=document)
 
-            with patch("ai_worker.tasks.ocr.config.MEDIA_DIR", str(media_dir)):
+            async def _mock_clova(file_bytes: bytes, file_name: str) -> tuple[str, list]:
+                return "mock extracted text", []
+
+            async def _mock_llm(extracted_text: str, raw_blocks: list) -> dict:
+                return {"medications": [], "overall_confidence": 0.9, "needs_user_review": False}
+
+            with (
+                patch("ai_worker.tasks.ocr.config.MEDIA_DIR", str(media_dir)),
+                patch("ai_worker.tasks.ocr._call_clova_ocr", _mock_clova),
+                patch("ai_worker.tasks.ocr._parse_medications_with_llm", _mock_llm),
+            ):
                 processed = await process_ocr_job(
                     job_id=job.id,
                     logger=logger,
@@ -66,7 +76,7 @@ class TestOcrWorkerTasks(TestCase):
         assert job.retry_count == 0
         assert job.failure_code is None
         assert result.job_id == job.id
-        assert "success.png" in result.extracted_text
+        assert result.extracted_text == "mock extracted text"
         assert file_exists_after_process is False
         assert scheduled_retries == []
         assert dead_letters == []
