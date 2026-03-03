@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 from app.core import config
 from app.core.exceptions import AppException, ErrorCode
+from app.core.logger import default_logger as logger
 from app.models.chat import ChatMessage, ChatMessageStatus, ChatRole, ChatSession, ChatSessionStatus
 from app.models.profiles import HealthProfile
 from app.models.users import User
@@ -155,6 +156,10 @@ class ChatService:
 
         # REQ-035: 안전 가드레일 — emergency 차단
         if intent == "emergency":
+            logger.warning(
+                "guardrail_blocked",
+                extra={"user_id": user.id, "session_id": session.id, "message_preview": message[:50]},
+            )
             await ChatMessage.create(
                 session_id=session.id,
                 role=ChatRole.USER,
@@ -279,6 +284,10 @@ class ChatService:
     ) -> AsyncGenerator[str] | None:
         """가드레일/재질문 조기 종료. None이면 정상 진행."""
         if intent == "emergency":
+            logger.warning(
+                "guardrail_blocked",
+                extra={"session_id": session.id, "message_preview": message[:50]},
+            )
             await ChatMessage.create(
                 session_id=session.id,
                 role=ChatRole.USER,
