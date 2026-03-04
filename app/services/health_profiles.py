@@ -13,6 +13,7 @@ from app.dtos.health_profiles import (
 from app.models.health_profiles import UserHealthProfile
 from app.models.users import User
 from app.repositories.health_profile_repository import HealthProfileRepository
+from app.services.guide_automation import GuideAutomationService
 
 
 def _to_minutes(hhmm: str) -> int:
@@ -30,6 +31,7 @@ def compute_sleep_time_hours(*, bed_time: str, wake_time: str) -> float:
 class HealthProfileService:
     def __init__(self) -> None:
         self.repo = HealthProfileRepository()
+        self.guide_automation_service = GuideAutomationService()
 
     def _compute_metrics(self, request: HealthProfileUpsertRequest) -> ComputedHealthMetrics:
         bmi = round(request.basic_info.weight_kg / ((request.basic_info.height_cm / 100) ** 2), 2)
@@ -47,6 +49,7 @@ class HealthProfileService:
         )
 
     async def upsert_profile(self, *, user: User, request: HealthProfileUpsertRequest) -> UserHealthProfile:
+        previous_profile = await self.repo.get_by_user_id(user_id=user.id)
         computed = self._compute_metrics(request)
         payload = {
             "height_cm": request.basic_info.height_cm,
@@ -74,7 +77,17 @@ class HealthProfileService:
             "weekly_adherence_rate": request.weekly_adherence_rate,
             "onboarding_completed_at": datetime.now(config.TIMEZONE),
         }
-        return await self.repo.upsert_by_user_id(user_id=user.id, payload=payload)
+        profile = await self.repo.upsert_by_user_id(user_id=user.id, payload=payload)
+
+        was_expired = False
+        if previous_profile:
+            was_expired = self.is_onboarding_expired(previous_profile)
+        if was_expired:
+            await self.guide_automation_service.trigger_refresh_with_latest_ocr(
+                user_id=user.id,
+                reason="weekly_profile_refreshed",
+            )
+        return profile
 
     async def get_profile(self, *, user: User) -> UserHealthProfile | None:
         return await self.repo.get_by_user_id(user_id=user.id)

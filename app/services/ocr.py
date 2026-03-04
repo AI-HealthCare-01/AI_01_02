@@ -11,6 +11,7 @@ from app.models.ocr import Document, DocumentType, OcrFailureCode, OcrJob, OcrJo
 from app.models.users import User
 from app.dtos.ocr import OcrResultConfirmRequest
 from app.repositories.ocr_repository import OcrRepository
+from app.services.guide_automation import GuideAutomationService
 from app.services.ocr_queue import OcrQueuePublisher
 
 
@@ -18,6 +19,7 @@ class OcrService:
     def __init__(self) -> None:
         self.repo = OcrRepository()
         self.queue_publisher = OcrQueuePublisher()
+        self.guide_automation_service = GuideAutomationService()
 
     async def upload_document(self, *, user: User, document_type: DocumentType, file: UploadFile) -> Document:
         if not file.filename:
@@ -132,6 +134,11 @@ class OcrService:
                 structured["confirm_comment"] = comment
             result.structured_data = structured
             await result.save(update_fields=["structured_data", "updated_at"])
+            await self.guide_automation_service.trigger_refresh_for_ocr_job(
+                user_id=user.id,
+                ocr_job_id=result.job_id,
+                reason="ocr_review_corrected",
+            )
         return result
 
     async def confirm_ocr_result(self, *, user: User, job_id: int, request: OcrResultConfirmRequest) -> OcrResult:
@@ -151,8 +158,14 @@ class OcrService:
             **existing_structured,
             "confirmed_ocr": confirmed_payload,
         }
-        return await self.repo.upsert_result(
+        result = await self.repo.upsert_result(
             job_id=job.id,
             extracted_text=request.raw_text,
             structured_data=merged_structured,
         )
+        await self.guide_automation_service.trigger_refresh_for_ocr_job(
+            user_id=user.id,
+            ocr_job_id=job.id,
+            reason="ocr_result_confirmed",
+        )
+        return result

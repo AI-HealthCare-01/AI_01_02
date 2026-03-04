@@ -20,6 +20,7 @@ from app.core.logger import default_logger as logger
 from app.db.databases import initialize_tortoise
 from app.dtos.errors import ApiError
 from app.services.chat import close_inactive_sessions
+from app.services.guide_automation import GuideAutomationService
 
 _SESSION_CLOSE_INTERVAL_SECONDS = 60
 
@@ -36,15 +37,35 @@ async def _session_auto_close_loop() -> None:
             logger.warning("auto_close_sessions_error", extra={"error": str(exc)})
 
 
+async def _guide_weekly_refresh_loop() -> None:
+    service = GuideAutomationService()
+    while True:
+        await asyncio.sleep(config.GUIDE_WEEKLY_REFRESH_CHECK_INTERVAL_SECONDS)
+        try:
+            processed = await service.process_weekly_refresh_due_users(
+                batch_size=config.GUIDE_WEEKLY_REFRESH_CHECK_BATCH_SIZE
+            )
+            if processed:
+                logger.info("weekly_guide_refresh_due_notified", extra={"user_count": processed})
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("weekly_guide_refresh_loop_error", extra={"error": str(exc)})
+
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    task = asyncio.create_task(_session_auto_close_loop())
+    session_task = asyncio.create_task(_session_auto_close_loop())
+    weekly_refresh_task = asyncio.create_task(_guide_weekly_refresh_loop())
     try:
         yield
     finally:
-        task.cancel()
+        session_task.cancel()
+        weekly_refresh_task.cancel()
         try:
-            await task
+            await session_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await weekly_refresh_task
         except asyncio.CancelledError:
             pass
 

@@ -42,6 +42,8 @@ class Config(BaseSettings):
     OCR_JOB_MAX_RETRIES: int = 3
     GUIDE_QUEUE_KEY: str = "guide:jobs"
     GUIDE_JOB_MAX_RETRIES: int = 3
+    GUIDE_WEEKLY_REFRESH_CHECK_INTERVAL_SECONDS: int = 3600
+    GUIDE_WEEKLY_REFRESH_CHECK_BATCH_SIZE: int = 100
 
     OPENAI_API_KEY: str = ""
     OPENAI_CHAT_MODEL: str = "gpt-4o-mini"

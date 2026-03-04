@@ -69,7 +69,7 @@ services:
       redis:
         condition: service_healthy
       chromadb:
-        condition: service_healthy
+        condition: service_started
 
   # 4. AI Worker (Model 학습 및 추론)
   ai-worker:
