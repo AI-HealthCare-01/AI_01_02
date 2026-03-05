@@ -27,7 +27,7 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const doFetch = (token: string | null) =>
     fetch(`${BASE}${path}`, {
       ...init,
@@ -56,22 +56,39 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message ?? err?.message ?? `HTTP ${res.status}`);
+    throw new Error(err?.code ?? err?.detail?.message ?? err?.message ?? `HTTP ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
 }
 
 async function requestForm<T>(path: string, body: FormData): Promise<T> {
-  const token = getToken();
-  const res = await fetch(`${BASE}${path}`, {
-    method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body,
-  });
+  const doFetch = (token: string | null) =>
+    fetch(`${BASE}${path}`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body,
+    });
+
+  let res = await doFetch(getToken());
+
+  if (res.status === 401) {
+    if (!_refreshPromise) {
+      _refreshPromise = refreshAccessToken().finally(() => { _refreshPromise = null; });
+    }
+    const newToken = await _refreshPromise;
+    if (newToken) {
+      res = await doFetch(newToken);
+    } else {
+      clearToken();
+      window.location.href = "/login";
+      throw new Error("인증이 만료되었습니다. 다시 로그인해주세요.");
+    }
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message ?? err?.message ?? `HTTP ${res.status}`);
+    throw new Error(err?.code ?? err?.detail?.message ?? err?.message ?? `HTTP ${res.status}`);
   }
   return res.json();
 }
@@ -85,7 +102,7 @@ export const authApi = {
     gender: "MALE" | "FEMALE";
     birth_date: string;
     phone_number: string;
-  }) => request<void>("/auth/signup", { method: "POST", body: JSON.stringify(body) }),
+  }) => request<{ detail: string }>("/auth/signup", { method: "POST", body: JSON.stringify(body) }),
 
   login: (email: string, password: string) =>
     request<{ access_token: string }>("/auth/login", {
@@ -100,7 +117,7 @@ export interface ScheduleItem {
   category: string;
   title: string;
   scheduled_at: string;
-  status: "PENDING" | "COMPLETED" | "SKIPPED";
+  status: "PENDING" | "DONE" | "SKIPPED";
   completed_at: string | null;
 }
 
@@ -108,7 +125,7 @@ export const scheduleApi = {
   getDaily: (date: string) =>
     request<{ date: string; items: ScheduleItem[] }>(`/schedules/daily?date=${date}`),
 
-  updateStatus: (itemId: string, status: "PENDING" | "COMPLETED" | "SKIPPED") =>
+  updateStatus: (itemId: string, status: "PENDING" | "DONE" | "SKIPPED") =>
     request<ScheduleItem>(`/schedules/items/${itemId}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
@@ -135,6 +152,14 @@ export const chatApi = {
 
   getPromptOptions: () =>
     request<{ items: { id: string; label: string; category: string }[] }>("/chat/prompt-options"),
+
+  getMessages: (sessionId: string, params?: { limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.limit !== undefined) q.set("limit", String(params.limit));
+    if (params?.offset !== undefined) q.set("offset", String(params.offset));
+    const qs = q.toString() ? `?${q}` : "";
+    return request<{ items: { id: string; role: string; content: string; created_at: string }[]; meta: { limit: number; offset: number; total: number } }>(`/chat/sessions/${sessionId}/messages${qs}`);
+  },
 
   async *streamMessage(sessionId: string, message: string): AsyncGenerator<string> {
     const token = getToken();
@@ -182,6 +207,11 @@ export interface UserInfo {
 
 export const userApi = {
   me: () => request<UserInfo>("/users/me"),
+
+  update: (data: Partial<Omit<UserInfo, "id" | "created_at">>) =>
+    request<UserInfo>("/users/me", { method: "PATCH", body: JSON.stringify(data) }),
+
+  deleteAccount: () => request<void>("/users/me", { method: "DELETE" }),
 };
 
 // ── OCR ───────────────────────────────────────────────
@@ -195,7 +225,7 @@ export interface OcrMedication {
   confidence: number | null;
 }
 
-export type OcrStatus = "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
+export type OcrStatus = "QUEUED" | "PROCESSING" | "SUCCEEDED" | "FAILED";
 
 export interface OcrJobStatusResponse {
   job_id: string;
@@ -259,7 +289,7 @@ export interface GuideSourceReference {
   url?: string;
 }
 
-export type GuideStatus = "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
+export type GuideStatus = "QUEUED" | "PROCESSING" | "SUCCEEDED" | "FAILED";
 
 export interface GuideJobResult {
   job_id: string;
@@ -287,6 +317,12 @@ export const guideApi = {
     ),
 
   getJobResult: (jobId: string) => request<GuideJobResult>(`/guides/jobs/${jobId}/result`),
+
+  refreshJob: (jobId: string, reason?: string) =>
+    request<{ refreshed_job_id: string; status: GuideStatus }>(`/guides/jobs/${jobId}/refresh`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
 };
 
 // ── Profile ───────────────────────────────────────────
@@ -412,6 +448,9 @@ export interface ApiNotification {
 }
 
 export const notificationApi = {
+  getUnreadCount: () =>
+    request<{ unread_count: number }>("/notifications/unread-count"),
+
   list: (params?: { limit?: number; offset?: number; is_read?: boolean }) => {
     const q = new URLSearchParams();
     if (params?.limit !== undefined) q.set("limit", String(params.limit));

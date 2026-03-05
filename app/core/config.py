@@ -1,5 +1,4 @@
 import os
-import uuid
 import zoneinfo
 from datetime import timedelta, timezone, tzinfo
 from enum import StrEnum
@@ -27,7 +26,7 @@ class Config(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow")
 
     ENV: Env = Env.LOCAL
-    SECRET_KEY: str = f"default-secret-key{uuid.uuid4().hex}"
+    SECRET_KEY: str
     TIMEZONE: tzinfo = Field(default_factory=get_default_timezone)
     TEMPLATE_DIR: str = os.path.join(Path(__file__).resolve().parent.parent, "templates")
     MEDIA_DIR: str = os.path.join(Path(__file__).resolve().parent.parent, "media")
@@ -61,7 +60,7 @@ class Config(BaseSettings):
     DB_HOST: str = "localhost"
     DB_PORT: int = 3306
     DB_USER: str = "root"
-    DB_PASSWORD: str = "pw1234"
+    DB_PASSWORD: str = ""
     DB_NAME: str = "ai_health"
     DB_CONNECT_TIMEOUT: int = 5
     DB_CONNECTION_POOL_MAXSIZE: int = 10

@@ -1,6 +1,6 @@
 # AI Health Project API 명세서
 
-문서 버전: v1.36  
+문서 버전: v1.37  
 작성일: 2026-03-13  
 원본:
 - `docs/요구사항_정의서.xlsx`
@@ -10,6 +10,7 @@
 문서 목적: 객체 모델 명세와 API 계약 명세를 독립 문서로 관리한다.
 
 문서 변경 이력:
+- v1.37 (2026-03-13): 코드 실사 기반 동기화 — 11.6 `ChatSession` 객체에 `title` 필드 추가; 12.6 에러코드 표에 `AUTH_ACCOUNT_INACTIVE` 항목 추가
 - v1.36 (2026-03-13): 코드 실사 기반 동기화 — 12.3(OCR/가이드/분석/일정), 12.4(챗봇), 12.5(알림/리마인더) API 상태를 "대기중"에서 "개발완료"로 일괄 갱신; 12.8 동기화 목록과 실제 구현 상태 일치 확인
 - v1.35 (2026-03-03): 문서 정합성 점검 반영으로 변경 이력의 과거 REQ 번호 표기를 현행 번호와 함께 명시해 혼동을 줄이고 기준 문서 버전을 최신으로 갱신
 - v1.34 (2026-03-03): 문서 정합성 점검 반영으로 변경 이력의 과거 REQ 번호 표기를 현행 번호와 함께 명시해 혼동을 줄이고 기준 문서 버전을 최신으로 갱신
@@ -221,6 +222,7 @@
 | ChatSessionCreateRequest | title | string | 선택 | 세션 제목 |
 | ChatSession | id | string | 필수 | 세션 ID |
 | ChatSession | status | enum(`ACTIVE`,`CLOSED`) | 필수 | 세션 상태 |
+| ChatSession | title | string \| null | 선택 | 세션 제목 |
 | ChatSession | last_activity_at | string(datetime) | 선택 | 마지막 활동 시각 |
 | ChatSession | auto_close_after_minutes | int | 선택 | 자동 종료 기준(분) |
 | ChatPromptOption | id | string | 필수 | 객관식 프롬프트 식별자 |
@@ -391,6 +393,7 @@
 
 | HTTP | code | 발생 상황 | action_hint |
 |---|---|---|---|
+| 423 | `AUTH_ACCOUNT_INACTIVE` | 비활성화 계정 접근 | - |
 | 400 | `VALIDATION_ERROR` | 필수 필드 누락, 형식 오류 | 입력 항목 수정 후 다시 시도 |
 | 400 | `FILE_INVALID_TYPE` | 허용되지 않는 파일 확장자 | 다른 파일을 선택해주세요. |
 | 401 | `AUTH_INVALID_TOKEN` | 토큰 누락/유효하지 않음 | 로그인 페이지로 이동 |

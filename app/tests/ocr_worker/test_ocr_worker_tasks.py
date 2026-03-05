@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 from tortoise.contrib.test import TestCase
 
 from ai_worker.tasks.ocr import compute_retry_delay_seconds, process_ocr_job
-from app.models.ocr import Document, DocumentType, OcrFailureCode, OcrJob, OcrJobStatus, OcrResult
+from app.models.ocr import Document, DocumentType, OcrFailureCode, OcrJob, OcrJobStatus
 from app.models.users import Gender, User
 
 
@@ -44,7 +44,7 @@ class TestOcrWorkerTasks(TestCase):
                 user=user,
                 document_type=DocumentType.PRESCRIPTION,
                 file_name="success.png",
-                file_path=relative_file_path,
+                temp_storage_key=relative_file_path,
                 file_size=len(b"worker-ocr-content"),
                 mime_type="image/png",
             )
@@ -70,13 +70,11 @@ class TestOcrWorkerTasks(TestCase):
             file_exists_after_process = absolute_file_path.exists()
 
         await job.refresh_from_db()
-        result = await OcrResult.get(job_id=job.id)
         assert processed is True
         assert job.status == OcrJobStatus.SUCCEEDED
         assert job.retry_count == 0
         assert job.failure_code is None
-        assert result.job_id == job.id
-        assert result.extracted_text == "mock extracted text"
+        assert job.raw_text == "mock extracted text"
         assert file_exists_after_process is False
         assert scheduled_retries == []
         assert dead_letters == []
@@ -99,7 +97,7 @@ class TestOcrWorkerTasks(TestCase):
                 user=user,
                 document_type=DocumentType.MEDICAL_RECORD,
                 file_name="missing.pdf",
-                file_path="documents/worker/missing.pdf",
+                temp_storage_key="documents/worker/missing.pdf",
                 file_size=10,
                 mime_type="application/pdf",
             )
@@ -157,7 +155,7 @@ class TestOcrWorkerTasks(TestCase):
                 user=user,
                 document_type=DocumentType.PRESCRIPTION,
                 file_name="skipped.png",
-                file_path="documents/worker/skipped.png",
+                temp_storage_key="documents/worker/skipped.png",
                 file_size=1,
                 mime_type="image/png",
             )

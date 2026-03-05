@@ -267,11 +267,15 @@ class ChatService:
 
         try:
             reply = await chat_completion(model=config.OPENAI_CHAT_MODEL, messages=messages_payload)
+            assistant_msg.content = reply
+            assistant_msg.status = ChatMessageStatus.COMPLETED
         except Exception:
-            reply = "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+            assistant_msg.status = ChatMessageStatus.FAILED
+            await assistant_msg.save(update_fields=["content", "status", "updated_at"])
+            logger.exception("chat_completion failed (session_id=%s)", session.id)
+            raise AppException(ErrorCode.INTERNAL_ERROR)
 
-        assistant_msg.content = reply
-        await assistant_msg.save(update_fields=["content", "updated_at"])
+        await assistant_msg.save(update_fields=["content", "status", "updated_at"])
         await self._update_session_activity(session)
         return assistant_msg
 

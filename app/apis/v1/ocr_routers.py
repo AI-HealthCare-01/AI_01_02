@@ -122,14 +122,13 @@ async def confirm_ocr_result(
         corrected_medications=[m.model_dump(exclude_none=True) for m in request.corrected_medications],
         comment=request.comment,
     )
-    structured = result.structured_data
-    needs_review = bool(structured.get("needs_user_review", False))
+    structured = result.confirmed_result or result.structured_result or {}
     return Response(
         OcrConfirmResponse(
-            job_id=str(result.job_id),
-            extracted_text=result.extracted_text,
+            job_id=str(result.id),
+            extracted_text=result.raw_text or "",
             structured_data=structured,
-            needs_user_review=needs_review,
+            needs_user_review=result.needs_user_review,
             created_at=result.created_at,
             updated_at=result.updated_at,
         ).model_dump(),

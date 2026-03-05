@@ -67,7 +67,7 @@ class ScheduleService:
         item.status = data.status
         if data.status == ScheduleItemStatus.DONE:
             item.completed_at = data.completed_at or datetime.now(config.TIMEZONE)
-        elif data.status == ScheduleItemStatus.PENDING:
+        elif data.status in (ScheduleItemStatus.PENDING, ScheduleItemStatus.SKIPPED):
             item.completed_at = None  # type: ignore[assignment]
         await item.save(update_fields=["status", "completed_at", "updated_at"])
         return item

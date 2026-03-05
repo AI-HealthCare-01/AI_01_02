@@ -14,7 +14,7 @@ from tortoise.transactions import in_transaction
 from ai_worker.core import config
 from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult, GuideRiskLevel
 from app.models.notifications import Notification, NotificationType
-from app.models.ocr import OcrJobStatus, OcrResult
+from app.models.ocr import OcrJobStatus
 
 # REQ-049: 프롬프트 버전 관리
 GUIDE_PROMPT_VERSION = "v1.1"
@@ -23,11 +23,13 @@ _GUIDE_SYSTEM_PROMPT = (
     "당신은 ADHD 환자를 위한 맞춤형 건강 가이드를 생성하는 AI입니다. "
     "OCR로 추출된 처방 정보를 바탕으로 복약 안내와 생활습관 가이드를 작성합니다. "
     "반드시 JSON 형식으로만 응답하세요: "
-    '{"medication_guidance": "...", "lifestyle_guidance": "...", "risk_level": "LOW|MEDIUM|HIGH"}'
+    '{"medication_guidance": "...", "lifestyle_guidance": "...", "risk_level": "LOW|MEDIUM|HIGH", '
+    '"source_references": [{"title": "...", "source": "...", "url": "..."}], '
+    '"adherence_rate_percent": null}'
 )
 
 
-async def _call_guide_llm(extracted_text: str) -> tuple[str, str, GuideRiskLevel]:
+async def _call_guide_llm(extracted_text: str) -> tuple[str, str, GuideRiskLevel, list[dict], float | None]:
     client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
     user_prompt = f"다음 처방 정보를 바탕으로 가이드를 생성하세요:\n\n{extracted_text[:2000]}"
     response = await client.chat.completions.create(
@@ -45,7 +47,9 @@ async def _call_guide_llm(extracted_text: str) -> tuple[str, str, GuideRiskLevel
     lifestyle_guidance = data.get("lifestyle_guidance", "생활습관 가이드를 생성할 수 없습니다.")
     risk_str = data.get("risk_level", "MEDIUM").upper()
     risk_level = GuideRiskLevel(risk_str) if risk_str in GuideRiskLevel._value2member_map_ else GuideRiskLevel.MEDIUM
-    return medication_guidance, lifestyle_guidance, risk_level
+    source_references: list[dict] = data.get("source_references") or []
+    adherence_rate_percent: float | None = data.get("adherence_rate_percent")
+    return medication_guidance, lifestyle_guidance, risk_level, source_references, adherence_rate_percent
 
 
 GUIDE_SAFETY_NOTICE = "본 가이드는 의료진 진료를 대체할 수 없습니다."
@@ -262,14 +266,14 @@ async def process_guide_job(
         return False
 
     try:
-        if job.ocr_job.status != OcrJobStatus.SUCCEEDED:
+        ocr_job = job.ocr_job
+        if ocr_job.status != OcrJobStatus.SUCCEEDED:
             raise ValueError(f"OCR job not ready: {job.ocr_job_id}")
 
-        ocr_result = await OcrResult.get_or_none(job_id=job.ocr_job_id)
-        if not ocr_result:
+        if not ocr_job.raw_text:
             raise ValueError(f"OCR result not found: {job.ocr_job_id}")
 
-        medication_guidance, lifestyle_guidance, risk_level = await _call_guide_llm(ocr_result.extracted_text)
+        medication_guidance, lifestyle_guidance, risk_level, source_references, adherence_rate_percent = await _call_guide_llm(ocr_job.raw_text)
         completed_at = datetime.now(config.TIMEZONE)
 
         async with in_transaction():
@@ -282,10 +286,11 @@ async def process_guide_job(
                     "safety_notice": GUIDE_SAFETY_NOTICE,
                     "structured_data": {
                         "source_ocr_job_id": job.ocr_job_id,
-                        "source_ocr_result_id": ocr_result.id,
                         "generator": f"openai-{config.OPENAI_GUIDE_MODEL}",
                         "prompt_version": GUIDE_PROMPT_VERSION,
                         "model_version": config.OPENAI_GUIDE_MODEL,
+                        "source_references": source_references,
+                        "adherence_rate_percent": adherence_rate_percent,
                     },
                     "updated_at": completed_at,
                 },

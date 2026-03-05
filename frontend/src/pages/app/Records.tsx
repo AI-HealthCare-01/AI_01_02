@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Edit2, Moon, Dumbbell, Coffee, Cigarette, Wine, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { scheduleApi, profileApi, HealthProfile, ScheduleItem, HealthProfileUpsertRequest } from "@/lib/api";
+import { toUserMessage } from "@/lib/errorMessages";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ export default function Records() {
     );
     const weekly = results.map((r, i) => {
       const medItems = r.items.filter((it) => it.category === "MEDICATION");
-      const done = medItems.length > 0 && medItems.every((it) => it.status === "COMPLETED");
+      const done = medItems.length > 0 && medItems.every((it) => it.status === "DONE");
       return { label: DOW_LABELS[i], done, hasItems: medItems.length > 0 };
     });
     setWeeklyData(weekly);
@@ -76,7 +77,7 @@ export default function Records() {
     // 복약 준수율
     const totalMed = results.flatMap((r) => r.items.filter((it) => it.category === "MEDICATION"));
     if (totalMed.length > 0) {
-      const completedMed = totalMed.filter((it) => it.status === "COMPLETED");
+      const completedMed = totalMed.filter((it) => it.status === "DONE");
       setAdherenceRate(Math.round((completedMed.length / totalMed.length) * 100));
     } else {
       setAdherenceRate(null);
@@ -204,11 +205,11 @@ export default function Records() {
                     <span className="text-xs text-gray-400 w-10 shrink-0">{formatTime(item.scheduled_at)}</span>
                     <span className="text-sm text-gray-700 flex-1 truncate">{item.title}</span>
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-lg ${
-                      item.status === "COMPLETED" ? "bg-green-50 text-green-700" :
+                      item.status === "DONE" ? "bg-green-50 text-green-700" :
                       item.status === "SKIPPED" ? "bg-gray-100 text-gray-400" :
                       "bg-blue-50 text-blue-600"
                     }`}>
-                      {item.status === "COMPLETED" ? "완료" : item.status === "SKIPPED" ? "건너뜀" : "예정"}
+                      {item.status === "DONE" ? "완료" : item.status === "SKIPPED" ? "건너뜀" : "예정"}
                     </span>
                   </div>
                 ))}
@@ -342,7 +343,7 @@ function EditModal({
       onSaved();
       onClose();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "저장에 실패했습니다.");
+      toast.error(toUserMessage(err));
     } finally {
       setLoading(false);
     }

@@ -47,10 +47,10 @@ export default function AiGuide() {
     setError("");
     try {
       const s = await guideApi.getJobStatus(jobId);
-      if (s.status === "COMPLETED") {
+      if (s.status === "SUCCEEDED") {
         const r = await guideApi.getJobResult(jobId);
         setResult(r);
-        setStatus("COMPLETED");
+        setStatus("SUCCEEDED");
       } else if (s.status === "FAILED") {
         setStatus("FAILED");
         setError(s.error_message ?? "가이드 생성에 실패했습니다.");
@@ -69,10 +69,10 @@ export default function AiGuide() {
       await new Promise((r) => setTimeout(r, 2000));
       try {
         const s = await guideApi.getJobStatus(jobId);
-        if (s.status === "COMPLETED") {
+        if (s.status === "SUCCEEDED") {
           const r = await guideApi.getJobResult(jobId);
           setResult(r);
-          setStatus("COMPLETED");
+          setStatus("SUCCEEDED");
           return;
         }
         if (s.status === "FAILED") {
@@ -150,7 +150,7 @@ export default function AiGuide() {
       )}
 
       {/* 생성 완료 */}
-      {status === "COMPLETED" && result && (
+      {status === "SUCCEEDED" && result && (
         <div className="space-y-4">
           {/* 완료 배너 */}
           <div className="bg-green-600 text-white rounded-xl px-6 py-5 flex items-center gap-4">

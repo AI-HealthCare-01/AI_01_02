@@ -9,7 +9,7 @@ import {
   LogOut,
   UserX,
 } from "lucide-react";
-import { clearToken, getToken } from "@/lib/api";
+import { clearToken, userApi } from "@/lib/api";
 import { useNotification } from "@/lib/NotificationContext";
 import { useState } from "react";
 
@@ -33,11 +33,9 @@ export default function AppLayout() {
   }
 
   async function handleWithdraw() {
-    const token = getToken();
-    await fetch("/api/v1/users/me", {
-      method: "DELETE",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+    try {
+      await userApi.deleteAccount();
+    } catch {}
     clearToken();
     navigate("/login");
   }

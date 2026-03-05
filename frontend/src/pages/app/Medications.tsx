@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { Pill, ChevronDown, ChevronUp, AlertTriangle, Upload, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { reminderApi, guideApi, scheduleApi, Reminder, DdayReminder, GuideJobResult } from "@/lib/api";
+import { toUserMessage } from "@/lib/errorMessages";
 
 // ── 7일 복약 준수율 계산 ────────────────────────────────────────────────────
 
@@ -24,7 +25,7 @@ async function calcAdherence(): Promise<number | null> {
   );
   const medItems = results.flatMap((r) => r.items.filter((it) => it.category === "MEDICATION"));
   if (medItems.length === 0) return null;
-  const completed = medItems.filter((it) => it.status === "COMPLETED");
+  const completed = medItems.filter((it) => it.status === "DONE");
   return Math.round((completed.length / medItems.length) * 100);
 }
 
@@ -53,8 +54,8 @@ export default function Medications() {
 
         // 첫 번째 항목 자동 펼치기
         if (remData.items.length > 0) setExpandedId(remData.items[0].id);
-      } catch {
-        toast.error("약 목록을 불러오지 못했습니다.");
+      } catch (err) {
+        toast.error(toUserMessage(err));
       } finally {
         setLoading(false);
       }
@@ -64,7 +65,7 @@ export default function Medications() {
       if (jobId) {
         try {
           const s = await guideApi.getJobStatus(jobId);
-          if (s.status === "COMPLETED") {
+          if (s.status === "SUCCEEDED") {
             const r = await guideApi.getJobResult(jobId);
             setGuide(r);
           }
