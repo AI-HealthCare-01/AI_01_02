@@ -135,6 +135,21 @@ export const chatApi = {
   },
 };
 
+// ── Users ─────────────────────────────────────────────
+export interface UserInfo {
+  id: string;
+  name: string;
+  email: string;
+  phone_number: string;
+  birthday: string;
+  gender: "MALE" | "FEMALE";
+  created_at: string;
+}
+
+export const userApi = {
+  me: () => request<UserInfo>("/users/me"),
+};
+
 // ── OCR ───────────────────────────────────────────────
 export interface OcrMedication {
   drug_name: string;
@@ -240,6 +255,50 @@ export const guideApi = {
     ),
 
   getJobResult: (jobId: string) => request<GuideJobResult>(`/guides/jobs/${jobId}/result`),
+};
+
+// ── Profile ───────────────────────────────────────────
+export interface HealthProfileUpsertRequest {
+  basic_info: {
+    height_cm: number;
+    weight_kg: number;
+    drug_allergies: string[];
+  };
+  lifestyle_input: {
+    exercise_hours: {
+      low_intensity: number;
+      moderate_intensity: number;
+      high_intensity: number;
+    };
+    digital_usage: {
+      pc_hours_per_day: number;
+      smartphone_hours_per_day: number;
+    };
+    substance_usage: {
+      caffeine_cups_per_day: number;
+      smoking: number;
+      alcohol_frequency_per_week: number;
+    };
+  };
+  sleep_input: {
+    bed_time?: string;
+    wake_time?: string;
+    sleep_latency_minutes?: number;
+    night_awakenings_per_week?: number;
+    daytime_sleepiness_score?: number;
+  };
+  nutrition_input: {
+    appetite_score?: number;
+    is_meal_regular?: boolean;
+  };
+}
+
+export const profileApi = {
+  upsertHealth: (data: HealthProfileUpsertRequest) =>
+    request<{ id: string }>("/profiles/health", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
 };
 
 // ── Reminders (약물 관리) ──────────────────────────────

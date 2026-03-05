@@ -42,8 +42,8 @@ export default function Dashboard() {
 
   const quickLinks = [
     { icon: ScanLine, label: "처방전 스캔", path: "/ocr-scan", color: "#8A9A5B", bgColor: "bg-[#8A9A5B]/10" },
-    { icon: Brain, label: "AI 가이드", path: "/ai-coach", color: "#6B9BD1", bgColor: "bg-[#6B9BD1]/10" },
-    { icon: MessageSquare, label: "챗봇", path: "/chat", color: "#E6B566", bgColor: "bg-[#E6B566]/10" },
+    { icon: Brain, label: "AI 가이드", path: "/ai-guide", color: "#6B9BD1", bgColor: "bg-[#6B9BD1]/10" },
+    { icon: MessageSquare, label: "챗봇", path: "/chatbot", color: "#E6B566", bgColor: "bg-[#E6B566]/10" },
     { icon: Bell, label: "알림", path: "/notifications", color: "#D88E73", bgColor: "bg-[#D88E73]/10" },
     { icon: Notebook, label: "일상기록", path: "/records", color: "#9D4EDD", bgColor: "bg-[#9D4EDD]/10" },
   ];

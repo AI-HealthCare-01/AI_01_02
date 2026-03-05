@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { ChevronRight, ChevronLeft, Check } from "lucide-react";
+import { profileApi } from "../../lib/api";
 
 const TOTAL_STEPS = 5;
 
@@ -41,10 +42,59 @@ export default function Onboarding() {
   // Step 5 - nutrition_input
   const [appetiteScore, setAppetiteScore] = useState(5);
   const [regularMeals, setRegularMeals] = useState<boolean | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
-  const handleNext = () => {
-    if (step < TOTAL_STEPS) setStep(step + 1);
-    else navigate("/");
+  const exerciseHoursMap: Record<string, { low_intensity: number; moderate_intensity: number; high_intensity: number }> = {
+    low:      { low_intensity: 1, moderate_intensity: 0, high_intensity: 0 },
+    moderate: { low_intensity: 0, moderate_intensity: 3, high_intensity: 0 },
+    high:     { low_intensity: 0, moderate_intensity: 0, high_intensity: 5 },
+  };
+
+  const handleNext = async () => {
+    if (step < TOTAL_STEPS) {
+      setStep(step + 1);
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      await profileApi.upsertHealth({
+        basic_info: {
+          height_cm: parseFloat(height) || 0,
+          weight_kg: parseFloat(weight) || 0,
+          drug_allergies: drugAllergies ? [drugAllergies] : [],
+        },
+        lifestyle_input: {
+          exercise_hours: exerciseHoursMap[exercise] ?? { low_intensity: 0, moderate_intensity: 0, high_intensity: 0 },
+          digital_usage: {
+            pc_hours_per_day: digitalUsage.includes("PC/노트북") ? 4 : 0,
+            smartphone_hours_per_day: digitalUsage.includes("스마트폰") ? 4 : 0,
+          },
+          substance_usage: {
+            caffeine_cups_per_day: substanceUsage.includes("카페인") ? 2 : 0,
+            smoking: substanceUsage.includes("흡연") ? 1 : 0,
+            alcohol_frequency_per_week: substanceUsage.includes("음주") ? 2 : 0,
+          },
+        },
+        sleep_input: {
+          bed_time: bedTime || undefined,
+          wake_time: wakeTime || undefined,
+          sleep_latency_minutes: sleepLatency ? parseInt(sleepLatency) : undefined,
+          night_awakenings_per_week: nightAwakenings ? parseInt(nightAwakenings) : undefined,
+          daytime_sleepiness_score: daytimeSleepiness,
+        },
+        nutrition_input: {
+          appetite_score: appetiteScore,
+          is_meal_regular: regularMeals ?? undefined,
+        },
+      });
+      navigate("/");
+    } catch (err: unknown) {
+      setSubmitError(err instanceof Error ? err.message : "저장에 실패했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
   };
   const handleBack = () => { if (step > 1) setStep(step - 1); };
 
@@ -394,6 +444,9 @@ export default function Onboarding() {
           )}
 
           {/* Navigation */}
+          {submitError && (
+            <p className="mt-4 text-sm text-red-500 text-center">{submitError}</p>
+          )}
           <div className="flex justify-between mt-8 gap-4">
             <button
               onClick={handleBack}
@@ -409,10 +462,11 @@ export default function Onboarding() {
             </button>
             <button
               onClick={handleNext}
-              className="flex items-center gap-2 px-6 py-3 bg-[#6B8E23] text-white rounded-xl hover:bg-[#556b1c] transition-colors font-medium"
+              disabled={submitting}
+              className="flex items-center gap-2 px-6 py-3 bg-[#6B8E23] text-white rounded-xl hover:bg-[#556b1c] transition-colors font-medium disabled:opacity-60"
             >
-              {step === TOTAL_STEPS ? "완료" : "다음"}
-              <ChevronRight className="w-5 h-5" />
+              {submitting ? "저장 중..." : step === TOTAL_STEPS ? "완료" : "다음"}
+              {!submitting && <ChevronRight className="w-5 h-5" />}
             </button>
           </div>
         </div>
