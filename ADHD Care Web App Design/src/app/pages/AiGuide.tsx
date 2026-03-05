@@ -209,7 +209,18 @@ export default function AiGuide() {
                 <Brain className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="font-bold">AI 맞춤 가이드 생성됨</h2>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <h2 className="font-bold">AI 맞춤 가이드 생성됨</h2>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                    guideResult.risk_level === "HIGH"
+                      ? "bg-red-500 text-white"
+                      : guideResult.risk_level === "MEDIUM"
+                      ? "bg-[#FFD166] text-[#2D3436]"
+                      : "bg-white/20 text-white"
+                  }`}>
+                    {guideResult.risk_level === "HIGH" ? "위험 높음" : guideResult.risk_level === "MEDIUM" ? "주의 필요" : "양호"}
+                  </span>
+                </div>
                 <p className="text-sm text-[#FFFCF5] opacity-80">
                   최종 업데이트: {updatedAt}
                   {guideResult.adherence_rate_percent != null &&

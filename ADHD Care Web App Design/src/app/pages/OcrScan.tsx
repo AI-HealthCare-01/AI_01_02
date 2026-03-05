@@ -575,6 +575,25 @@ export default function OcrScan() {
             </div>
           </div>
 
+          {/* 리마인더 설정 제안 (REQ-060) */}
+          <div className="bg-[#FFD166] p-5 rounded-2xl flex items-start gap-4">
+            <div className="w-10 h-10 bg-[#2D3436] rounded-xl flex items-center justify-center shrink-0">
+              <Bell className="w-5 h-5 text-[#FFD166]" />
+            </div>
+            <div className="flex-1">
+              <p className="font-bold text-[#2D3436] mb-0.5">복약 알림 설정하기</p>
+              <p className="text-sm text-[#2D3436] opacity-80 mb-3">
+                약을 제때 복용할 수 있도록 복약 리마인더를 설정해 보세요.
+              </p>
+              <button
+                onClick={() => navigate("/medications")}
+                className="bg-[#2D3436] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#1a1d1f] transition-colors"
+              >
+                리마인더 설정
+              </button>
+            </div>
+          </div>
+
           {/* CTA Buttons */}
           <div className="grid grid-cols-2 gap-3">
             <button

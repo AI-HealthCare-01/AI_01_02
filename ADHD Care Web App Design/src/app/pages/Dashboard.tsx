@@ -127,7 +127,7 @@ export default function Dashboard() {
             <p className="text-sm text-[#2D3436] opacity-80 mb-3 leading-relaxed">
               AI 가이드를 통해 맞춤형 복약 및 생활습관 안내를 받아보세요.
             </p>
-            <button onClick={() => navigate("/ai-coach")}
+            <button onClick={() => navigate("/ai-guide")}
               className="w-full bg-[#2D3436] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#1a1d1f] transition-colors flex items-center justify-center gap-2">
               가이드 보기 <ChevronRight className="w-4 h-4" />
             </button>

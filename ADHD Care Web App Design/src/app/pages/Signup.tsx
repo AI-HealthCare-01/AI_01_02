@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router";
 import { Mail, Lock, User, Phone } from "lucide-react";
 import { authApi } from "../../lib/api";
+import { toUserMessage } from "../../lib/errorMessages";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -54,8 +55,8 @@ export default function Signup() {
         phone_number: formData.phone.replace(/-/g, ""),
       });
       navigate("/login");
-    } catch (err: any) {
-      setErrors({ submit: err.message ?? "회원가입에 실패했습니다." });
+    } catch (err: unknown) {
+      setErrors({ submit: toUserMessage(err) });
     } finally {
       setLoading(false);
     }
@@ -68,7 +69,7 @@ export default function Signup() {
     <div className="min-h-screen bg-[#FFFCF5] flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-[#2D3436]">ADHD Care</h1>
+          <h1 className="text-3xl font-bold text-[#2D3436]">Logly</h1>
           <p className="text-[#6c6f72] mt-1">건강한 일상을 위한 첫 걸음</p>
         </div>
 
