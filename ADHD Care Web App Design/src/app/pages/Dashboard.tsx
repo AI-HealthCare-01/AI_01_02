@@ -25,7 +25,24 @@ export default function Dashboard() {
     },
   ];
 
-  const ddayAlerts = medications.filter((item) => item.dday <= 7);
+  const ddayAlerts = medications.filter((item) => item.dday <= 5);
+  const emergencyAlerts = [
+    {
+      type: "HEALTH_ALERT",
+      title: "알레르기 약물 충돌 가능성",
+      message:
+        "현재 처방된 메틸페니데이트 서방정에는 페니실린과 관련된 알레르기 반응을 유발할 수 있는 성분이 포함되었을 가능성이 있어 주의가 필요합니다. 의료진과 확인하기 전에는 임의로 복용하지 마시고, 가능한 한 빠르게 담당 의사 또는 약사에게 상담을 요청해 주세요.",
+    },
+  ];
+  const homeAlerts = [
+    ...emergencyAlerts,
+    ...ddayAlerts.map((item) => ({
+      type: "MEDICATION_DDAY",
+      title: "약 소진 알림",
+      message: `현재 복용 중인 ${item.name}의 남은 분량이 ${item.dday}일치로 확인되어 약이 곧 부족해질 수 있습니다. 복약이 중단되지 않도록 진료 일정을 미리 확인해 주세요.`,
+    })),
+  ];
+  const topHomeAlert = homeAlerts[0];
 
   const todaySchedule = [
     { time: "08:00", label: "메틸페니데이트 서방정 18mg", status: "completed" },
@@ -40,18 +57,19 @@ export default function Dashboard() {
         <p className="text-[#6c6f72]">오늘의 복약, OCR, 가이드, 챗봇 상태를 한 번에 확인하세요</p>
       </div>
 
-      {ddayAlerts.length > 0 && (
-        <div className="bg-[#20B2AA] text-white p-6 rounded-2xl mb-6">
+      {topHomeAlert && (
+        <div
+          className={`text-white p-6 rounded-2xl mb-6 ${
+            topHomeAlert.type === "HEALTH_ALERT" ? "bg-[#d9534f]" : "bg-[#20B2AA]"
+          }`}
+        >
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <Bell className="w-5 h-5" />
-                <span className="text-sm font-medium">약 소진 D-day 알림 (7일 이내)</span>
+                <span className="text-sm font-medium">{topHomeAlert.title}</span>
               </div>
-              <h2 className="text-3xl font-bold mb-1">D-{ddayAlerts[0].dday}</h2>
-              <p className="text-[#FFFCF5] opacity-90">
-                {ddayAlerts[0].name} 재처방 일정 확인이 필요합니다.
-              </p>
+              <p className="text-[#FFFCF5] opacity-90">{topHomeAlert.message}</p>
             </div>
             <button
               onClick={() => navigate("/notifications")}

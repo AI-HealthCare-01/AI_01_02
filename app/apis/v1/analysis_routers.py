@@ -19,6 +19,7 @@ class AnalysisSummaryResponse(BaseModel):
     nutrition_analysis: dict[str, Any]
     risk_flags: list[dict[str, Any]]
     allergy_alerts: list[dict[str, Any]]
+    emergency_alerts: list[dict[str, Any]]
 
 
 @analysis_router.get("/summary", response_model=AnalysisSummaryResponse, status_code=status.HTTP_200_OK)

@@ -77,7 +77,7 @@ class ReminderService:
                 continue
             depletion = r.dispensed_date + timedelta(days=r.total_days)
             remaining = (depletion - today).days
-            if remaining <= days:
+            if 0 <= remaining <= days:
                 result.append(
                     DdayReminderItem(
                         medication_name=r.medication_name,

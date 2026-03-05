@@ -29,3 +29,21 @@ class UnreadCountResponse(BaseModel):
 
 class ReadAllNotificationsResponse(BaseModel):
     updated_count: int
+
+
+class NotificationSettingResponse(BaseModel):
+    home_schedule_enabled: bool
+    meal_alarm_enabled: bool
+    medication_alarm_enabled: bool
+    exercise_alarm_enabled: bool
+    sleep_alarm_enabled: bool
+    medication_dday_alarm_enabled: bool
+
+
+class NotificationSettingUpdateRequest(BaseModel):
+    home_schedule_enabled: bool | None = None
+    meal_alarm_enabled: bool | None = None
+    medication_alarm_enabled: bool | None = None
+    exercise_alarm_enabled: bool | None = None
+    sleep_alarm_enabled: bool | None = None
+    medication_dday_alarm_enabled: bool | None = None

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Bell, CheckCheck, Clock3, Pill, Sparkles } from "lucide-react";
 
-type NotificationType = "GUIDE_READY" | "MEDICATION_REMINDER" | "MEDICATION_DDAY";
+type NotificationType = "GUIDE_READY" | "MEDICATION_REMINDER" | "MEDICATION_DDAY" | "HEALTH_ALERT";
 
 type NotificationItem = {
   id: number;
@@ -40,9 +40,19 @@ const initialNotifications: NotificationItem[] = [
     id: 3,
     type: "MEDICATION_DDAY",
     title: "약 소진 D-day",
-    message: "메틸페니데이트 서방정이 6일 후 소진 예정입니다. 재처방 일정을 확인하세요.",
+    message:
+      "현재 복용 중인 메틸페니데이트 서방정의 남은 분량이 6일치로 확인되어 약이 곧 부족해질 수 있습니다. 복약이 중단되지 않도록 다음 진료 일정을 미리 확인해 주세요.",
     isRead: true,
     createdAt: "오늘 08:00",
+  },
+  {
+    id: 4,
+    type: "HEALTH_ALERT",
+    title: "수면 안전 알림",
+    message:
+      "수면 부족이나 잦은 각성은 주의력과 판단력을 떨어뜨려 일상 기능과 안전에 영향을 줄 수 있습니다. 졸림이나 피로가 심하게 느껴질 때는 운전이나 위험 작업을 피하고 충분한 휴식과 회복을 우선해 주세요.",
+    isRead: false,
+    createdAt: "오늘 07:40",
   },
 ];
 
@@ -91,6 +101,7 @@ export default function Notifications() {
   const getTypeChip = (type: NotificationType) => {
     if (type === "GUIDE_READY") return "bg-[#dcf7f5] text-[#156f6a]";
     if (type === "MEDICATION_REMINDER") return "bg-[#fff5d6] text-[#8a6510]";
+    if (type === "HEALTH_ALERT") return "bg-[#ffe9e8] text-[#a73a36]";
     return "bg-[#ffe9e8] text-[#a73a36]";
   };
 
@@ -215,7 +226,7 @@ export default function Notifications() {
                 </div>
               ))}
             </div>
-            <p className="text-xs text-[#2D3436] mt-3 opacity-80">소진 7일 전부터 알림이 노출됩니다.</p>
+            <p className="text-xs text-[#2D3436] mt-3 opacity-80">소진 5일 전부터 알림이 노출됩니다.</p>
           </div>
 
           <div className="bg-[#20B2AA] text-white p-5 rounded-2xl">

@@ -67,6 +67,14 @@ drinking_guide:
 - alcohol_risk_code=ALCOHOL_HIGH_RISK: explain current alcohol level may pose serious health risks, emphasize reduction/control, suggest professional help if self-control is difficult, advise prompt medical visit for severe dizziness/reduced consciousness/extreme anxiety/depressive symptoms, 3-5 sentences.
 
 If a section risk code is NONE, provide short preventive guidance in 1-2 natural Korean sentences.
+If all section risk codes are NONE, write general_health_guide as a supportive Korean paragraph for a user who is
+already maintaining healthy ADHD-related routines:
+- Start by acknowledging and praising current efforts.
+- Emphasize that consistent habits support concentration and daily stability.
+- Encourage maintaining current behaviors.
+- Suggest small practical habits (consistent sleep timing, regular breaks, daily routine check).
+- Tone: calm, supportive, professional, not overly diagnostic/medical.
+- No bullet points, no numeric values, natural paragraph form, 4-6 sentences.
 """.strip()
 
 GUIDE_SAFETY_NOTICE = (
@@ -75,6 +83,13 @@ GUIDE_SAFETY_NOTICE = (
 DEFAULT_LLM_FALLBACK = (
     "최근 프로필과 처방 정보를 기준으로 복약/생활습관 가이드를 업데이트했습니다. "
     "수면과 식사 시간을 일정하게 유지하고, 복약 누락 시 임의 증량 없이 의료진 지침을 우선하세요."
+)
+
+DEFAULT_HEALTHY_GENERAL_GUIDE = (
+    "현재 생활습관을 꾸준히 관리하고 계신 점이 매우 좋습니다. 지금처럼 규칙적인 일상을 유지하는 습관은 "
+    "집중력과 하루 리듬의 안정에 도움이 됩니다. 현재 실천 중인 건강한 패턴을 계속 이어가 보세요. "
+    "여기에 더해 취침과 기상 시간을 가능한 일정하게 맞추고, 활동 중간에 짧은 휴식을 넣으며 하루 계획을 "
+    "간단히 점검하면 안정적인 루틴 유지에 도움이 됩니다."
 )
 
 ALLOWED_STATUS_TRANSITIONS: dict[GuideJobStatus, set[GuideJobStatus]] = {
@@ -489,7 +504,7 @@ def _build_guide_fallback(*, risk_codes: dict[str, str]) -> dict[str, str]:
         "caffeine_guide": caffeine_guide,
         "smoking_guide": smoking_guide,
         "drinking_guide": drinking_guide,
-        "general_health_guide": DEFAULT_LLM_FALLBACK,
+        "general_health_guide": DEFAULT_HEALTHY_GENERAL_GUIDE,
     }
 
 

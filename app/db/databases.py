@@ -10,6 +10,7 @@ TORTOISE_APP_MODELS = [
     "app.models.guides",
     "app.models.ocr",
     "app.models.notifications",
+    "app.models.notification_settings",
     "app.models.users",
     "app.models.profiles",
     "app.models.medications",

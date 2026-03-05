@@ -1,6 +1,13 @@
 from app.models.ocr import OcrJobStatus, OcrResult
 from app.models.profiles import HealthProfile
 from app.models.users import User
+from app.services.emergency_guidance import (
+    generate_allergy_medication_guidance,
+    generate_nutrition_guidance,
+    generate_sleep_guidance,
+    is_nutrition_guide_condition_1,
+    is_sleep_guide_condition_1,
+)
 
 
 def _analyze_lifestyle(lifestyle: dict) -> dict:
@@ -52,6 +59,8 @@ class AnalysisService:
 
         risk_flags = []
         allergy_alerts = []
+        emergency_alerts = []
+        seen_emergency_keys: set[str] = set()
 
         if profile:
             lifestyle_analysis = _analyze_lifestyle(profile.lifestyle_input)
@@ -70,17 +79,57 @@ class AnalysisService:
                         continue
                     medications = result.structured_data.get("medications", [])
                     for med in medications:
-                        drug_name = med.get("drug_name", "")
+                        drug_name = str(med.get("drug_name", "") or "")
                         for allergy in drug_allergies:
-                            if allergy.lower() in drug_name.lower():
+                            allergy_text = str(allergy or "")
+                            if allergy_text and allergy_text.lower() in drug_name.lower():
+                                guidance_message = await generate_allergy_medication_guidance(
+                                    medication_name=drug_name,
+                                    allergy_substance=allergy_text,
+                                )
+                                alert_key = f"ALLERGY::{allergy_text}::{drug_name}"
+                                if alert_key in seen_emergency_keys:
+                                    continue
+                                seen_emergency_keys.add(alert_key)
                                 allergy_alerts.append(
                                     {
                                         "medication_name": drug_name,
-                                        "allergy_substance": allergy,
+                                        "allergy_substance": allergy_text,
                                         "severity": "HIGH",
-                                        "message": f"{drug_name}이(가) 알러지 물질({allergy})을 포함할 수 있습니다. 즉시 의료진과 상담하세요.",
+                                        "message": guidance_message,
                                     }
                                 )
+                                emergency_alerts.append(
+                                    {
+                                        "alert_key": alert_key,
+                                        "type": "ALLERGY",
+                                        "severity": "HIGH",
+                                        "title": "알레르기 약물 충돌 가능성",
+                                        "message": guidance_message,
+                                    }
+                                )
+
+            if is_nutrition_guide_condition_1(basic_info=profile.basic_info, nutrition_input=profile.nutrition_input):
+                emergency_alerts.append(
+                    {
+                        "alert_key": "NUTRITION::CONDITION_1",
+                        "type": "NUTRITION",
+                        "severity": "HIGH",
+                        "title": "영양 상태 주의 알림",
+                        "message": await generate_nutrition_guidance(),
+                    }
+                )
+
+            if is_sleep_guide_condition_1(sleep_input=profile.sleep_input):
+                emergency_alerts.append(
+                    {
+                        "alert_key": "SLEEP::CONDITION_1",
+                        "type": "SLEEP",
+                        "severity": "HIGH",
+                        "title": "수면 안전 알림",
+                        "message": await generate_sleep_guidance(),
+                    }
+                )
         else:
             lifestyle_analysis = {}
             sleep_analysis = {}
@@ -93,4 +142,5 @@ class AnalysisService:
             "nutrition_analysis": nutrition_analysis,
             "risk_flags": risk_flags,
             "allergy_alerts": allergy_alerts,
+            "emergency_alerts": emergency_alerts,
         }
