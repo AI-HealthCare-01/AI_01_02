@@ -45,8 +45,11 @@ async def _run_migrations() -> None:
     migration_dir = Path(__file__).parent / "db" / "migrations" / "models"
     conn = Tortoise.get_connection("default")
 
-    result = await conn.execute_query("SELECT version FROM aerich ORDER BY id")
-    applied = {row["version"] for row in result[1]}
+    try:
+        result = await conn.execute_query("SELECT version FROM aerich ORDER BY id")
+        applied = {row["version"] for row in result[1]}
+    except Exception:  # noqa: BLE001
+        applied = set()
 
     for migration_file in sorted(migration_dir.glob("[0-9]*.py")):
         name = migration_file.name
@@ -65,7 +68,7 @@ async def _run_migrations() -> None:
                 except Exception:  # noqa: BLE001
                     pass
         await conn.execute_query(
-            "INSERT IGNORE INTO aerich (version, app) VALUES (%s, %s)", [name, "models"]
+            "INSERT IGNORE INTO aerich (version, app, content) VALUES (%s, %s, %s)", [name, "models", "{}"]
         )
         logger.info("migration applied: %s", name)
 
