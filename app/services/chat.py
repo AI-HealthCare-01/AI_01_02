@@ -279,9 +279,7 @@ class ChatService:
         session.last_activity_at = datetime.now(config.TIMEZONE)
         await session.save(update_fields=["last_activity_at", "updated_at"])
 
-    async def _check_early_exit(
-        self, *, session: ChatSession, message: str, intent: str
-    ) -> AsyncGenerator[str] | None:
+    async def _check_early_exit(self, *, session: ChatSession, message: str, intent: str) -> AsyncGenerator[str] | None:
         """가드레일/재질문 조기 종료. None이면 정상 진행."""
         if intent == "emergency":
             logger.warning(

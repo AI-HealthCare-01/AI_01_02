@@ -1,7 +1,9 @@
 import asyncio
+import re
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 
 import sentry_sdk
 from fastapi import FastAPI, HTTPException, Request, status
@@ -11,6 +13,7 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+from tortoise import Tortoise
 
 from app.apis.v1 import v1_routers
 from app.apis.v2 import v2_routers
@@ -36,8 +39,46 @@ async def _session_auto_close_loop() -> None:
             logger.warning("auto_close_sessions_error", extra={"error": str(exc)})
 
 
+async def _run_migrations() -> None:
+    """누락된 마이그레이션 SQL을 직접 실행 (aerich 포맷 호환 문제 우회)."""
+    migration_dir = Path(__file__).parent / "db" / "migrations" / "models"
+    conn = Tortoise.get_connection("default")
+
+    try:
+        result = await conn.execute_query("SELECT version FROM aerich ORDER BY id")
+        applied = {row["version"] for row in result[1]}
+    except Exception:  # noqa: BLE001
+        applied = set()
+
+    for migration_file in sorted(migration_dir.glob("[0-9]*.py")):
+        name = migration_file.name
+        if name in applied:
+            continue
+        try:
+            source = migration_file.read_text(encoding="utf-8")
+            match = re.search(r'async def upgrade.*?return\s+"""(.*?)"""', source, re.DOTALL)
+            if not match:
+                logger.warning("migration SQL not found: %s", name)
+                continue
+            sql = match.group(1).strip()
+            for stmt in sql.split(";"):
+                stmt = stmt.strip()
+                if stmt:
+                    try:
+                        await conn.execute_query(stmt)
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning("migration stmt warning (ignored): %s | %s", name, e)
+            await conn.execute_query(
+                "INSERT IGNORE INTO aerich (version, app, content) VALUES (%s, %s, %s)", [name, "models", "{}"]
+            )
+            logger.info("migration applied: %s", name)
+        except Exception as e:  # noqa: BLE001
+            logger.error("migration failed: %s | %s", name, e)
+
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
+    await _run_migrations()
     task = asyncio.create_task(_session_auto_close_loop())
     try:
         yield
@@ -48,6 +89,7 @@ async def lifespan(application: FastAPI):
         except asyncio.CancelledError:
             pass
 
+
 if config.SENTRY_DSN:
     sentry_sdk.init(
         dsn=config.SENTRY_DSN,
@@ -55,6 +97,7 @@ if config.SENTRY_DSN:
         traces_sample_rate=config.SENTRY_TRACES_SAMPLE_RATE,
         environment=config.ENV,
     )
+
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
     """REQ-105: 모든 요청에 X-Request-ID를 생성/전파하고 응답 헤더에 포함."""
@@ -69,7 +112,10 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
 app = FastAPI(
     lifespan=lifespan,
-    default_response_class=ORJSONResponse, docs_url="/api/docs", redoc_url="/api/redoc", openapi_url="/api/openapi.json"
+    default_response_class=ORJSONResponse,
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
 )
 app.add_middleware(RequestIDMiddleware)
 initialize_tortoise(app)
