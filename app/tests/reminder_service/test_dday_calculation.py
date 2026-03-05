@@ -37,7 +37,7 @@ async def test_dday_calculation_accuracy():
     cases = [
         (date(2026, 1, 1), 30, date(2026, 1, 31)),
         (date(2026, 1, 31), 28, date(2026, 2, 28)),  # 월말 경계
-        (date(2026, 2, 28), 1, date(2026, 3, 1)),    # 윤년 아닌 2월 말
+        (date(2026, 2, 28), 1, date(2026, 3, 1)),  # 윤년 아닌 2월 말
         (date(2026, 12, 25), 14, date(2027, 1, 8)),  # 연말 넘김
     ]
     for dispensed, total_days, expected_depletion in cases:

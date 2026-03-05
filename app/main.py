@@ -89,6 +89,7 @@ async def lifespan(application: FastAPI):
         except asyncio.CancelledError:
             pass
 
+
 if config.SENTRY_DSN:
     sentry_sdk.init(
         dsn=config.SENTRY_DSN,
@@ -96,6 +97,7 @@ if config.SENTRY_DSN:
         traces_sample_rate=config.SENTRY_TRACES_SAMPLE_RATE,
         environment=config.ENV,
     )
+
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
     """REQ-105: 모든 요청에 X-Request-ID를 생성/전파하고 응답 헤더에 포함."""
@@ -110,7 +112,10 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
 app = FastAPI(
     lifespan=lifespan,
-    default_response_class=ORJSONResponse, docs_url="/api/docs", redoc_url="/api/redoc", openapi_url="/api/openapi.json"
+    default_response_class=ORJSONResponse,
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
 )
 app.add_middleware(RequestIDMiddleware)
 initialize_tortoise(app)
