@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router";
+import { userApi, UserInfo, clearToken } from "../../lib/api";
 import {
   Home,
   ScanLine,
@@ -18,6 +19,11 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [user, setUser] = useState<UserInfo | null>(null);
+
+  useEffect(() => {
+    userApi.me().then(setUser).catch(() => {});
+  }, []);
 
   const navItems = [
     { path: "/", icon: Home, label: "홈" },
@@ -30,6 +36,7 @@ export default function Layout() {
   ];
 
   const handleLogout = () => {
+    clearToken();
     navigate("/login");
   };
 
@@ -79,11 +86,13 @@ export default function Layout() {
       <div className="p-3 border-t border-[#6d7a49]">
         <div className="flex items-center gap-3 px-3 py-2 mb-1">
           <div className="w-8 h-8 rounded-full bg-[#FFD166] flex items-center justify-center shrink-0">
-            <span className="text-sm font-bold text-[#2D3436]">김</span>
+            <span className="text-sm font-bold text-[#2D3436]">
+              {user?.name?.[0] ?? "?"}
+            </span>
           </div>
           <div className="hidden lg:block flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">김민수</p>
-            <p className="text-xs text-[#FFFCF5] opacity-60 truncate">minsu@example.com</p>
+            <p className="text-sm font-medium text-white truncate">{user?.name ?? "..."}</p>
+            <p className="text-xs text-[#FFFCF5] opacity-60 truncate">{user?.email ?? ""}</p>
           </div>
         </div>
         <button
