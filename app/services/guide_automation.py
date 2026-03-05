@@ -12,12 +12,29 @@ class GuideAutomationService:
     def __init__(self) -> None:
         self.queue_publisher = GuideQueuePublisher()
 
-    async def _is_profile_expired(self, *, user_id: int) -> bool:
+    async def _get_latest_succeeded_guide_job(self, *, user_id: int) -> GuideJob | None:
+        return (
+            await GuideJob.filter(user_id=user_id, status=GuideJobStatus.SUCCEEDED)
+            .order_by("-completed_at", "-id")
+            .first()
+        )
+
+    async def is_profile_refresh_required_for_guide_generation(self, *, user_id: int) -> tuple[bool, int | None]:
+        latest_succeeded_guide = await self._get_latest_succeeded_guide_job(user_id=user_id)
+        if not latest_succeeded_guide or not latest_succeeded_guide.completed_at:
+            return False, None
+
+        cutoff = datetime.now(config.TIMEZONE) - timedelta(days=7)
+        if latest_succeeded_guide.completed_at > cutoff:
+            return False, latest_succeeded_guide.id
+
         profile = await UserHealthProfile.get_or_none(user_id=user_id)
         if not profile:
-            return True
-        now = datetime.now(config.TIMEZONE)
-        return profile.onboarding_completed_at + timedelta(days=7) <= now
+            return True, latest_succeeded_guide.id
+
+        if profile.updated_at <= latest_succeeded_guide.completed_at:
+            return True, latest_succeeded_guide.id
+        return False, latest_succeeded_guide.id
 
     async def _get_latest_succeeded_ocr_job(self, *, user_id: int) -> OcrJob | None:
         return (
@@ -57,35 +74,19 @@ class GuideAutomationService:
         )
 
     async def notify_weekly_refresh_if_due(self, *, user_id: int) -> bool:
-        latest_succeeded_guide = (
-            await GuideJob.filter(user_id=user_id, status=GuideJobStatus.SUCCEEDED)
-            .order_by("-completed_at", "-id")
-            .first()
-        )
-        if not latest_succeeded_guide or not latest_succeeded_guide.completed_at:
+        required, source_guide_job_id = await self.is_profile_refresh_required_for_guide_generation(user_id=user_id)
+        if not required or source_guide_job_id is None:
             return False
-
-        cutoff = datetime.now(config.TIMEZONE) - timedelta(days=7)
-        if latest_succeeded_guide.completed_at > cutoff:
-            return False
-
-        await self._create_weekly_refresh_required_notification(
-            user_id=user_id,
-            source_guide_job_id=latest_succeeded_guide.id,
-        )
+        await self._create_weekly_refresh_required_notification(user_id=user_id, source_guide_job_id=source_guide_job_id)
         return True
 
     async def trigger_refresh_with_latest_ocr(self, *, user_id: int, reason: str) -> GuideJob | None:
-        if await self._is_profile_expired(user_id=user_id):
-            latest_succeeded_guide = (
-                await GuideJob.filter(user_id=user_id, status=GuideJobStatus.SUCCEEDED)
-                .order_by("-completed_at", "-id")
-                .first()
-            )
-            if latest_succeeded_guide:
+        required, source_guide_job_id = await self.is_profile_refresh_required_for_guide_generation(user_id=user_id)
+        if required:
+            if source_guide_job_id is not None:
                 await self._create_weekly_refresh_required_notification(
                     user_id=user_id,
-                    source_guide_job_id=latest_succeeded_guide.id,
+                    source_guide_job_id=source_guide_job_id,
                 )
             return None
 
@@ -95,16 +96,12 @@ class GuideAutomationService:
         return await self.trigger_refresh_for_ocr_job(user_id=user_id, ocr_job_id=latest_ocr_job.id, reason=reason)
 
     async def trigger_refresh_for_ocr_job(self, *, user_id: int, ocr_job_id: int, reason: str) -> GuideJob | None:
-        if await self._is_profile_expired(user_id=user_id):
-            latest_succeeded_guide = (
-                await GuideJob.filter(user_id=user_id, status=GuideJobStatus.SUCCEEDED)
-                .order_by("-completed_at", "-id")
-                .first()
-            )
-            if latest_succeeded_guide:
+        required, source_guide_job_id = await self.is_profile_refresh_required_for_guide_generation(user_id=user_id)
+        if required:
+            if source_guide_job_id is not None:
                 await self._create_weekly_refresh_required_notification(
                     user_id=user_id,
-                    source_guide_job_id=latest_succeeded_guide.id,
+                    source_guide_job_id=source_guide_job_id,
                 )
             return None
 

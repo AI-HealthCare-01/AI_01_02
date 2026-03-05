@@ -97,6 +97,34 @@ class TestNotificationApis(TestCase):
             assert response.status_code == status.HTTP_200_OK
             assert response.json()["unread_count"] == 1
 
+    async def test_get_unread_count_triggers_dynamic_notification_sync(self):
+        email = "notification_unread_sync@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01040004001")
+            user = await User.get(email=email)
+
+            document = await Document.create(
+                user=user,
+                document_type=DocumentType.PRESCRIPTION,
+                file_name="weekly_refresh_unread.png",
+                file_path="documents/test/weekly_refresh_unread.png",
+                file_size=100,
+                mime_type="image/png",
+            )
+            ocr_job = await OcrJob.create(user=user, document=document, status=OcrJobStatus.SUCCEEDED)
+            old_completed_at = datetime.now(config.TIMEZONE) - timedelta(days=8)
+            await GuideJob.create(
+                user=user,
+                ocr_job=ocr_job,
+                status=GuideJobStatus.SUCCEEDED,
+                completed_at=old_completed_at,
+            )
+
+            headers = {"Authorization": f"Bearer {access_token}"}
+            response = await client.get("/api/v1/notifications/unread-count", headers=headers)
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json()["unread_count"] == 1
+
     async def test_mark_notification_as_read_success(self):
         email = "notification_read@example.com"
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

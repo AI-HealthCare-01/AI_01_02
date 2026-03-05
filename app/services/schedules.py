@@ -22,26 +22,49 @@ class ScheduleService:
         day_start = datetime.combine(target_date, time.min).replace(tzinfo=tz)
         day_end = datetime.combine(target_date, time.max).replace(tzinfo=tz)
 
-        items = await ScheduleItem.filter(
+        await self.schedule_sync(user=user, target_date=target_date, tz=tz)
+        return await ScheduleItem.filter(
             user_id=user.id,
             scheduled_at__gte=day_start,
             scheduled_at__lte=day_end,
         ).order_by("scheduled_at")
 
-        if not items:
-            await self._generate_schedule_items(user=user, target_date=target_date, tz=tz)
-            items = await ScheduleItem.filter(
-                user_id=user.id,
-                scheduled_at__gte=day_start,
-                scheduled_at__lte=day_end,
-            ).order_by("scheduled_at")
-
-        return items
-
-    async def _generate_schedule_items(self, *, user: User, target_date: date, tz) -> None:
+    async def schedule_sync(self, *, user: User, target_date: date, tz) -> None:
         setting = await self.notification_setting_service.get_or_create(user=user)
+        desired_specs = await self._build_desired_schedule_specs(user=user, target_date=target_date, tz=tz, setting=setting)
+
+        day_start = datetime.combine(target_date, time.min).replace(tzinfo=tz)
+        day_end = datetime.combine(target_date, time.max).replace(tzinfo=tz)
+        existing_items = await ScheduleItem.filter(
+            user_id=user.id,
+            scheduled_at__gte=day_start,
+            scheduled_at__lte=day_end,
+        )
+
+        existing_map = {(item.category, item.title, item.scheduled_at, item.reminder_id): item for item in existing_items}
+        desired_keys = set(desired_specs.keys())
+        existing_keys = set(existing_map.keys())
+
+        remove_ids = [existing_map[key].id for key in (existing_keys - desired_keys)]
+        if remove_ids:
+            await ScheduleItem.filter(id__in=remove_ids, user_id=user.id).delete()
+
+        create_keys = desired_keys - existing_keys
+        for key in create_keys:
+            category, title, scheduled_at, reminder_id = key
+            await ScheduleItem.create(
+                user_id=user.id,
+                reminder_id=reminder_id,
+                scheduled_at=scheduled_at,
+                category=category,
+                title=title,
+                status=ScheduleItemStatus.PENDING,
+            )
+
+    async def _build_desired_schedule_specs(self, *, user: User, target_date: date, tz, setting) -> dict[tuple, None]:
+        desired: dict[tuple, None] = {}
         if not setting.home_schedule_enabled:
-            return
+            return desired
 
         default_items: list[tuple[ScheduleItemCategory, str, str]] = []
         if setting.meal_alarm_enabled:
@@ -60,16 +83,7 @@ class ScheduleService:
         for category, title, time_str in default_items:
             h, m = map(int, time_str.split(":"))
             scheduled_at = datetime.combine(target_date, time(h, m)).replace(tzinfo=tz)
-            await ScheduleItem.get_or_create(
-                user_id=user.id,
-                reminder_id=None,
-                scheduled_at=scheduled_at,
-                defaults={
-                    "category": category,
-                    "title": title,
-                    "status": ScheduleItemStatus.PENDING,
-                },
-            )
+            desired[(category, title, scheduled_at, None)] = None
 
         if setting.medication_alarm_enabled:
             reminders = await MedicationReminder.filter(user_id=user.id, enabled=True)
@@ -82,18 +96,10 @@ class ScheduleService:
                     try:
                         h, m = map(int, str(time_str).split(":"))
                         scheduled_at = datetime.combine(target_date, time(h, m)).replace(tzinfo=tz)
-                        await ScheduleItem.get_or_create(
-                            user_id=user.id,
-                            reminder_id=reminder.id,
-                            scheduled_at=scheduled_at,
-                            defaults={
-                                "category": ScheduleItemCategory.MEDICATION,
-                                "title": "복약",
-                                "status": ScheduleItemStatus.PENDING,
-                            },
-                        )
+                        desired[(ScheduleItemCategory.MEDICATION, "복약", scheduled_at, reminder.id)] = None
                     except (ValueError, AttributeError):
                         continue
+        return desired
 
     async def update_item_status(
         self, *, user: User, item_id: int, data: ScheduleItemStatusUpdateRequest

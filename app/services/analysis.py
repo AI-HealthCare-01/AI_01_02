@@ -1,5 +1,7 @@
+from typing import Any
+
+from app.models.health_profiles import UserHealthProfile
 from app.models.ocr import OcrJobStatus, OcrResult
-from app.models.profiles import HealthProfile
 from app.models.users import User
 from app.services.emergency_guidance import (
     generate_allergy_medication_guidance,
@@ -53,9 +55,68 @@ def _analyze_nutrition(nutrition: dict) -> dict:
     return {"flags": flags}
 
 
+def _serialize_basic_info(profile: UserHealthProfile) -> dict[str, Any]:
+    return {
+        "height_cm": profile.height_cm,
+        "weight_kg": profile.weight_kg,
+        "drug_allergies": profile.drug_allergies,
+    }
+
+
+def _serialize_lifestyle_input(profile: UserHealthProfile) -> dict[str, Any]:
+    return {
+        "exercise_hours": {
+            "low_intensity": max(profile.exercise_frequency_per_week, 0),
+            "moderate_intensity": 0,
+            "high_intensity": 0,
+        },
+        "digital_usage": {
+            "pc_hours_per_day": profile.pc_hours_per_day,
+            "smartphone_hours_per_day": profile.smartphone_hours_per_day,
+        },
+        "substance_usage": {
+            "caffeine_cups_per_day": profile.caffeine_cups_per_day,
+            "smoking": profile.smoking,
+            "alcohol_frequency_per_week": profile.alcohol_frequency_per_week,
+        },
+    }
+
+
+def _serialize_sleep_input(profile: UserHealthProfile) -> dict[str, Any]:
+    return {
+        "bed_time": profile.bed_time,
+        "wake_time": profile.wake_time,
+        "sleep_latency_minutes": profile.sleep_latency_minutes,
+        "night_awakenings_per_week": profile.night_awakenings_per_week,
+        "daytime_sleepiness_score": profile.daytime_sleepiness,
+    }
+
+
+def _serialize_nutrition_input(profile: UserHealthProfile) -> dict[str, Any]:
+    return {
+        "appetite_score": profile.appetite_level,
+        "is_meal_regular": profile.meal_regular,
+    }
+
+
+def _extract_medications_from_ocr_result(result: OcrResult) -> list[dict[str, Any]]:
+    structured = result.structured_data if isinstance(result.structured_data, dict) else {}
+    medications = structured.get("medications")
+    if isinstance(medications, list):
+        return [m for m in medications if isinstance(m, dict)]
+
+    confirmed = structured.get("confirmed_ocr")
+    if not isinstance(confirmed, dict):
+        return []
+    extracted = confirmed.get("extracted_medications")
+    if not isinstance(extracted, list):
+        return []
+    return [m for m in extracted if isinstance(m, dict)]
+
+
 class AnalysisService:
     async def get_summary(self, *, user: User) -> dict:
-        profile = await HealthProfile.get_or_none(user_id=user.id)
+        profile = await UserHealthProfile.get_or_none(user_id=user.id)
 
         risk_flags = []
         allergy_alerts = []
@@ -63,12 +124,17 @@ class AnalysisService:
         seen_emergency_keys: set[str] = set()
 
         if profile:
-            lifestyle_analysis = _analyze_lifestyle(profile.lifestyle_input)
-            sleep_analysis = _analyze_sleep(profile.sleep_input)
-            nutrition_analysis = _analyze_nutrition(profile.nutrition_input)
+            basic_info = _serialize_basic_info(profile)
+            lifestyle_input = _serialize_lifestyle_input(profile)
+            sleep_input = _serialize_sleep_input(profile)
+            nutrition_input = _serialize_nutrition_input(profile)
+
+            lifestyle_analysis = _analyze_lifestyle(lifestyle_input)
+            sleep_analysis = _analyze_sleep(sleep_input)
+            nutrition_analysis = _analyze_nutrition(nutrition_input)
             risk_flags = lifestyle_analysis["flags"] + sleep_analysis["flags"] + nutrition_analysis["flags"]
 
-            drug_allergies = profile.basic_info.get("drug_allergies", [])
+            drug_allergies = basic_info.get("drug_allergies", [])
             if drug_allergies:
                 from app.models.ocr import OcrJob  # noqa: PLC0415
 
@@ -77,7 +143,7 @@ class AnalysisService:
                     result = await OcrResult.get_or_none(job_id=job.id)
                     if not result:
                         continue
-                    medications = result.structured_data.get("medications", [])
+                    medications = _extract_medications_from_ocr_result(result)
                     for med in medications:
                         drug_name = str(med.get("drug_name", "") or "")
                         for allergy in drug_allergies:
@@ -109,7 +175,7 @@ class AnalysisService:
                                     }
                                 )
 
-            if is_nutrition_guide_condition_1(basic_info=profile.basic_info, nutrition_input=profile.nutrition_input):
+            if is_nutrition_guide_condition_1(basic_info=basic_info, nutrition_input=nutrition_input):
                 emergency_alerts.append(
                     {
                         "alert_key": "NUTRITION::CONDITION_1",
@@ -120,7 +186,7 @@ class AnalysisService:
                     }
                 )
 
-            if is_sleep_guide_condition_1(sleep_input=profile.sleep_input):
+            if is_sleep_guide_condition_1(sleep_input=sleep_input):
                 emergency_alerts.append(
                     {
                         "alert_key": "SLEEP::CONDITION_1",
@@ -131,12 +197,13 @@ class AnalysisService:
                     }
                 )
         else:
+            basic_info = {}
             lifestyle_analysis = {}
             sleep_analysis = {}
             nutrition_analysis = {}
 
         return {
-            "basic_info": profile.basic_info if profile else {},
+            "basic_info": basic_info,
             "lifestyle_analysis": lifestyle_analysis,
             "sleep_analysis": sleep_analysis,
             "nutrition_analysis": nutrition_analysis,

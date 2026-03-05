@@ -9,6 +9,7 @@ from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideR
 from app.models.ocr import OcrJobStatus
 from app.models.users import User
 from app.repositories.guide_repository import GuideRepository
+from app.services.guide_automation import GuideAutomationService
 from app.services.health_profiles import HealthProfileService
 from app.services.ocr import OcrService
 from app.services.guide_queue import GuideQueuePublisher
@@ -18,6 +19,7 @@ class GuideService:
     def __init__(self) -> None:
         self.repo = GuideRepository()
         self.queue_publisher = GuideQueuePublisher()
+        self.guide_automation_service = GuideAutomationService()
         self.health_profile_service = HealthProfileService()
         self.ocr_service = OcrService()
 
@@ -28,10 +30,11 @@ class GuideService:
                 ErrorCode.STATE_CONFLICT,
                 developer_message="건강 프로필이 없습니다. 온보딩 정보를 먼저 저장해주세요.",
             )
-        if self.health_profile_service.is_onboarding_expired(profile):
+        required, _ = await self.guide_automation_service.is_profile_refresh_required_for_guide_generation(user_id=user.id)
+        if required:
             raise AppException(
                 ErrorCode.STATE_CONFLICT,
-                developer_message="온보딩 유효기간(7일)이 만료되었습니다. 최신 정보를 다시 입력해주세요.",
+                developer_message="최근 가이드 생성 후 7일이 경과했습니다. 건강 프로필을 다시 입력한 뒤 가이드를 생성해주세요.",
             )
 
         ocr_job = await self.repo.get_user_ocr_job(ocr_job_id=ocr_job_id, user_id=user.id)
@@ -82,6 +85,13 @@ class GuideService:
         return job
 
     async def refresh_guide_job(self, *, user: User, job_id: int) -> GuideJob:
+        required, _ = await self.guide_automation_service.is_profile_refresh_required_for_guide_generation(user_id=user.id)
+        if required:
+            raise AppException(
+                ErrorCode.STATE_CONFLICT,
+                developer_message="최근 가이드 생성 후 7일이 경과했습니다. 건강 프로필을 다시 입력한 뒤 가이드를 갱신해주세요.",
+            )
+
         original_job = await self.get_guide_job(user=user, job_id=job_id)
 
         async with in_transaction():

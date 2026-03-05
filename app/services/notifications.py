@@ -27,9 +27,7 @@ class NotificationService:
         offset: int,
         is_read: bool | None = None,
     ) -> tuple[list[Notification], int]:
-        await self.guide_automation_service.notify_weekly_refresh_if_due(user_id=user.id)
-        await self._sync_health_alert_notifications(user=user)
-        await self._sync_dday_notifications(user=user)
+        await self._sync_dynamic_notifications(user=user)
         notifications = await self.repo.list_notifications(
             user_id=user.id,
             limit=limit,
@@ -40,6 +38,7 @@ class NotificationService:
         return notifications, unread_count
 
     async def get_unread_count(self, *, user: User) -> int:
+        await self._sync_dynamic_notifications(user=user)
         return await self.repo.count_unread(user_id=user.id)
 
     async def mark_as_read(self, *, user: User, notification_id: int) -> Notification:
@@ -54,6 +53,11 @@ class NotificationService:
     async def mark_all_as_read(self, *, user: User) -> int:
         async with in_transaction():
             return await self.repo.mark_all_as_read(user_id=user.id)
+
+    async def _sync_dynamic_notifications(self, *, user: User) -> None:
+        await self.guide_automation_service.notify_weekly_refresh_if_due(user_id=user.id)
+        await self._sync_health_alert_notifications(user=user)
+        await self._sync_dday_notifications(user=user)
 
     async def _sync_dday_notifications(self, *, user: User) -> None:
         setting = await self.notification_setting_service.get_or_create(user=user)

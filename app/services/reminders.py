@@ -1,5 +1,6 @@
-from datetime import date, timedelta
+from datetime import datetime, timedelta
 
+from app.core import config
 from app.core.exceptions import AppException, ErrorCode
 from app.dtos.reminders import DdayReminderItem, MedicationReminderUpsertRequest
 from app.models.reminders import MedicationReminder
@@ -64,7 +65,7 @@ class ReminderService:
         await reminder.delete()
 
     async def get_dday_reminders(self, *, user: User, days: int) -> list[DdayReminderItem]:
-        today = date.today()
+        today = datetime.now(config.TIMEZONE).date()
         reminders = await MedicationReminder.filter(
             user_id=user.id,
             enabled=True,

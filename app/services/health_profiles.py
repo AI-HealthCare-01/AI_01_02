@@ -50,6 +50,9 @@ class HealthProfileService:
 
     async def upsert_profile(self, *, user: User, request: HealthProfileUpsertRequest) -> UserHealthProfile:
         previous_profile = await self.repo.get_by_user_id(user_id=user.id)
+        refresh_required_before_update, _ = (
+            await self.guide_automation_service.is_profile_refresh_required_for_guide_generation(user_id=user.id)
+        )
         computed = self._compute_metrics(request)
         payload = {
             "height_cm": request.basic_info.height_cm,
@@ -79,13 +82,10 @@ class HealthProfileService:
         }
         profile = await self.repo.upsert_by_user_id(user_id=user.id, payload=payload)
 
-        was_expired = False
-        if previous_profile:
-            was_expired = self.is_onboarding_expired(previous_profile)
-        if was_expired:
+        if refresh_required_before_update or previous_profile is None:
             await self.guide_automation_service.trigger_refresh_with_latest_ocr(
                 user_id=user.id,
-                reason="weekly_profile_refreshed",
+                reason="profile_updated",
             )
         return profile
 
