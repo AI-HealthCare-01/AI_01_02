@@ -135,12 +135,36 @@ export default function Signup() {
             <div>
               <label className="block text-sm font-medium mb-1.5 text-[#2D3436]">생년월일 <span className="text-red-500">*</span></label>
               <div className="flex gap-2">
-                <input type="number" value={formData.birthYear} onChange={(e) => handleChange("birthYear", e.target.value.slice(0, 4))}
-                  className={`flex-1 ${inputBase} ${errors.birthDate ? "border-red-400" : "border-[#8A9A5B]"}`} placeholder="년 (4자리)" />
-                <input type="number" value={formData.birthMonth} onChange={(e) => handleChange("birthMonth", e.target.value)} min="1" max="12"
-                  className={`w-20 ${inputBase} ${errors.birthDate ? "border-red-400" : "border-[#8A9A5B]"}`} placeholder="월" />
-                <input type="number" value={formData.birthDay} onChange={(e) => handleChange("birthDay", e.target.value)} min="1" max="31"
-                  className={`w-20 ${inputBase} ${errors.birthDate ? "border-red-400" : "border-[#8A9A5B]"}`} placeholder="일" />
+                <select
+                  value={formData.birthYear}
+                  onChange={(e) => handleChange("birthYear", e.target.value)}
+                  className={`flex-1 ${inputBase} ${errors.birthDate ? "border-red-400" : "border-[#8A9A5B]"}`}
+                >
+                  <option value="">년도</option>
+                  {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                    <option key={y} value={String(y)}>{y}년</option>
+                  ))}
+                </select>
+                <select
+                  value={formData.birthMonth}
+                  onChange={(e) => handleChange("birthMonth", e.target.value)}
+                  className={`flex-1 ${inputBase} ${errors.birthDate ? "border-red-400" : "border-[#8A9A5B]"}`}
+                >
+                  <option value="">월</option>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={String(m)}>{m}월</option>
+                  ))}
+                </select>
+                <select
+                  value={formData.birthDay}
+                  onChange={(e) => handleChange("birthDay", e.target.value)}
+                  className={`flex-1 ${inputBase} ${errors.birthDate ? "border-red-400" : "border-[#8A9A5B]"}`}
+                >
+                  <option value="">일</option>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                    <option key={d} value={String(d)}>{d}일</option>
+                  ))}
+                </select>
               </div>
               {errors.birthDate && <p className="text-red-500 text-xs mt-1">{errors.birthDate}</p>}
             </div>
