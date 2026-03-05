@@ -1,352 +1,238 @@
-import { FormEvent, useMemo, useState } from "react";
-import { AlertTriangle, Bot, MessageCircle, Send, User, FileText } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import {
+  MessageSquare, Send, Plus, Bot, User, AlertTriangle,
+  HelpCircle, BookOpen, Loader2, Trash2,
+} from "lucide-react";
+import { chatApi, ChatSession } from "../../lib/api";
+import MedicalSafetyNotice from "../components/MedicalSafetyNotice";
 
-type ChatRole = "USER" | "ASSISTANT";
-type ChatIntent = "smalltalk" | "medical" | "crisis";
-type ChatStatus = "ACTIVE" | "CLOSED";
-
-type ChatReference = {
-  title: string;
-  source: string;
-  link: string;
-};
-
-type ChatMessage = {
-  id: number;
-  role: ChatRole;
+interface Message {
+  id: string;
+  role: "user" | "assistant";
   content: string;
-  createdAt: string;
-  intent?: ChatIntent;
-  needsClarification?: boolean;
-  references?: ChatReference[];
-  blockedByGuardrail?: boolean;
-};
-
-type ChatSession = {
-  id: number;
-  title: string;
-  status: ChatStatus;
-  lastActivityAt: string;
-};
-
-const GUARDRAIL_PATTERN = /(자살|자해|죽고\s?싶|오남용|범죄|마약)/i;
-
-const initialSessions: ChatSession[] = [
-  { id: 1, title: "복약 시간 질문", status: "ACTIVE", lastActivityAt: "방금 전" },
-  { id: 2, title: "카페인 섭취 상담", status: "CLOSED", lastActivityAt: "어제 21:12" },
-];
-
-const initialMessages: Record<number, ChatMessage[]> = {
-  1: [
-    {
-      id: 1,
-      role: "ASSISTANT",
-      content: "안녕하세요. 의료 정보를 기반으로 복약/생활 질문에 답변해드릴게요.",
-      createdAt: "09:20",
-      intent: "medical",
-      references: [
-        {
-          title: "ADHD Medication Guide",
-          source: "NIH",
-          link: "https://www.nih.gov",
-        },
-      ],
-    },
-  ],
-  2: [
-    {
-      id: 2,
-      role: "ASSISTANT",
-      content: "세션이 자동 종료되었습니다. 새 질문은 새 세션에서 시작해주세요.",
-      createdAt: "어제 21:12",
-      intent: "smalltalk",
-    },
-  ],
-};
-
-function classifyIntent(message: string): ChatIntent {
-  if (GUARDRAIL_PATTERN.test(message)) return "crisis";
-  if (/(약|복용|부작용|식후|식전|카페인|수면|ADHD)/i.test(message)) return "medical";
-  return "smalltalk";
+  timestamp: string;
+  sources?: { title: string; source: string; url?: string }[];
+  isCrisisBlocked?: boolean;
+  isClarification?: boolean;
+  isStreaming?: boolean;
 }
 
 export default function Chatbot() {
-  const [sessions, setSessions] = useState<ChatSession[]>(initialSessions);
-  const [activeSessionId, setActiveSessionId] = useState<number>(1);
-  const [messagesBySession, setMessagesBySession] =
-    useState<Record<number, ChatMessage[]>>(initialMessages);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const activeSession = sessions.find((session) => session.id === activeSessionId);
-  const messages = messagesBySession[activeSessionId] ?? [];
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-  const canSend = !!activeSession && activeSession.status === "ACTIVE" && input.trim() && !isStreaming;
+  // 첫 진입 시 세션 자동 생성
+  useEffect(() => {
+    handleNewSession();
+  }, []);
 
-  const sessionBadgeClass = useMemo(() => {
-    if (!activeSession) return "bg-[#f5f3eb] text-[#6c6f72]";
-    return activeSession.status === "ACTIVE"
-      ? "bg-[#20B2AA] text-white"
-      : "bg-[#f5f3eb] text-[#6c6f72]";
-  }, [activeSession]);
-
-  const upsertSessionActivity = (sessionId: number) => {
-    setSessions((prev) =>
-      prev.map((session) => (session.id === sessionId ? { ...session, lastActivityAt: "방금 전" } : session)),
-    );
-  };
-
-  const appendMessage = (sessionId: number, message: ChatMessage) => {
-    setMessagesBySession((prev) => ({
-      ...prev,
-      [sessionId]: [...(prev[sessionId] ?? []), message],
-    }));
-  };
-
-  const updateLastAssistantMessage = (sessionId: number, content: string) => {
-    setMessagesBySession((prev) => {
-      const next = [...(prev[sessionId] ?? [])];
-      const lastIndex = next.length - 1;
-      if (lastIndex < 0) return prev;
-      next[lastIndex] = { ...next[lastIndex], content };
-      return { ...prev, [sessionId]: next };
-    });
-  };
-
-  const simulateStreamingAnswer = (sessionId: number, answer: string) => {
-    setIsStreaming(true);
-    let cursor = 0;
-    const buffer = answer.split("");
-
-    const timer = setInterval(() => {
-      cursor += 2;
-      updateLastAssistantMessage(sessionId, buffer.slice(0, cursor).join(""));
-      if (cursor >= buffer.length) {
-        clearInterval(timer);
-        setIsStreaming(false);
-      }
-    }, 35);
-  };
-
-  const handleSend = (event: FormEvent) => {
-    event.preventDefault();
-    if (!canSend || !activeSession) return;
-
-    const content = input.trim();
-    const intent = classifyIntent(content);
-    const timestamp = new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
-    const userMessage: ChatMessage = {
-      id: Date.now(),
-      role: "USER",
-      content,
-      createdAt: timestamp,
-      intent,
-    };
-    appendMessage(activeSession.id, userMessage);
-    setInput("");
-    upsertSessionActivity(activeSession.id);
-
-    if (intent === "crisis") {
-      appendMessage(activeSession.id, {
-        id: Date.now() + 1,
-        role: "ASSISTANT",
-        content:
-          "위기 신호가 감지되어 일반 답변을 중단합니다. 즉시 1393(자살예방상담전화) 또는 112/119로 도움을 요청하세요.",
-        createdAt: timestamp,
-        intent,
-        blockedByGuardrail: true,
-      });
-      return;
+  const handleNewSession = async () => {
+    try {
+      const session = await chatApi.createSession();
+      setSessions((prev) => [session, ...prev]);
+      setActiveSession(session);
+      setMessages([{
+        id: "welcome",
+        role: "assistant",
+        content: "안녕하세요! 복약 관리와 ADHD 관련 질문에 답변해 드리는 AI 챗봇입니다. 무엇이든 질문해 주세요.",
+        timestamp: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }),
+      }]);
+    } catch (err: any) {
+      setMessages([{
+        id: "err",
+        role: "assistant",
+        content: `세션 생성 실패: ${err.message}`,
+        timestamp: "",
+      }]);
     }
-
-    const needsClarification = content.length < 8 || /(이거|그거|저거)/.test(content);
-    const assistantSeed: ChatMessage = {
-      id: Date.now() + 2,
-      role: "ASSISTANT",
-      content: "",
-      createdAt: timestamp,
-      intent,
-      needsClarification,
-      references: needsClarification
-        ? []
-        : [
-            {
-              title: "Korean ADHD Clinical Guideline",
-              source: "대한소아청소년정신의학회",
-              link: "https://www.kacap.or.kr",
-            },
-            {
-              title: "Medication Timing Guidance",
-              source: "NIMH",
-              link: "https://www.nimh.nih.gov",
-            },
-          ],
-    };
-    appendMessage(activeSession.id, assistantSeed);
-
-    const answer = needsClarification
-      ? "질문 범위가 넓어 정확한 답변이 어렵습니다. 약 이름, 복용 시간, 현재 증상을 함께 알려주시면 구체적으로 안내할게요."
-      : "복용 시간은 가능한 매일 동일하게 유지하는 것이 좋습니다. 카페인은 약 복용 직후보다 2시간 이상 간격을 두는 것을 권장합니다.";
-    simulateStreamingAnswer(activeSession.id, answer);
   };
 
-  const handleNewSession = () => {
-    const nextId = Math.max(...sessions.map((session) => session.id)) + 1;
-    const nextSession: ChatSession = {
-      id: nextId,
-      title: "새 채팅",
-      status: "ACTIVE",
-      lastActivityAt: "방금 전",
+  const handleDeleteSession = async () => {
+    if (!activeSession) return;
+    try {
+      await chatApi.deleteSession(activeSession.id);
+      setSessions((prev) => prev.filter((s) => s.id !== activeSession.id));
+      await handleNewSession();
+    } catch {}
+  };
+
+  const handleSend = async () => {
+    if (!input.trim() || isStreaming || !activeSession) return;
+
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: input.trim(),
+      timestamp: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }),
     };
-    setSessions((prev) => [nextSession, ...prev]);
-    setMessagesBySession((prev) => ({
-      ...prev,
-      [nextId]: [
-        {
-          id: Date.now(),
-          role: "ASSISTANT",
-          content: "새 세션이 시작되었습니다. 질문을 입력해주세요.",
-          createdAt: "방금 전",
-          intent: "smalltalk",
-        },
-      ],
-    }));
-    setActiveSessionId(nextId);
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    setIsStreaming(true);
+
+    const streamingId = (Date.now() + 1).toString();
+    setMessages((prev) => [...prev, {
+      id: streamingId, role: "assistant", content: "", timestamp: "", isStreaming: true,
+    }]);
+
+    try {
+      let collected = "";
+      for await (const token of chatApi.streamMessage(activeSession.id, userMsg.content)) {
+        collected += token;
+        setMessages((prev) =>
+          prev.map((m) => m.id === streamingId ? { ...m, content: collected } : m)
+        );
+      }
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === streamingId
+            ? { ...m, isStreaming: false, timestamp: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) }
+            : m
+        )
+      );
+    } catch (err: any) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === streamingId
+            ? { ...m, isStreaming: false, content: `오류가 발생했습니다: ${err.message}` }
+            : m
+        )
+      );
+    } finally {
+      setIsStreaming(false);
+    }
   };
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto">
-      <div className="mb-8 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-bold mb-2 text-[#2D3436]">실시간 챗봇</h1>
-          <p className="text-[#6c6f72]">RAG 기반 의료 정보에 한정해 스트리밍 답변을 제공합니다</p>
+    <div className="flex h-screen bg-[#FFFCF5]">
+      {/* Session List */}
+      <div className="hidden lg:flex w-72 flex-col bg-white border-r border-gray-100 shrink-0">
+        <div className="p-4 border-b border-gray-100">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-bold text-[#2D3436]">대화 목록</h2>
+            <button onClick={handleNewSession}
+              className="w-8 h-8 bg-[#6B8E23] text-white rounded-lg flex items-center justify-center hover:bg-[#556b1c] transition-colors">
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-xs text-[#6c6f72]">새 대화를 시작하거나 이전 대화를 선택하세요</p>
         </div>
-        <button
-          onClick={handleNewSession}
-          className="bg-[#20B2AA] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#1a8f89] transition-colors"
-        >
-          새 세션
-        </button>
+        <div className="flex-1 overflow-y-auto">
+          {sessions.map((session) => (
+            <button key={session.id} onClick={() => setActiveSession(session)}
+              className={`w-full text-left p-4 border-b border-gray-50 hover:bg-[#f5f3eb] transition-colors ${
+                activeSession?.id === session.id ? "bg-[#f5f3eb] border-l-4 border-l-[#6B8E23]" : ""
+              }`}>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-[#6B8E23] rounded-full flex items-center justify-center shrink-0">
+                  <MessageSquare className="w-4 h-4 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[#2D3436] truncate">{session.title ?? "새 대화"}</p>
+                  <p className="text-xs text-[#6c6f72]">{new Date(session.created_at).toLocaleDateString("ko-KR")}</p>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white border-2 border-[#20B2AA] rounded-2xl p-4 h-[640px] overflow-auto">
-          <h2 className="font-bold text-[#2D3436] mb-3">세션 목록</h2>
-          <div className="space-y-2">
-            {sessions.map((session) => (
-              <button
-                key={session.id}
-                onClick={() => setActiveSessionId(session.id)}
-                className={`w-full text-left p-3 rounded-lg border-2 transition-colors ${
-                  session.id === activeSessionId
-                    ? "border-[#20B2AA] bg-[#f5fffe]"
-                    : "border-[#f0eee8] hover:border-[#20B2AA]"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="font-medium text-[#2D3436] truncate">{session.title}</div>
-                  <span
-                    className={`text-xs px-2 py-1 rounded-full ${
-                      session.status === "ACTIVE" ? "bg-[#20B2AA] text-white" : "bg-[#f5f3eb] text-[#6c6f72]"
-                    }`}
-                  >
-                    {session.status}
-                  </span>
-                </div>
-                <p className="text-xs text-[#6c6f72] mt-1">{session.lastActivityAt}</p>
-              </button>
-            ))}
+      {/* Chat Panel */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#6B8E23] rounded-xl flex items-center justify-center">
+              <Bot className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="font-bold text-[#2D3436]">ADHD Care AI</h2>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-green-500" />
+                <span className="text-xs text-[#6c6f72]">온라인 · 복약 전문 AI</span>
+              </div>
+            </div>
           </div>
+          <button onClick={handleDeleteSession} className="text-[#6c6f72] hover:text-red-500 transition-colors">
+            <Trash2 className="w-5 h-5" />
+          </button>
         </div>
 
-        <div className="lg:col-span-2 bg-white border-2 border-[#20B2AA] rounded-2xl p-4 h-[640px] flex flex-col">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <MessageCircle className="w-5 h-5 text-[#20B2AA]" />
-              <h2 className="font-bold text-[#2D3436]">대화</h2>
-            </div>
-            <span className={`text-xs px-2 py-1 rounded-full ${sessionBadgeClass}`}>
-              {activeSession?.status ?? "N/A"}
-            </span>
-          </div>
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+          {messages.map((msg) => (
+            <div key={msg.id} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                msg.role === "assistant" ? "bg-[#6B8E23]" : "bg-[#FFD166]"
+              }`}>
+                {msg.role === "assistant" ? <Bot className="w-4 h-4 text-white" /> : <User className="w-4 h-4 text-[#2D3436]" />}
+              </div>
 
-          <div className="flex-1 overflow-auto bg-[#FFFCF5] rounded-lg p-4 space-y-4">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`rounded-xl p-3 border ${
-                  message.role === "USER"
-                    ? "bg-[#20B2AA] text-white border-[#20B2AA] ml-8"
-                    : "bg-white text-[#2D3436] border-[#f0eee8] mr-8"
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-2 text-xs opacity-80">
-                  {message.role === "USER" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-                  <span>{message.role}</span>
-                  <span>{message.createdAt}</span>
-                  {message.intent && (
-                    <span className="px-2 py-0.5 rounded-full bg-black/10">{message.intent}</span>
-                  )}
-                </div>
-                <p className="leading-relaxed whitespace-pre-wrap">{message.content || "..."}</p>
-
-                {message.blockedByGuardrail && (
-                  <div className="mt-3 bg-[#fff6d9] text-[#2D3436] border border-[#FFD166] rounded-lg p-2 text-sm flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 mt-0.5" />
-                    <span>위기 대응 정책으로 일반 LLM 응답을 차단했습니다.</span>
+              <div className={`max-w-[75%] flex flex-col gap-1 ${msg.role === "user" ? "items-end" : "items-start"}`}>
+                {msg.isStreaming && msg.content === "" ? (
+                  <div className="bg-white border-2 border-[#6B8E23] rounded-2xl rounded-tl-sm px-4 py-3">
+                    <div className="flex items-center gap-2 text-[#6c6f72]">
+                      <Loader2 className="w-4 h-4 animate-spin text-[#6B8E23]" />
+                      <span className="text-sm">응답 생성 중...</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={`rounded-2xl px-4 py-3 ${
+                    msg.role === "user"
+                      ? "bg-[#6B8E23] text-white rounded-tr-sm"
+                      : "bg-white border-2 border-gray-100 text-[#2D3436] rounded-tl-sm"
+                  }`}>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                    {msg.isStreaming && <span className="inline-block w-1 h-4 bg-[#6B8E23] animate-pulse ml-1" />}
                   </div>
                 )}
 
-                {message.needsClarification && (
-                  <div className="mt-3 text-xs text-[#6c6f72] bg-[#f5f3eb] rounded-lg p-2">
-                    저유사도 질의로 분류되어 재질문 유도 응답이 반환되었습니다.
-                  </div>
-                )}
-
-                {!!message.references?.length && (
-                  <div className="mt-3 pt-2 border-t border-[#f0eee8] space-y-1">
-                    {message.references.map((ref) => (
-                      <a
-                        key={ref.title}
-                        href={ref.link}
-                        className="text-xs text-[#156f6a] hover:underline flex items-center gap-1"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <FileText className="w-3 h-3" />
-                        {ref.title} · {ref.source}
-                      </a>
+                {msg.sources && msg.sources.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {msg.sources.map((src, i) => (
+                      <div key={i} className="flex items-center gap-1 bg-[#f5f3eb] border border-[#6B8E23]/30 px-2 py-1 rounded-full">
+                        <BookOpen className="w-3 h-3 text-[#6B8E23]" />
+                        <span className="text-xs text-[#6c6f72]">{src.title}</span>
+                      </div>
                     ))}
                   </div>
                 )}
+                {msg.timestamp && <span className="text-xs text-[#6c6f72] px-1">{msg.timestamp}</span>}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
 
-          <form onSubmit={handleSend} className="mt-3 flex gap-2">
-            <input
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder={
-                activeSession?.status === "CLOSED"
-                  ? "종료된 세션입니다. 새 세션을 시작해주세요."
-                  : "복약, 수면, 부작용 관련 질문을 입력하세요"
-              }
-              disabled={activeSession?.status !== "ACTIVE"}
-              className="flex-1 border-2 border-[#20B2AA] rounded-lg px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-[#FFD166]"
-            />
-            <button
-              type="submit"
-              disabled={!canSend}
-              className={`px-4 rounded-lg font-medium flex items-center gap-2 ${
-                canSend ? "bg-[#20B2AA] text-white hover:bg-[#1a8f89]" : "bg-[#f5f3eb] text-[#6c6f72]"
-              }`}
-            >
-              <Send className="w-4 h-4" />
-              전송
+        <div className="bg-white border-t border-gray-100 p-4 shrink-0">
+          <div className="flex gap-3 items-end">
+            <div className="flex-1 bg-[#f5f3eb] rounded-2xl px-4 py-3">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                className="w-full bg-transparent text-[#2D3436] text-sm resize-none focus:outline-none placeholder-[#6c6f72]"
+                placeholder="복약, 부작용, 생활습관에 대해 질문하세요... (Enter로 전송)"
+                rows={1}
+                style={{ maxHeight: "120px" }}
+                disabled={isStreaming}
+              />
+            </div>
+            <button onClick={handleSend} disabled={!input.trim() || isStreaming}
+              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all shrink-0 ${
+                input.trim() && !isStreaming ? "bg-[#6B8E23] hover:bg-[#556b1c] text-white" : "bg-[#f5f3eb] text-[#6c6f72] cursor-not-allowed"
+              }`}>
+              {isStreaming ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </button>
-          </form>
-          {isStreaming && <p className="mt-2 text-xs text-[#6c6f72]">SSE 스트리밍 응답 수신 중...</p>}
+          </div>
+          <p className="text-xs text-[#6c6f72] mt-2 px-1">
+            * 이 AI는 의료 전문가의 진료를 대체하지 않습니다. 긴급 시 1577-0199로 연락하세요.
+          </p>
         </div>
       </div>
     </div>
