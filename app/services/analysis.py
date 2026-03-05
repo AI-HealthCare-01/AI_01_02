@@ -1,4 +1,4 @@
-from app.models.ocr import OcrJobStatus, OcrResult
+from app.models.ocr import OcrJobStatus
 from app.models.profiles import HealthProfile
 from app.models.users import User
 
@@ -65,10 +65,9 @@ class AnalysisService:
 
                 ocr_jobs = await OcrJob.filter(user_id=user.id, status=OcrJobStatus.SUCCEEDED)
                 for job in ocr_jobs:
-                    result = await OcrResult.get_or_none(job_id=job.id)
-                    if not result:
+                    if not job.structured_result:
                         continue
-                    medications = result.structured_data.get("medications", [])
+                    medications = job.structured_result.get("extracted_medications", [])
                     for med in medications:
                         drug_name = med.get("drug_name", "")
                         for allergy in drug_allergies:

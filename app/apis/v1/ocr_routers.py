@@ -37,7 +37,7 @@ async def upload_document(
             id=str(document.id),
             document_type=document.document_type,
             file_name=document.file_name,
-            file_path=document.file_path,
+            file_path=document.temp_storage_key,
             file_size=document.file_size,
             mime_type=document.mime_type,
             uploaded_at=document.uploaded_at,
@@ -98,11 +98,11 @@ async def get_ocr_job_result(
     result = await ocr_service.get_ocr_result(user=user, job_id=int(job_id))
     return Response(
         OcrJobResultResponse(
-            job_id=str(result.job_id),
-            extracted_text=result.extracted_text,
-            structured_data=result.structured_data,
-            created_at=result.created_at,
-            updated_at=result.updated_at,
+            job_id=str(result["job_id"]),
+            extracted_text=result["extracted_text"],
+            structured_data=result["structured_data"],
+            created_at=result["created_at"],
+            updated_at=result["updated_at"],
         ).model_dump(),
         status_code=status.HTTP_200_OK,
     )

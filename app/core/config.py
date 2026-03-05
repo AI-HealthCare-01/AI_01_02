@@ -43,6 +43,9 @@ class Config(BaseSettings):
     GUIDE_QUEUE_KEY: str = "guide:jobs"
     GUIDE_JOB_MAX_RETRIES: int = 3
 
+    CLOVA_OCR_SECRET: str = ""
+    CLOVA_OCR_APIGW_URL: str = ""
+
     OPENAI_API_KEY: str = ""
     OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
     OPENAI_GUIDE_MODEL: str = "gpt-4o-mini"

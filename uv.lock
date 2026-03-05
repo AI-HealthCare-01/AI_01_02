@@ -24,9 +24,12 @@ source = { virtual = "." }
 dependencies = [
     { name = "chromadb" },
     { name = "cryptography" },
+    { name = "httpx" },
+    { name = "openai" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-dateutil" },
+    { name = "python-multipart" },
     { name = "rank-bm25" },
     { name = "redis" },
     { name = "tomlkit" },
@@ -52,6 +55,7 @@ app = [
     { name = "passlib", extra = ["bcrypt"] },
     { name = "pyjwt" },
     { name = "rank-bm25" },
+    { name = "sentry-sdk", extra = ["fastapi"] },
     { name = "tortoise-orm" },
     { name = "uvicorn" },
 ]
@@ -68,9 +72,12 @@ dev = [
 requires-dist = [
     { name = "chromadb", specifier = ">=1.5.2" },
     { name = "cryptography", specifier = ">=46.0.3" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "openai", specifier = ">=2.24.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
     { name = "python-dateutil", specifier = ">=2.9.0.post0" },
+    { name = "python-multipart", specifier = ">=0.0.22" },
     { name = "rank-bm25", specifier = ">=0.2.2" },
     { name = "redis", specifier = ">=7.1.0" },
     { name = "tomlkit", specifier = ">=0.14.0" },
@@ -96,6 +103,7 @@ app = [
     { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
     { name = "pyjwt", specifier = ">=2.10.1" },
     { name = "rank-bm25", specifier = ">=0.2.2" },
+    { name = "sentry-sdk", extras = ["fastapi"], specifier = ">=2.0.0" },
     { name = "tortoise-orm", specifier = ">=0.25.3" },
     { name = "uvicorn", specifier = ">=0.40.0" },
 ]
@@ -2564,6 +2572,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/15/8a/3c4f53d32c21012e9870913544e56bfa9e931aede080779a0f177513f534/sentry_sdk-2.50.0.tar.gz", hash = "sha256:873437a989ee1b8b25579847bae8384515bf18cfed231b06c591b735c1781fe3", size = 401233, upload-time = "2026-01-20T12:53:16.244Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4e/5b/cbc2bb9569f03c8e15d928357e7e6179e5cfab45544a3bbac8aec4caf9be/sentry_sdk-2.50.0-py2.py3-none-any.whl", hash = "sha256:0ef0ed7168657ceb5a0be081f4102d92042a125462d1d1a29277992e344e749e", size = 424961, upload-time = "2026-01-20T12:53:14.826Z" },
+]
+
+[package.optional-dependencies]
+fastapi = [
+    { name = "fastapi" },
 ]
 
 [[package]]
