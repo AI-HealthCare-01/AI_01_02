@@ -34,27 +34,59 @@ class GuideAutomationService:
         ).count()
         return count > 0
 
-    async def _create_weekly_refresh_required_notification(self, *, user_id: int) -> None:
-        recent_unread = await Notification.filter(
+    async def _create_weekly_refresh_required_notification(self, *, user_id: int, source_guide_job_id: int) -> None:
+        existing = await Notification.filter(
             user_id=user_id,
-            is_read=False,
             type=NotificationType.HEALTH_ALERT,
         ).order_by("-created_at", "-id")
-        for notification in recent_unread:
+        for notification in existing:
             payload = notification.payload if isinstance(notification.payload, dict) else {}
-            if payload.get("event") == "guide_weekly_refresh_required":
+            if payload.get("event") != "guide_weekly_refresh_required":
+                continue
+            if int(payload.get("source_guide_job_id") or 0) == source_guide_job_id:
                 return
         await Notification.create(
             user_id=user_id,
             type=NotificationType.HEALTH_ALERT,
             title="주간 건강정보 재입력 필요",
             message="가이드 생성 후 7일이 지났습니다. 최신 키/몸무게/생활습관/수면/식사 정보를 다시 입력해 주세요.",
-            payload={"event": "guide_weekly_refresh_required"},
+            payload={
+                "event": "guide_weekly_refresh_required",
+                "source_guide_job_id": source_guide_job_id,
+            },
         )
+
+    async def notify_weekly_refresh_if_due(self, *, user_id: int) -> bool:
+        latest_succeeded_guide = (
+            await GuideJob.filter(user_id=user_id, status=GuideJobStatus.SUCCEEDED)
+            .order_by("-completed_at", "-id")
+            .first()
+        )
+        if not latest_succeeded_guide or not latest_succeeded_guide.completed_at:
+            return False
+
+        cutoff = datetime.now(config.TIMEZONE) - timedelta(days=7)
+        if latest_succeeded_guide.completed_at > cutoff:
+            return False
+
+        await self._create_weekly_refresh_required_notification(
+            user_id=user_id,
+            source_guide_job_id=latest_succeeded_guide.id,
+        )
+        return True
 
     async def trigger_refresh_with_latest_ocr(self, *, user_id: int, reason: str) -> GuideJob | None:
         if await self._is_profile_expired(user_id=user_id):
-            await self._create_weekly_refresh_required_notification(user_id=user_id)
+            latest_succeeded_guide = (
+                await GuideJob.filter(user_id=user_id, status=GuideJobStatus.SUCCEEDED)
+                .order_by("-completed_at", "-id")
+                .first()
+            )
+            if latest_succeeded_guide:
+                await self._create_weekly_refresh_required_notification(
+                    user_id=user_id,
+                    source_guide_job_id=latest_succeeded_guide.id,
+                )
             return None
 
         latest_ocr_job = await self._get_latest_succeeded_ocr_job(user_id=user_id)
@@ -64,7 +96,16 @@ class GuideAutomationService:
 
     async def trigger_refresh_for_ocr_job(self, *, user_id: int, ocr_job_id: int, reason: str) -> GuideJob | None:
         if await self._is_profile_expired(user_id=user_id):
-            await self._create_weekly_refresh_required_notification(user_id=user_id)
+            latest_succeeded_guide = (
+                await GuideJob.filter(user_id=user_id, status=GuideJobStatus.SUCCEEDED)
+                .order_by("-completed_at", "-id")
+                .first()
+            )
+            if latest_succeeded_guide:
+                await self._create_weekly_refresh_required_notification(
+                    user_id=user_id,
+                    source_guide_job_id=latest_succeeded_guide.id,
+                )
             return None
 
         ocr_job = await OcrJob.get_or_none(id=ocr_job_id, user_id=user_id)
@@ -91,19 +132,18 @@ class GuideAutomationService:
 
     async def process_weekly_refresh_due_users(self, *, batch_size: int) -> int:
         cutoff = datetime.now(config.TIMEZONE) - timedelta(days=7)
-        stale_jobs = (
-            await GuideJob.filter(status=GuideJobStatus.SUCCEEDED, completed_at__lte=cutoff)
-            .order_by("user_id", "-completed_at", "-id")
-            .limit(batch_size * 3)
-        )
+        stale_jobs = await GuideJob.filter(status=GuideJobStatus.SUCCEEDED, completed_at__lte=cutoff).order_by(
+            "user_id", "-completed_at", "-id"
+        ).limit(batch_size * 3)
         processed = 0
         seen_user_ids: set[int] = set()
         for job in stale_jobs:
             if job.user_id in seen_user_ids:
                 continue
             seen_user_ids.add(job.user_id)
-            await self._create_weekly_refresh_required_notification(user_id=job.user_id)
-            processed += 1
+            notified = await self.notify_weekly_refresh_if_due(user_id=job.user_id)
+            if notified:
+                processed += 1
             if processed >= batch_size:
                 break
         return processed

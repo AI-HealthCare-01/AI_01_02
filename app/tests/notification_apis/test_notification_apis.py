@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from httpx import ASGITransport, AsyncClient
 from starlette import status
@@ -6,7 +6,9 @@ from tortoise.contrib.test import TestCase
 
 from app.core import config
 from app.main import app
+from app.models.guides import GuideJob, GuideJobStatus
 from app.models.notifications import Notification, NotificationType
+from app.models.ocr import Document, DocumentType, OcrJob, OcrJobStatus
 from app.models.users import User
 
 
@@ -173,3 +175,40 @@ class TestNotificationApis(TestCase):
             unread_response = await client.get("/api/v1/notifications/unread-count", headers=headers)
             assert unread_response.status_code == status.HTTP_200_OK
             assert unread_response.json()["unread_count"] == 0
+
+    async def test_list_notifications_creates_weekly_profile_refresh_alert_after_7_days(self):
+        email = "notification_weekly_profile_alert@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01081118111")
+            user = await User.get(email=email)
+
+            document = await Document.create(
+                user=user,
+                document_type=DocumentType.PRESCRIPTION,
+                file_name="weekly_refresh.png",
+                file_path="documents/test/weekly_refresh.png",
+                file_size=100,
+                mime_type="image/png",
+            )
+            ocr_job = await OcrJob.create(user=user, document=document, status=OcrJobStatus.SUCCEEDED)
+            old_completed_at = datetime.now(config.TIMEZONE) - timedelta(days=8)
+            await GuideJob.create(
+                user=user,
+                ocr_job=ocr_job,
+                status=GuideJobStatus.SUCCEEDED,
+                completed_at=old_completed_at,
+            )
+
+            headers = {"Authorization": f"Bearer {access_token}"}
+            response = await client.get("/api/v1/notifications", headers=headers)
+            assert response.status_code == status.HTTP_200_OK
+
+            body = response.json()
+            weekly_alerts = [
+                item
+                for item in body["items"]
+                if item["type"] == "HEALTH_ALERT"
+                and item.get("payload", {}).get("event") == "guide_weekly_refresh_required"
+            ]
+            assert len(weekly_alerts) == 1
+            assert "가이드 생성 후 7일이 지났습니다" in weekly_alerts[0]["message"]
