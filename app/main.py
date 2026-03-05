@@ -38,36 +38,43 @@ async def _session_auto_close_loop() -> None:
 
 async def _run_migrations() -> None:
     """누락된 마이그레이션 SQL을 직접 실행 (aerich 포맷 호환 문제 우회)."""
-    from tortoise import Tortoise
+    import re
     from pathlib import Path
-    import importlib
+    from tortoise import Tortoise
 
     migration_dir = Path(__file__).parent / "db" / "migrations" / "models"
     conn = Tortoise.get_connection("default")
 
-    result = await conn.execute_query("SELECT version FROM aerich ORDER BY id")
-    applied = {row["version"] for row in result[1]}
+    try:
+        result = await conn.execute_query("SELECT version FROM aerich ORDER BY id")
+        applied = {row["version"] for row in result[1]}
+    except Exception:  # noqa: BLE001
+        applied = set()
 
-    for migration_file in sorted(migration_dir.glob("*.py")):
+    for migration_file in sorted(migration_dir.glob("[0-9]*.py")):
         name = migration_file.name
-        if name in applied or name == "__init__.py":
+        if name in applied:
             continue
-        spec = importlib.util.spec_from_file_location(name, migration_file)
-        mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-        spec.loader.exec_module(mod)  # type: ignore[union-attr]
-        sql: str = await mod.upgrade(conn)
-        if sql and sql.strip():
-            for statement in sql.strip().split(";"):
-                stmt = statement.strip()
+        try:
+            source = migration_file.read_text(encoding="utf-8")
+            match = re.search(r'async def upgrade.*?return\s+"""(.*?)"""', source, re.DOTALL)
+            if not match:
+                logger.warning("migration SQL not found: %s", name)
+                continue
+            sql = match.group(1).strip()
+            for stmt in sql.split(";"):
+                stmt = stmt.strip()
                 if stmt:
                     try:
-                        await conn.execute_script(stmt)
-                    except Exception:  # noqa: BLE001
-                        pass
-        await conn.execute_query(
-            "INSERT IGNORE INTO aerich (version, app) VALUES (%s, %s)", [name, "models"]
-        )
-        logger.info("migration applied: %s", name)
+                        await conn.execute_query(stmt)
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning("migration stmt warning (ignored): %s | %s", name, e)
+            await conn.execute_query(
+                "INSERT IGNORE INTO aerich (version, app, content) VALUES (%s, %s, %s)", [name, "models", "{}"]
+            )
+            logger.info("migration applied: %s", name)
+        except Exception as e:  # noqa: BLE001
+            logger.error("migration failed: %s | %s", name, e)
 
 
 @asynccontextmanager

@@ -5,7 +5,7 @@ import Signup from "./pages/Signup";
 import Onboarding from "./pages/Onboarding";
 import OcrScan from "./pages/OcrScan";
 import MyMedications from "./pages/MyMedications";
-import AiCoach from "./pages/AiCoach";
+import AiGuide from "./pages/AiGuide";
 import Chatbot from "./pages/Chatbot";
 import Notifications from "./pages/Notifications";
 import Records from "./pages/Records";
@@ -30,10 +30,10 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: Dashboard },
       { path: "ocr-scan", Component: OcrScan },
-      { path: "medications", Component: MyMedications },
-      { path: "ai-coach", Component: AiCoach },
-      { path: "chat", Component: Chatbot },
+      { path: "ai-guide", Component: AiGuide },
+      { path: "chatbot", Component: Chatbot },
       { path: "notifications", Component: Notifications },
+      { path: "medications", Component: MyMedications },
       { path: "records", Component: Records },
     ],
   },

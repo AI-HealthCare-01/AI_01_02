@@ -1,16 +1,28 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router";
 import { Mail, Lock } from "lucide-react";
+import { authApi, setToken } from "../../lib/api";
 
 export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock login - 실제로는 백엔드 연동 필요
-    navigate("/");
+    setError("");
+    setLoading(true);
+    try {
+      const { access_token } = await authApi.login(email, password);
+      setToken(access_token);
+      navigate("/");
+    } catch (err: any) {
+      setError(err.message ?? "로그인에 실패했습니다.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -23,7 +35,7 @@ export default function Login() {
 
         <div className="bg-[#20B2AA] text-white p-8 rounded-2xl">
           <h2 className="text-2xl font-bold mb-6">로그인</h2>
-          
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2">이메일</label>
@@ -55,11 +67,14 @@ export default function Login() {
               </div>
             </div>
 
+            {error && <p className="text-[#FFD166] text-sm">{error}</p>}
+
             <button
               type="submit"
-              className="w-full bg-[#FFD166] text-[#2D3436] font-medium py-3 rounded-lg hover:bg-[#ffc84d] transition-colors"
+              disabled={loading}
+              className="w-full bg-[#FFD166] text-[#2D3436] font-medium py-3 rounded-lg hover:bg-[#ffc84d] transition-colors disabled:opacity-60"
             >
-              로그인
+              {loading ? "로그인 중..." : "로그인"}
             </button>
           </form>
 
