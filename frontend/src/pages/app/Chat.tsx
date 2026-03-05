@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Send, Plus, Loader2, MessageCircle, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { chatApi } from "@/lib/api";
+import { toUserMessage } from "@/lib/errorMessages";
 
 // ── 세션 목록 (localStorage) ────────────────────────────────────────────────
 
@@ -91,8 +92,8 @@ export default function Chat() {
         },
       ]);
       setMobileView("chat");
-    } catch {
-      toast.error("채팅 세션을 시작하지 못했습니다.");
+    } catch (err) {
+      toast.error(toUserMessage(err));
     }
   }
 
@@ -108,7 +109,13 @@ export default function Chat() {
           content: m.content,
         })));
       })
-      .catch(() => {});
+      .catch(() => {
+        // 세션이 서버에 없으면 localStorage에서 제거 후 새 세션 생성
+        const next = loadSessions().filter((x) => x.id !== s.id);
+        saveSessions(next);
+        setSessions(next);
+        startNewSession();
+      });
   }
 
   async function deleteCurrentSession() {

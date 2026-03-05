@@ -12,6 +12,7 @@ import {
   DdayReminder,
   GuideJobResult,
 } from "@/lib/api";
+import { toUserMessage } from "@/lib/errorMessages";
 
 function formatDate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -66,7 +67,7 @@ export default function Dashboard() {
     if (jobId) {
       try {
         const status = await guideApi.getJobStatus(jobId);
-        if (status.status === "COMPLETED") {
+        if (status.status === "SUCCEEDED") {
           const result = await guideApi.getJobResult(jobId);
           setGuide(result);
         }
@@ -83,7 +84,7 @@ export default function Dashboard() {
       const updated = await scheduleApi.updateStatus(itemId, status);
       setItems((prev) => prev.map((it) => (it.item_id === itemId ? updated : it)));
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "업데이트에 실패했습니다.");
+      toast.error(toUserMessage(err));
     }
   }
 
@@ -240,7 +241,7 @@ function ScheduleRow({
             onClick={() => onUpdate(item.item_id, "SKIPPED")}
             className="px-3 py-1 text-xs font-medium bg-gray-50 text-gray-400 rounded-lg hover:bg-gray-100 transition-colors"
           >
-            예정
+            건너뜀
           </button>
         </div>
       ) : (

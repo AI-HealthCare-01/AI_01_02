@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Edit2, Moon, Dumbbell, Coffee, Cigarette, Wine, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { scheduleApi, profileApi, HealthProfile, ScheduleItem, HealthProfileUpsertRequest } from "@/lib/api";
+import { toUserMessage } from "@/lib/errorMessages";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -342,7 +343,7 @@ function EditModal({
       onSaved();
       onClose();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "저장에 실패했습니다.");
+      toast.error(toUserMessage(err));
     } finally {
       setLoading(false);
     }

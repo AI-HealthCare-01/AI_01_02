@@ -55,6 +55,8 @@ class OcrMedicationItem(BaseModel):
     dose: float | None = None
     frequency_per_day: int | None = None
     dosage_per_once: int | None = None
+    intake_time: str | None = None  # morning/lunch/dinner/bedtime/PRN
+    administration_timing: str | None = None  # 식전/식후
     dispensed_date: str | None = None
     total_days: int | None = None
     confidence: float | None = None

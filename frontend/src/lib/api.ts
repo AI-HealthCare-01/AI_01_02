@@ -27,7 +27,7 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const doFetch = (token: string | null) =>
     fetch(`${BASE}${path}`, {
       ...init,
@@ -63,12 +63,29 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 async function requestForm<T>(path: string, body: FormData): Promise<T> {
-  const token = getToken();
-  const res = await fetch(`${BASE}${path}`, {
-    method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body,
-  });
+  const doFetch = (token: string | null) =>
+    fetch(`${BASE}${path}`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body,
+    });
+
+  let res = await doFetch(getToken());
+
+  if (res.status === 401) {
+    if (!_refreshPromise) {
+      _refreshPromise = refreshAccessToken().finally(() => { _refreshPromise = null; });
+    }
+    const newToken = await _refreshPromise;
+    if (newToken) {
+      res = await doFetch(newToken);
+    } else {
+      clearToken();
+      window.location.href = "/login";
+      throw new Error("인증이 만료되었습니다. 다시 로그인해주세요.");
+    }
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err?.code ?? err?.detail?.message ?? err?.message ?? `HTTP ${res.status}`);
@@ -85,7 +102,7 @@ export const authApi = {
     gender: "MALE" | "FEMALE";
     birth_date: string;
     phone_number: string;
-  }) => request<void>("/auth/signup", { method: "POST", body: JSON.stringify(body) }),
+  }) => request<{ detail: string }>("/auth/signup", { method: "POST", body: JSON.stringify(body) }),
 
   login: (email: string, password: string) =>
     request<{ access_token: string }>("/auth/login", {
@@ -272,7 +289,7 @@ export interface GuideSourceReference {
   url?: string;
 }
 
-export type GuideStatus = "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
+export type GuideStatus = "QUEUED" | "PROCESSING" | "SUCCEEDED" | "FAILED";
 
 export interface GuideJobResult {
   job_id: string;

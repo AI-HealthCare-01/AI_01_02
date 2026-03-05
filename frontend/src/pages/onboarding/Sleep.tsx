@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import OnboardingShell from "./OnboardingShell";
 import { profileApi, HealthProfileUpsertRequest } from "@/lib/api";
+import { toUserMessage } from "@/lib/errorMessages";
 
 export default function Sleep() {
   const navigate = useNavigate();
@@ -37,7 +38,7 @@ export default function Sleep() {
       sessionStorage.removeItem("onboarding_lifestyle");
       navigate("/onboarding/scan");
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "저장에 실패했습니다.");
+      toast.error(toUserMessage(err));
     } finally {
       setLoading(false);
     }

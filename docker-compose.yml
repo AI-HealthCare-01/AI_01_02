@@ -57,7 +57,7 @@ services:
     volumes:
       - ./app:/app/app
       - static_volume:/app/templates
-      - media_volume:/app/media
+      - media_volume:/app/app/media
     restart: always
     ports:
       - "8000:8000"
@@ -85,7 +85,7 @@ services:
     restart: always
     mem_limit: 4G
     volumes:
-      - media_volume:/app/media
+      - media_volume:/app/app/media
     networks:
       - ws
     depends_on:

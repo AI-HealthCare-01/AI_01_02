@@ -1,3 +1,5 @@
+from datetime import date
+
 from app.models.ocr import OcrJobStatus
 from app.models.profiles import HealthProfile
 from app.models.users import User
@@ -47,7 +49,7 @@ def _analyze_nutrition(nutrition: dict) -> dict:
 
 
 class AnalysisService:
-    async def get_summary(self, *, user: User) -> dict:
+    async def get_summary(self, *, user: User, date_from: date | None = None, date_to: date | None = None) -> dict:
         profile = await HealthProfile.get_or_none(user_id=user.id)
 
         risk_flags = []

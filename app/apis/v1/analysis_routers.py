@@ -28,5 +28,5 @@ async def get_analysis_summary(
     date_from: Annotated[date | None, Query()] = None,
     date_to: Annotated[date | None, Query()] = None,
 ) -> Response:
-    summary = await service.get_summary(user=user)
+    summary = await service.get_summary(user=user, date_from=date_from, date_to=date_to)
     return Response(AnalysisSummaryResponse(**summary).model_dump(), status_code=status.HTTP_200_OK)
