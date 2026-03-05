@@ -36,8 +36,43 @@ async def _session_auto_close_loop() -> None:
             logger.warning("auto_close_sessions_error", extra={"error": str(exc)})
 
 
+async def _run_migrations() -> None:
+    """누락된 마이그레이션 SQL을 직접 실행 (aerich 포맷 호환 문제 우회)."""
+    from tortoise import Tortoise
+    from pathlib import Path
+    import importlib
+
+    migration_dir = Path(__file__).parent / "db" / "migrations" / "models"
+    conn = Tortoise.get_connection("default")
+
+    result = await conn.execute_query("SELECT version FROM aerich ORDER BY id")
+    applied = {row["version"] for row in result[1]}
+
+    for migration_file in sorted(migration_dir.glob("*.py")):
+        name = migration_file.name
+        if name in applied or name == "__init__.py":
+            continue
+        spec = importlib.util.spec_from_file_location(name, migration_file)
+        mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        spec.loader.exec_module(mod)  # type: ignore[union-attr]
+        sql: str = await mod.upgrade(conn)
+        if sql and sql.strip():
+            for statement in sql.strip().split(";"):
+                stmt = statement.strip()
+                if stmt:
+                    try:
+                        await conn.execute_script(stmt)
+                    except Exception:  # noqa: BLE001
+                        pass
+        await conn.execute_query(
+            "INSERT IGNORE INTO aerich (version, app) VALUES (%s, %s)", [name, "models"]
+        )
+        logger.info("migration applied: %s", name)
+
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
+    await _run_migrations()
     task = asyncio.create_task(_session_auto_close_loop())
     try:
         yield
