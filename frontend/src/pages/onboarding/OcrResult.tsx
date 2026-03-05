@@ -189,7 +189,7 @@ export default function OcrResult() {
       for (let i = 0; i < 30; i++) {
         await new Promise((r) => setTimeout(r, 2000));
         const status = await ocrApi.getJobStatus(job_id);
-        if (status.status === "COMPLETED") {
+        if (status.status === "SUCCEEDED") {
           localStorage.setItem("ocr_job_id", job_id);
           const res = await ocrApi.getJobResult(job_id);
           const meds = res.structured_data?.medications ?? [];

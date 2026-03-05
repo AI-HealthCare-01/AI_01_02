@@ -98,13 +98,17 @@ export default function Chat() {
 
   function selectSession(s: StoredSession) {
     setActiveSessionId(s.id);
-    setMessages([
-      {
-        role: "assistant",
-        content: "안녕하세요! 복약, 부작용에 대해서 무엇이든 질문하세요.",
-      },
-    ]);
+    setMessages([{ role: "assistant", content: "안녕하세요! 복약, 부작용에 대해서 무엇이든 질문하세요." }]);
     setMobileView("chat");
+    chatApi.getMessages(s.id, { limit: 50 })
+      .then((r) => {
+        if (r.items.length === 0) return;
+        setMessages(r.items.map((m) => ({
+          role: m.role === "USER" ? "user" : "assistant",
+          content: m.content,
+        })));
+      })
+      .catch(() => {});
   }
 
   async function deleteCurrentSession() {
