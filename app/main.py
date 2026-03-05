@@ -55,22 +55,26 @@ async def _run_migrations() -> None:
         name = migration_file.name
         if name in applied:
             continue
-        source = migration_file.read_text(encoding="utf-8")
-        match = re.search(r'async def upgrade.*?return\s+"""(.*?)"""', source, re.DOTALL)
-        if not match:
-            continue
-        sql = match.group(1).strip()
-        for stmt in sql.split(";"):
-            stmt = stmt.strip()
-            if stmt:
-                try:
-                    await conn.execute_script(stmt)
-                except Exception:  # noqa: BLE001
-                    pass
-        await conn.execute_query(
-            "INSERT IGNORE INTO aerich (version, app, content) VALUES (%s, %s, %s)", [name, "models", "{}"]
-        )
-        logger.info("migration applied: %s", name)
+        try:
+            source = migration_file.read_text(encoding="utf-8")
+            match = re.search(r'async def upgrade.*?return\s+"""(.*?)"""', source, re.DOTALL)
+            if not match:
+                logger.warning("migration SQL not found: %s", name)
+                continue
+            sql = match.group(1).strip()
+            for stmt in sql.split(";"):
+                stmt = stmt.strip()
+                if stmt:
+                    try:
+                        await conn.execute_query(stmt)
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning("migration stmt warning (ignored): %s | %s", name, e)
+            await conn.execute_query(
+                "INSERT IGNORE INTO aerich (version, app, content) VALUES (%s, %s, %s)", [name, "models", "{}"]
+            )
+            logger.info("migration applied: %s", name)
+        except Exception as e:  # noqa: BLE001
+            logger.error("migration failed: %s | %s", name, e)
 
 
 @asynccontextmanager
