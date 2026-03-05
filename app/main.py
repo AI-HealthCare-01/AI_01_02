@@ -1,7 +1,9 @@
 import asyncio
+import re
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 
 import sentry_sdk
 from fastapi import FastAPI, HTTPException, Request, status
@@ -11,6 +13,7 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+from tortoise import Tortoise
 
 from app.apis.v1 import v1_routers
 from app.apis.v2 import v2_routers
@@ -38,10 +41,6 @@ async def _session_auto_close_loop() -> None:
 
 async def _run_migrations() -> None:
     """누락된 마이그레이션 SQL을 직접 실행 (aerich 포맷 호환 문제 우회)."""
-    import re
-    from pathlib import Path
-    from tortoise import Tortoise
-
     migration_dir = Path(__file__).parent / "db" / "migrations" / "models"
     conn = Tortoise.get_connection("default")
 
