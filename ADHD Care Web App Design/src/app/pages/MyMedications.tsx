@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Clock, AlertCircle, ChevronRight, Plus, Pill, Loader2 } from "lucide-react";
+import { Clock, AlertCircle, ChevronRight, Plus, Pill, Loader2, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router";
 import { reminderApi, Reminder, DdayReminder } from "../../lib/api";
 import MedicalSafetyNotice from "../components/MedicalSafetyNotice";
@@ -34,14 +34,26 @@ function buildMedications(reminders: Reminder[], ddays: DdayReminder[]): Medicat
   });
 }
 
+interface AddForm {
+  medication_name: string;
+  dose: string;
+  schedule_times: string;
+}
+
 export default function MyMedications() {
   const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [medications, setMedications] = useState<MedicationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState<AddForm>({ medication_name: "", dose: "", schedule_times: "" });
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true);
     Promise.all([reminderApi.list(), reminderApi.getDday(30)])
       .then(([remRes, ddayRes]) => {
         setMedications(buildMedications(remRes.items, ddayRes.items));
@@ -50,7 +62,45 @@ export default function MyMedications() {
         setError(err instanceof Error ? err.message : "약 정보를 불러오지 못했습니다.");
       })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
+
+  const handleAdd = async () => {
+    if (!addForm.medication_name.trim()) { setAddError("약품명을 입력해주세요."); return; }
+    if (!addForm.schedule_times.trim()) { setAddError("복용 시간을 입력해주세요."); return; }
+    setAddLoading(true);
+    setAddError("");
+    try {
+      const times = addForm.schedule_times.split(",").map((t) => t.trim()).filter(Boolean);
+      await reminderApi.create({
+        medication_name: addForm.medication_name.trim(),
+        dose: addForm.dose.trim() || undefined,
+        schedule_times: times,
+      });
+      setShowAddModal(false);
+      setAddForm({ medication_name: "", dose: "", schedule_times: "" });
+      loadData();
+    } catch (err: unknown) {
+      setAddError(err instanceof Error ? err.message : "추가에 실패했습니다.");
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    try {
+      await reminderApi.delete(id);
+      if (selectedId === id) setSelectedId(null);
+      loadData();
+    } catch {
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const selectedMed = medications.find((m) => m.id === selectedId);
   const isLowStock = (med: MedicationItem) =>
@@ -113,7 +163,7 @@ export default function MyMedications() {
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-[#2D3436]">현재 복용 약물</h2>
             <button
-              onClick={() => navigate("/ocr-scan")}
+              onClick={() => setShowAddModal(true)}
               className="flex items-center gap-1.5 bg-[#6B8E23] text-white px-3 py-2 rounded-xl text-sm font-medium hover:bg-[#556b1c] transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -184,6 +234,19 @@ export default function MyMedications() {
                         D-{med.remainingDays}
                       </span>
                     )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(med.id); }}
+                      disabled={deletingId === med.id}
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
+                        isSelected
+                          ? "bg-white/20 hover:bg-white/30 text-white"
+                          : "bg-[#f5f3eb] hover:bg-red-100 text-[#6c6f72] hover:text-red-500"
+                      }`}
+                    >
+                      {deletingId === med.id
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <Trash2 className="w-3.5 h-3.5" />}
+                    </button>
                     <ChevronRight
                       className={`w-5 h-5 transition-transform ${
                         isSelected ? "text-white rotate-90" : lowStock ? "text-red-400" : "text-[#6c6f72]"
@@ -313,6 +376,64 @@ export default function MyMedications() {
         </div>
       </div>
       <MedicalSafetyNotice />
+
+      {/* 약 추가 모달 */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-[#2D3436]">약 추가</h3>
+              <button onClick={() => { setShowAddModal(false); setAddError(""); }}
+                className="w-8 h-8 rounded-lg bg-[#f5f3eb] flex items-center justify-center text-[#6c6f72] hover:bg-gray-200 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-[#2D3436] mb-1.5">약품명 <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={addForm.medication_name}
+                  onChange={(e) => setAddForm((f) => ({ ...f, medication_name: e.target.value }))}
+                  placeholder="예: 콘서타 18mg"
+                  className="w-full border-2 border-[#8A9A5B] rounded-xl px-4 py-2.5 text-sm text-[#2D3436] focus:outline-none focus:ring-2 focus:ring-[#FFD166]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#2D3436] mb-1.5">용량</label>
+                <input
+                  type="text"
+                  value={addForm.dose}
+                  onChange={(e) => setAddForm((f) => ({ ...f, dose: e.target.value }))}
+                  placeholder="예: 18mg"
+                  className="w-full border-2 border-[#8A9A5B] rounded-xl px-4 py-2.5 text-sm text-[#2D3436] focus:outline-none focus:ring-2 focus:ring-[#FFD166]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#2D3436] mb-1.5">복용 시간 <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={addForm.schedule_times}
+                  onChange={(e) => setAddForm((f) => ({ ...f, schedule_times: e.target.value }))}
+                  placeholder="예: 08:00, 12:00 (쉼표로 구분)"
+                  className="w-full border-2 border-[#8A9A5B] rounded-xl px-4 py-2.5 text-sm text-[#2D3436] focus:outline-none focus:ring-2 focus:ring-[#FFD166]"
+                />
+              </div>
+              {addError && <p className="text-sm text-red-500">{addError}</p>}
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => { setShowAddModal(false); setAddError(""); }}
+                  className="flex-1 py-3 rounded-xl border-2 border-gray-200 text-[#6c6f72] text-sm font-medium hover:bg-gray-50 transition-colors">
+                  취소
+                </button>
+                <button onClick={handleAdd} disabled={addLoading}
+                  className="flex-1 py-3 rounded-xl bg-[#6B8E23] text-white text-sm font-medium hover:bg-[#556b1c] transition-colors disabled:opacity-60">
+                  {addLoading ? "추가 중..." : "추가"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

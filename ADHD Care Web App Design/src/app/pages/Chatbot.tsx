@@ -1,9 +1,16 @@
 import { useState, useRef, useEffect } from "react";
 import {
-  MessageSquare, Send, Plus, Bot, User, AlertTriangle,
-  HelpCircle, BookOpen, Loader2, Trash2,
+  MessageSquare, Send, Plus, Bot, User,
+  BookOpen, Loader2, Trash2,
 } from "lucide-react";
 import { chatApi, ChatSession } from "../../lib/api";
+import { toUserMessage } from "../../lib/errorMessages";
+
+interface PromptOption {
+  id: string;
+  label: string;
+  category: string;
+}
 import MedicalSafetyNotice from "../components/MedicalSafetyNotice";
 
 interface Message {
@@ -23,15 +30,17 @@ export default function Chatbot() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [promptOptions, setPromptOptions] = useState<PromptOption[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // 첫 진입 시 세션 자동 생성
+  // 첫 진입 시 세션 자동 생성 + 프롬프트 옵션 로드
   useEffect(() => {
     handleNewSession();
+    chatApi.getPromptOptions().then((res) => setPromptOptions(res.items)).catch(() => {});
   }, []);
 
   const handleNewSession = async () => {
@@ -45,11 +54,11 @@ export default function Chatbot() {
         content: "안녕하세요! 복약 관리와 ADHD 관련 질문에 답변해 드리는 AI 챗봇입니다. 무엇이든 질문해 주세요.",
         timestamp: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }),
       }]);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setMessages([{
         id: "err",
         role: "assistant",
-        content: `세션 생성 실패: ${err.message}`,
+        content: toUserMessage(err),
         timestamp: "",
       }]);
     }
@@ -64,13 +73,14 @@ export default function Chatbot() {
     } catch {}
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isStreaming || !activeSession) return;
+  const handleSend = async (text?: string) => {
+    const content = (text ?? input).trim();
+    if (!content || isStreaming || !activeSession) return;
 
     const userMsg: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: input.trim(),
+      content,
       timestamp: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }),
     };
     setMessages((prev) => [...prev, userMsg]);
@@ -84,7 +94,7 @@ export default function Chatbot() {
 
     try {
       let collected = "";
-      for await (const token of chatApi.streamMessage(activeSession.id, userMsg.content)) {
+      for await (const token of chatApi.streamMessage(activeSession.id, content)) {
         collected += token;
         setMessages((prev) =>
           prev.map((m) => m.id === streamingId ? { ...m, content: collected } : m)
@@ -97,11 +107,11 @@ export default function Chatbot() {
             : m
         )
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === streamingId
-            ? { ...m, isStreaming: false, content: `오류가 발생했습니다: ${err.message}` }
+            ? { ...m, isStreaming: false, content: toUserMessage(err) }
             : m
         )
       );
@@ -111,7 +121,7 @@ export default function Chatbot() {
   };
 
   return (
-    <div className="flex h-screen bg-[#FFFCF5]">
+    <div className="flex h-full bg-[#FFFCF5]">
       {/* Session List */}
       <div className="hidden lg:flex w-72 flex-col bg-white border-r border-gray-100 shrink-0">
         <div className="p-4 border-b border-gray-100">
@@ -206,6 +216,21 @@ export default function Chatbot() {
               </div>
             </div>
           ))}
+          {/* 객관식 프롬프트 칩 — 웰컴 메시지만 있을 때 표시 */}
+          {messages.length === 1 && promptOptions.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-2">
+              {promptOptions.map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => handleSend(opt.label)}
+                  disabled={isStreaming}
+                  className="bg-white border-2 border-[#6B8E23] text-[#6B8E23] text-sm px-4 py-2 rounded-full hover:bg-[#6B8E23] hover:text-white transition-colors disabled:opacity-50"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
 
@@ -215,7 +240,7 @@ export default function Chatbot() {
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } } }
                 className="w-full bg-transparent text-[#2D3436] text-sm resize-none focus:outline-none placeholder-[#6c6f72]"
                 placeholder="복약, 부작용, 생활습관에 대해 질문하세요... (Enter로 전송)"
                 rows={1}
@@ -223,7 +248,7 @@ export default function Chatbot() {
                 disabled={isStreaming}
               />
             </div>
-            <button onClick={handleSend} disabled={!input.trim() || isStreaming}
+            <button onClick={() => handleSend()} disabled={!input.trim() || isStreaming}
               className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all shrink-0 ${
                 input.trim() && !isStreaming ? "bg-[#6B8E23] hover:bg-[#556b1c] text-white" : "bg-[#f5f3eb] text-[#6c6f72] cursor-not-allowed"
               }`}>
