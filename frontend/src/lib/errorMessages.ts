@@ -10,6 +10,7 @@ const ERROR_MAP: Record<string, ErrorMeta> = {
   AUTH_INVALID_TOKEN:        { message: "인증에 실패했습니다. 다시 로그인해주세요." },
   AUTH_TOKEN_EXPIRED:        { message: "로그인이 만료되었습니다. 다시 로그인해주세요." },
   AUTH_FORBIDDEN:            { message: "접근 권한이 없습니다." },
+  AUTH_ACCOUNT_INACTIVE:     { message: "비활성화된 계정입니다.", action: "고객센터에 문의해주세요." },
   RESOURCE_NOT_FOUND:        { message: "요청한 정보를 찾을 수 없습니다." },
   DUPLICATE_EMAIL:           { message: "이미 사용 중인 이메일입니다.", action: "다른 이메일을 입력해주세요." },
   DUPLICATE_PHONE:           { message: "이미 사용 중인 전화번호입니다.", action: "다른 번호를 입력해주세요." },
