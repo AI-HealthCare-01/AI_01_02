@@ -41,6 +41,7 @@ def _get_bm25() -> tuple[BM25Okapi, list[dict]]:
     return BM25Okapi(tokenized), ADHD_DOCUMENTS
 
 
+@lru_cache(maxsize=1)
 def _get_chroma_collection() -> chromadb.Collection:
     client = chromadb.HttpClient(host=config.CHROMA_HOST, port=config.CHROMA_PORT)
     return client.get_or_create_collection(
@@ -68,7 +69,7 @@ async def hybrid_search(query: str) -> tuple[list[RagResult], bool]:
     dense_weight = 1.0 - bm25_weight
 
     # BM25 검색 (동기, 스레드풀에서 실행)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     bm25, docs = await loop.run_in_executor(None, _get_bm25)
     bm25_scores_raw: list[float] = await loop.run_in_executor(None, bm25.get_scores, query.split())
 
