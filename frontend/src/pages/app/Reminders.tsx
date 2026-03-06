@@ -8,7 +8,7 @@ export default function Reminders() {
   const [tab, setTab] = useState<Tab>("notifications");
 
   return (
-    <div className="p-4 md:p-8 max-w-3xl mx-auto">
+    <div className="min-h-full p-4 md:p-8 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">알람 관리</h1>
 
       {/* Tabs */}

@@ -82,7 +82,7 @@ export default function Medications() {
   const ddayWarnings = Object.values(ddayMap).filter((d) => d.remaining_days <= 7);
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto">
+    <div className="min-h-full p-4 md:p-8 max-w-5xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-800 mb-1">내 약 정보</h1>
       <p className="text-sm font-medium text-gray-400 mb-5">현재 복용 중인 약물과 복약 현황을 확인하세요.</p>
 

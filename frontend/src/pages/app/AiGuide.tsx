@@ -106,7 +106,7 @@ export default function AiGuide() {
     : null;
 
   return (
-    <div className="p-4 md:p-8 max-w-3xl mx-auto stagger-children">
+    <div className="min-h-full p-4 md:p-8 max-w-3xl mx-auto stagger-children">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">AI 가이드</h1>

@@ -164,7 +164,7 @@ export default function Records() {
   ];
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto">
+    <div className="min-h-full p-4 md:p-8 max-w-5xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-800 mb-1">일상 기록</h1>
       <p className="text-sm text-gray-400 mb-6">날짜별 복약 일정과 생활 패턴을 확인하세요.</p>
 

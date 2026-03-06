@@ -171,7 +171,7 @@ export default function Chat() {
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-[calc(100dvh-5rem)] md:h-dvh">
       {/* ── Session list panel ── */}
       <div
         className={`

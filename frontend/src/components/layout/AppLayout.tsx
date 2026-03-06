@@ -134,7 +134,7 @@ export default function AppLayout() {
 
       {/* ── Main content ── */}
       <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
-        <div className="animate-page-enter">
+        <div className="min-h-full animate-page-enter">
           <Outlet />
         </div>
       </main>
