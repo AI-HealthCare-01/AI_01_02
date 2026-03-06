@@ -188,7 +188,7 @@ export const chatApi = {
         try {
           const parsed = JSON.parse(data);
           if (parsed.content) yield parsed.content as string;
-        } catch {}
+        } catch { }
       }
     }
   },
@@ -225,7 +225,7 @@ export interface OcrMedication {
   confidence: number | null;
 }
 
-export type OcrStatus = "QUEUED" | "PROCESSING" | "SUCCEEDED" | "FAILED";
+export type OcrStatus = "QUEUED" | "PROCESSING" | "SUCCEEDED" | "COMPLETED" | "FAILED";
 
 export interface OcrJobStatusResponse {
   job_id: string;
@@ -240,14 +240,16 @@ export interface OcrJobStatusResponse {
   completed_at: string | null;
 }
 
+export interface OcrStructuredData {
+  needs_user_review?: boolean;
+  extracted_medications?: OcrMedication[];
+  [key: string]: unknown; // Keep index signature if other arbitrary data can be present
+}
+
 export interface OcrJobResult {
   job_id: string;
   extracted_text: string;
-  structured_data: {
-    medications?: OcrMedication[];
-    needs_user_review?: boolean;
-    [key: string]: unknown;
-  };
+  structured_data: OcrStructuredData;
   created_at: string;
   updated_at: string;
 }

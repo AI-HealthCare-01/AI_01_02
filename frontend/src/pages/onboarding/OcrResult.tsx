@@ -51,8 +51,7 @@ function MedRow({
 
   const nameLow = isLowConfidence(med.confidence);
   const inputCls = (low: boolean, disabled: boolean) =>
-    `border rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-green-500 ${
-      disabled ? "bg-gray-50 text-gray-500 cursor-default" : low ? "border-amber-400 bg-amber-50" : "border-gray-200 bg-white"
+    `border rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-green-500 ${disabled ? "bg-gray-50 text-gray-500 cursor-default" : low ? "border-amber-400 bg-amber-50" : "border-gray-200 bg-white"
     }`;
 
   return (
@@ -60,9 +59,8 @@ function MedRow({
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-gray-500">약물 {index + 1}</span>
         {med.confidence !== null && med.confidence !== undefined && (
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-            isLowConfidence(med.confidence) ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"
-          }`}>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isLowConfidence(med.confidence) ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"
+            }`}>
             신뢰도 {Math.round(med.confidence * 100)}%
           </span>
         )}
@@ -99,21 +97,15 @@ function MedRow({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">용량 (mg)</label>
-          <input type="number" value={med.dose ?? ""} readOnly={!editable}
-            onChange={(e) => onChange(index, "dose", e.target.value ? Number(e.target.value) : null)}
-            className={inputCls(false, !editable)} placeholder="mg" />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">1회 복용량</label>
+          <label className="block text-xs text-gray-500 mb-1">1회 투약량(정/캡슐)</label>
           <input type="number" value={med.dosage_per_once ?? ""} readOnly={!editable}
             onChange={(e) => onChange(index, "dosage_per_once", e.target.value ? Number(e.target.value) : null)}
-            className={inputCls(false, !editable)} placeholder="정" />
+            className={inputCls(false, !editable)} placeholder="갯수" />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">1일 횟수</label>
+          <label className="block text-xs text-gray-500 mb-1">1일 투여횟수(회)</label>
           <input type="number" value={med.frequency_per_day ?? ""} readOnly={!editable}
             onChange={(e) => onChange(index, "frequency_per_day", e.target.value ? Number(e.target.value) : null)}
             className={inputCls(false, !editable)} placeholder="회" />
@@ -167,7 +159,7 @@ export default function OcrResult() {
       setLoadingResult(true);
       ocrApi.getJobResult(savedJobId)
         .then((res) => {
-          const meds = res.structured_data?.medications ?? [];
+          const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
@@ -188,10 +180,10 @@ export default function OcrResult() {
       for (let i = 0; i < 30; i++) {
         await new Promise((r) => setTimeout(r, 2000));
         const status = await ocrApi.getJobStatus(job_id);
-        if (status.status === "SUCCEEDED") {
+        if (status.status === "SUCCEEDED" || status.status === "COMPLETED") {
           localStorage.setItem("ocr_job_id", job_id);
           const res = await ocrApi.getJobResult(job_id);
-          const meds = res.structured_data?.medications ?? [];
+          const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
@@ -268,13 +260,12 @@ export default function OcrResult() {
             <button
               onClick={phase === "preview" ? handleAnalyze : undefined}
               disabled={phase === "analyzing" || phase === "result" || phase === "confirming"}
-              className={`flex-1 py-2.5 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors ${
-                phase === "result" || phase === "confirming"
-                  ? "bg-green-700 text-white cursor-default"
-                  : phase === "analyzing"
+              className={`flex-1 py-2.5 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors ${phase === "result" || phase === "confirming"
+                ? "bg-green-700 text-white cursor-default"
+                : phase === "analyzing"
                   ? "bg-green-600 text-white opacity-80 cursor-not-allowed"
                   : "bg-green-600 text-white hover:bg-green-700"
-              }`}
+                }`}
             >
               {phase === "analyzing" && <Loader2 className="w-4 h-4 animate-spin" />}
               {analyzeBtnLabel}
@@ -286,13 +277,15 @@ export default function OcrResult() {
         {(phase === "result" || phase === "confirming") && (
           <div className="bg-white border border-gray-200 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-semibold text-gray-700">스캔된 약 정보</p>
-              {hasLowConfidence && (
-                <div className="flex items-center gap-1 text-amber-600">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span className="text-xs">신뢰도 낮은 항목 있음</span>
-                </div>
-              )}
+              <div className="flex items-center gap-3">
+                <p className="text-sm font-semibold text-gray-700">스캔된 약 정보</p>
+                {hasLowConfidence && (
+                  <div className="flex items-center gap-1 text-amber-600">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span className="text-xs">신뢰도 낮은 항목 있음</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {medications.length === 0 ? (
@@ -305,18 +298,19 @@ export default function OcrResult() {
               </div>
             )}
 
-            <div className="flex gap-3 mt-5">
+            <div className="flex flex-col gap-3 mt-5">
               <button
                 onClick={() => setEditable((v) => !v)}
-                disabled={phase === "confirming"}
-                className="flex-1 py-2.5 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40"
+                disabled={phase === "confirming" || medications.length === 0}
+                className={`w-full py-3 text-sm font-medium rounded-lg border transition-colors disabled:opacity-40 ${editable ? "bg-gray-800 text-white border-gray-800 hover:bg-gray-900" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                  }`}
               >
                 {editable ? "수정 완료" : "약 정보 수정하기"}
               </button>
               <button
                 onClick={handleConfirm}
                 disabled={phase === "confirming" || medications.length === 0}
-                className="flex-1 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                className="w-full py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {phase === "confirming" && <Loader2 className="w-4 h-4 animate-spin" />}
                 확인 및 저장
