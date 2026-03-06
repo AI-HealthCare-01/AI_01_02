@@ -15,7 +15,7 @@ from ai_worker.core import config
 from app.models.health_profiles import UserHealthProfile
 from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult, GuideRiskLevel
 from app.models.notifications import Notification, NotificationType
-from app.models.ocr import OcrJobStatus, OcrResult
+from app.models.ocr import OcrJob as OcrJobModel, OcrJobStatus
 
 # REQ-049: 프롬프트 버전 관리
 GUIDE_PROMPT_VERSION = "v1.2"
@@ -654,7 +654,7 @@ async def process_guide_job(
         if job.ocr_job.status != OcrJobStatus.SUCCEEDED:
             raise ValueError(f"OCR job not ready: {job.ocr_job_id}")
 
-        ocr_result = await OcrResult.get_or_none(job_id=job.ocr_job_id)
+        ocr_result = await OcrJobModel.get_or_none(id=job.ocr_job_id)
         if not ocr_result:
             raise ValueError(f"OCR result not found: {job.ocr_job_id}")
 
@@ -662,9 +662,11 @@ async def process_guide_job(
         if not profile:
             raise ValueError(f"User health profile not found: {job.user_id}")
 
-        confirmed_ocr = {}
-        if isinstance(ocr_result.structured_data, dict):
-            confirmed_ocr = cast(dict[str, Any], ocr_result.structured_data.get("confirmed_ocr", {}))
+        # Extract confirmed_ocr from confirmed_result or structured_result
+        _result_data = ocr_result.confirmed_result if isinstance(ocr_result.confirmed_result, dict) else {}
+        if not _result_data:
+            _result_data = ocr_result.structured_result if isinstance(ocr_result.structured_result, dict) else {}
+        confirmed_ocr = cast(dict[str, Any], _result_data.get("confirmed_ocr", _result_data))
 
         medication_guide = _build_medication_guide(confirmed_ocr)
         flags = _build_lifestyle_flags(profile)
