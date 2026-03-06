@@ -37,7 +37,7 @@ async def call_clova_ocr(file_path: Path) -> dict:
         if response.status_code != 200:
             default_logger.error("CLOVA OCR API error: %s", response.text)
             raise RuntimeError(f"CLOVA OCR failed with status {response.status_code}")
-            
+
         return response.json()
 
 
@@ -73,10 +73,10 @@ async def parse_ocr_with_openai(raw_text: str) -> dict:
         temperature=0.0,
         response_format={"type": "json_object"},
     )
-    
+
     content = response.choices[0].message.content
     if not content:
-         return {"extracted_medications": [], "needs_user_review": True}
+        return {"extracted_medications": [], "needs_user_review": True}
 
     try:
         parsed_json = json.loads(content)
@@ -84,23 +84,23 @@ async def parse_ocr_with_openai(raw_text: str) -> dict:
         if isinstance(parsed_json, dict) and "medications" in parsed_json:
             parsed_items = parsed_json["medications"]
         elif isinstance(parsed_json, dict) and "extracted_medications" in parsed_json:
-             parsed_items = parsed_json["extracted_medications"]
+            parsed_items = parsed_json["extracted_medications"]
         elif isinstance(parsed_json, list):
-             parsed_items = parsed_json
+            parsed_items = parsed_json
         else:
-             parsed_items = []
-        
+            parsed_items = []
+
         valid_meds = []
         for item in parsed_items:
-             try:
-                 valid_meds.append(OcrMedicationItem(**item).model_dump(exclude_none=True))
-             except ValidationError as e:
-                 default_logger.warning("Validation error on parsed item: %s. Error: %s", item, e)
-                 continue
-                 
+            try:
+                valid_meds.append(OcrMedicationItem(**item).model_dump(exclude_none=True))
+            except ValidationError as e:
+                default_logger.warning("Validation error on parsed item: %s. Error: %s", item, e)
+                continue
+
         return {
             "extracted_medications": valid_meds,
-            "needs_user_review": len(valid_meds) == 0  # Require review if parsing yields nothing 
+            "needs_user_review": len(valid_meds) == 0,  # Require review if parsing yields nothing
         }
 
     except json.JSONDecodeError:

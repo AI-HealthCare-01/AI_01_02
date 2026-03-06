@@ -37,6 +37,10 @@ function dateLabel(iso: string) {
   return d.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
 }
 
+// ── 상수 ──────────────────────────────────────────────────────────────────────
+
+const WELCOME_MESSAGE = "안녕하세요! 복약, 부작용에 대해서 무엇이든 질문하세요.";
+
 // ── 메시지 타입 ─────────────────────────────────────────────────────────────
 
 interface Message {
@@ -88,7 +92,7 @@ export default function Chat() {
       setMessages([
         {
           role: "assistant",
-          content: "안녕하세요! 복약, 부작용에 대해서 무엇이든 질문하세요.",
+          content: WELCOME_MESSAGE,
         },
       ]);
       setMobileView("chat");
@@ -99,7 +103,7 @@ export default function Chat() {
 
   function selectSession(s: StoredSession) {
     setActiveSessionId(s.id);
-    setMessages([{ role: "assistant", content: "안녕하세요! 복약, 부작용에 대해서 무엇이든 질문하세요." }]);
+    setMessages([{ role: "assistant", content: WELCOME_MESSAGE }]);
     setMobileView("chat");
     chatApi.getMessages(s.id, { limit: 50 })
       .then((r) => {
@@ -148,27 +152,28 @@ export default function Chat() {
     }
 
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: msg }]);
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: msg },
+      { role: "assistant", content: "", streaming: true },
+    ]);
     setStreaming(true);
-
-    const assistantIdx = messages.length + 1;
-    setMessages((prev) => [...prev, { role: "assistant", content: "", streaming: true }]);
 
     try {
       let accumulated = "";
       for await (const chunk of chatApi.streamMessage(activeSessionId, msg)) {
         accumulated += chunk;
         setMessages((prev) =>
-          prev.map((m, i) => (i === assistantIdx ? { ...m, content: accumulated } : m)),
+          prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: accumulated } : m)),
         );
       }
       setMessages((prev) =>
-        prev.map((m, i) => (i === assistantIdx ? { ...m, streaming: false } : m)),
+        prev.map((m, i) => (i === prev.length - 1 ? { ...m, streaming: false } : m)),
       );
     } catch {
       setMessages((prev) =>
         prev.map((m, i) =>
-          i === assistantIdx
+          i === prev.length - 1
             ? { role: "assistant", content: "오류가 발생했습니다. 다시 시도해주세요." }
             : m,
         ),

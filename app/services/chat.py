@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta
 
@@ -145,87 +146,59 @@ class ChatService:
         messages = await ChatMessage.filter(session_id=session_id).order_by("-updated_at").offset(offset).limit(limit)
         return messages, total
 
-    async def send_message(self, *, user: User, session_id: int, message: str) -> ChatMessage:
-        session = await self._get_active_session(user=user, session_id=session_id)
+    async def _prepare_rag_context(
+        self, *, user: User, intent: str, message: str
+    ) -> tuple[HealthProfile | None, list, bool, list[str]]:
+        """프로필 조회 + RAG 검색을 동시 실행."""
+        profile_task = HealthProfile.get_or_none(user_id=user.id)
 
-        # REQ-034: 의도 분류 (키워드 1차 → LLM 2차)
-        if any(kw in message for kw in _GUARDRAIL_KEYWORDS):
-            intent = "emergency"
-        else:
-            intent = await _classify_intent(message)
-
-        # REQ-035: 안전 가드레일 — emergency 차단
-        if intent == "emergency":
-            logger.warning(
-                "guardrail_blocked",
-                extra={"user_id": user.id, "session_id": session.id, "message_preview": message[:50]},
-            )
-            await ChatMessage.create(
-                session_id=session.id,
-                role=ChatRole.USER,
-                status=ChatMessageStatus.COMPLETED,
-                content=message,
-                intent_label=intent,
-                guardrail_blocked=False,
-                prompt_version=CHAT_PROMPT_VERSION,
-                model_version=config.OPENAI_CHAT_MODEL,
-            )
-            assistant_msg = await ChatMessage.create(
-                session_id=session.id,
-                role=ChatRole.ASSISTANT,
-                status=ChatMessageStatus.COMPLETED,
-                content=_EMERGENCY_MESSAGE,
-                intent_label=intent,
-                guardrail_blocked=True,
-                guardrail_reason="위기 신호 감지",
-                prompt_version=CHAT_PROMPT_VERSION,
-                model_version=config.OPENAI_CHAT_MODEL,
-            )
-            await self._update_session_activity(session)
-            return assistant_msg
-
-        # REQ-032: 사용자 프로필 컨텍스트 주입
-        profile = await HealthProfile.get_or_none(user_id=user.id)
-        profile_ctx = _build_profile_context(profile)
-
-        # REQ-036, REQ-040: 의학 질의에만 RAG 하이브리드 검색 수행
         rag_docs: list = []
         needs_clarification = False
         retrieved_doc_ids: list[str] = []
 
         if intent == "medical":
             try:
-                rag_docs, needs_clarification = await hybrid_search(message)
+                profile, (rag_docs, needs_clarification) = await asyncio.gather(profile_task, hybrid_search(message))
                 retrieved_doc_ids = [d.doc_id for d in rag_docs]
+                return profile, rag_docs, needs_clarification, retrieved_doc_ids
             except Exception:
-                rag_docs = []
-                needs_clarification = False
+                logger.warning("RAG hybrid_search failed (user_id=%s)", user.id, exc_info=True)
+
+        profile = await profile_task
+        return profile, rag_docs, needs_clarification, retrieved_doc_ids
+
+    async def send_message(self, *, user: User, session_id: int, message: str) -> ChatMessage:
+        session = await self._get_active_session(user=user, session_id=session_id)
+        intent = "emergency" if any(kw in message for kw in _GUARDRAIL_KEYWORDS) else await _classify_intent(message)
+
+        # REQ-035: 안전 가드레일 — emergency 차단
+        early = await self._check_early_exit(session=session, message=message, intent=intent)
+        if early is not None:
+            async for _ in early:
+                pass
+            last_msg = (
+                await ChatMessage.filter(session_id=session.id, role=ChatRole.ASSISTANT).order_by("-created_at").first()
+            )
+            return last_msg  # type: ignore[return-value]
+
+        profile, rag_docs, needs_clarification, retrieved_doc_ids = await self._prepare_rag_context(
+            user=user, intent=intent, message=message
+        )
 
         # REQ-042: 저유사도 재질문 유도
-        if needs_clarification:
-            await ChatMessage.create(
-                session_id=session.id,
-                role=ChatRole.USER,
-                status=ChatMessageStatus.COMPLETED,
-                content=message,
-                intent_label=intent,
-                prompt_version=CHAT_PROMPT_VERSION,
-                model_version=config.OPENAI_CHAT_MODEL,
+        clarification_gen = await self._check_clarification(
+            session=session, message=message, intent=intent, needs_clarification=needs_clarification
+        )
+        if clarification_gen is not None:
+            async for _ in clarification_gen:
+                pass
+            last_msg = (
+                await ChatMessage.filter(session_id=session.id, role=ChatRole.ASSISTANT).order_by("-created_at").first()
             )
-            clarification_msg = await ChatMessage.create(
-                session_id=session.id,
-                role=ChatRole.ASSISTANT,
-                status=ChatMessageStatus.COMPLETED,
-                content="질문을 조금 더 구체적으로 해주세요. 예: 복용 중인 약물명, 증상, 궁금한 점을 함께 알려주시면 더 정확한 답변을 드릴 수 있습니다.",
-                intent_label=intent,
-                needs_clarification=True,
-                prompt_version=CHAT_PROMPT_VERSION,
-                model_version=config.OPENAI_CHAT_MODEL,
-            )
-            await self._update_session_activity(session)
-            return clarification_msg
+            return last_msg  # type: ignore[return-value]
 
         # REQ-036: RAG 컨텍스트 + 프로필 컨텍스트로 시스템 프롬프트 구성
+        profile_ctx = _build_profile_context(profile)
         rag_ctx = _build_rag_context(rag_docs)
         system_content = _SYSTEM_PROMPT_BASE + profile_ctx + rag_ctx
 
@@ -249,8 +222,6 @@ class ChatService:
         history = [{"role": m.role.lower(), "content": m.content} for m in reversed(recent)]
         messages_payload = [{"role": "system", "content": system_content}] + history
 
-        # REQ-039: 감사 로그용 필드 준비 (retrieved_doc_ids, prompt_version, model_version)
-        # REQ-041: references_json에 출처 저장
         references_json = [d.to_reference_dict() for d in rag_docs]
 
         assistant_msg = await ChatMessage.create(
@@ -273,7 +244,7 @@ class ChatService:
             assistant_msg.status = ChatMessageStatus.FAILED
             await assistant_msg.save(update_fields=["content", "status", "updated_at"])
             logger.exception("chat_completion failed (session_id=%s)", session.id)
-            raise AppException(ErrorCode.INTERNAL_ERROR)
+            raise AppException(ErrorCode.INTERNAL_ERROR) from None
 
         await assistant_msg.save(update_fields=["content", "status", "updated_at"])
         await self._update_session_activity(session)
@@ -363,17 +334,9 @@ class ChatService:
         if early is not None:
             return early
 
-        profile = await HealthProfile.get_or_none(user_id=user.id)
-        profile_ctx = _build_profile_context(profile)
-        rag_docs: list = []
-        needs_clarification = False
-        retrieved_doc_ids: list[str] = []
-        if intent == "medical":
-            try:
-                rag_docs, needs_clarification = await hybrid_search(message)
-                retrieved_doc_ids = [d.doc_id for d in rag_docs]
-            except Exception:
-                pass
+        profile, rag_docs, needs_clarification, retrieved_doc_ids = await self._prepare_rag_context(
+            user=user, intent=intent, message=message
+        )
 
         clarification_gen = await self._check_clarification(
             session=session, message=message, intent=intent, needs_clarification=needs_clarification
@@ -381,6 +344,7 @@ class ChatService:
         if clarification_gen is not None:
             return clarification_gen
 
+        profile_ctx = _build_profile_context(profile)
         rag_ctx = _build_rag_context(rag_docs)
         system_content = _SYSTEM_PROMPT_BASE + profile_ctx + rag_ctx
         recent = await (

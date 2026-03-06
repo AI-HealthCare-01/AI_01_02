@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bell, ChevronDown, ChevronUp, RefreshCw, AlertTriangle } from "lucide-react";
 import { guideApi, GuideJobResult, GuideStatus } from "@/lib/api";
 
@@ -37,6 +37,7 @@ export default function AiGuide() {
   const [status, setStatus] = useState<GuideStatus | "IDLE">("IDLE");
   const [result, setResult] = useState<GuideJobResult | null>(null);
   const [error, setError] = useState("");
+  const cancelledRef = useRef(false);
 
   async function loadGuide() {
     const jobId = localStorage.getItem("guide_job_id");
@@ -67,10 +68,12 @@ export default function AiGuide() {
   async function pollStatus(jobId: string) {
     for (let i = 0; i < 30; i++) {
       await new Promise((r) => setTimeout(r, 2000));
+      if (cancelledRef.current) return;
       try {
         const s = await guideApi.getJobStatus(jobId);
         if (s.status === "SUCCEEDED") {
           const r = await guideApi.getJobResult(jobId);
+          if (cancelledRef.current) return;
           setResult(r);
           setStatus("SUCCEEDED");
           return;
@@ -84,12 +87,16 @@ export default function AiGuide() {
         break;
       }
     }
-    setStatus("FAILED");
-    setError("가이드 생성 시간이 초과되었습니다.");
+    if (!cancelledRef.current) {
+      setStatus("FAILED");
+      setError("가이드 생성 시간이 초과되었습니다.");
+    }
   }
 
   useEffect(() => {
+    cancelledRef.current = false;
     loadGuide();
+    return () => { cancelledRef.current = true; };
   }, []); // eslint-disable-line
 
   const updatedAt = result?.updated_at
