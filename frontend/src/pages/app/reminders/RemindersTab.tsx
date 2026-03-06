@@ -55,7 +55,7 @@ export default function RemindersTab() {
       <div className="flex justify-end mb-4">
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 gradient-primary text-white text-sm rounded-xl font-bold hover:shadow-lg transition-all duration-200"
         >
           <Plus className="w-4 h-4" />
           알람 추가
@@ -96,8 +96,8 @@ export default function RemindersTab() {
           {reminders.map((r) => (
             <div
               key={r.id}
-              className={`flex items-center gap-4 bg-white border rounded-xl px-4 py-4 ${
-                r.enabled ? "border-gray-100" : "border-gray-100 opacity-50"
+              className={`flex items-center gap-4 bg-white/80 rounded-xl px-4 py-4 shadow-sm ${
+                r.enabled ? "" : "opacity-50"
               }`}
             >
               <div className="flex-1 min-w-0">
@@ -118,7 +118,7 @@ export default function RemindersTab() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => toggleEnabled(r)}
-                  className={`p-1.5 rounded-lg transition-colors ${
+                  className={`p-1.5 rounded-lg transition-all duration-200 ${
                     r.enabled ? "text-green-600 hover:bg-green-50" : "text-gray-400 hover:bg-gray-50"
                   }`}
                 >
@@ -126,7 +126,7 @@ export default function RemindersTab() {
                 </button>
                 <button
                   onClick={() => handleDelete(r.id)}
-                  className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all duration-200"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -174,11 +174,11 @@ function ReminderForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =
     }
   }
 
-  const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent";
+  const inputCls = "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent";
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+    <div className="fixed inset-0 bg-black/25 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-page-enter">
         <h3 className="text-base font-bold text-gray-800 mb-5">알람 추가</h3>
         <div className="space-y-4">
           <div>
@@ -215,8 +215,8 @@ function ReminderForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =
           </div>
         </div>
         <div className="flex gap-3 mt-6">
-          <button onClick={onClose} className="flex-1 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">취소</button>
-          <button onClick={handleSave} disabled={loading} className="flex-1 py-2.5 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60">
+          <button onClick={onClose} className="flex-1 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all duration-200">취소</button>
+          <button onClick={handleSave} disabled={loading} className="flex-1 py-2.5 text-sm font-bold gradient-primary text-white rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-60">
             {loading ? "저장 중..." : "저장"}
           </button>
         </div>

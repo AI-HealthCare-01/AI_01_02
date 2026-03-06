@@ -44,8 +44,10 @@ export default function OcrScan() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-10">
-      <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen gradient-warm-bg relative overflow-hidden p-6 md:p-10">
+      <div className="absolute top-[-6%] right-[-4%] w-64 h-64 bg-green-200/25 rounded-full blur-3xl" />
+      <div className="absolute bottom-[-8%] left-[-6%] w-72 h-72 bg-amber-100/20 rounded-full blur-3xl" />
+      <div className="max-w-2xl mx-auto relative z-10 animate-page-enter">
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-xl font-bold text-green-700">처방전 스캔</h1>
@@ -55,7 +57,7 @@ export default function OcrScan() {
         </div>
 
         {/* 촬영 가이드 */}
-        <div className="border border-gray-200 rounded-xl p-5 bg-white mb-4">
+        <div className="card-warm p-5 mb-4">
           <p className="text-sm font-semibold text-gray-700 mb-4">촬영 가이드</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* 좋은 예시 */}
@@ -93,7 +95,7 @@ export default function OcrScan() {
 
         {/* 업로드 영역 */}
         <div
-          className={`border-2 border-dashed rounded-xl bg-white transition-colors ${
+          className={`border-2 border-dashed rounded-xl bg-white transition-all duration-200 ${
             dragging ? "border-green-400 bg-green-50" : "border-gray-200"
           }`}
           onDrop={onDrop}
@@ -113,7 +115,7 @@ export default function OcrScan() {
             <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
               <button
                 onClick={() => inputRef.current?.click()}
-                className="px-8 py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors mb-3"
+                className="px-8 py-3 gradient-primary text-white text-sm rounded-xl font-bold hover:shadow-lg transition-all duration-200 mb-3"
               >
                 파일 업로드
               </button>
@@ -139,13 +141,13 @@ export default function OcrScan() {
           <div className="flex gap-3 mt-4">
             <button
               onClick={() => { setFile(null); setPreview(null); }}
-              className="flex-1 py-3 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex-1 py-3 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-all duration-200"
             >
               다시 선택
             </button>
             <button
               onClick={handleNext}
-              className="flex-1 py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+              className="flex-1 py-3 gradient-primary text-white text-sm rounded-xl font-bold hover:shadow-lg transition-all duration-200"
             >
               다음
             </button>
@@ -154,7 +156,7 @@ export default function OcrScan() {
 
         <button
           onClick={() => navigate("/")}
-          className="w-full mt-3 py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+          className="w-full mt-3 py-2 text-sm text-gray-400 hover:text-gray-600 transition-all duration-200"
         >
           나중에 하기
         </button>

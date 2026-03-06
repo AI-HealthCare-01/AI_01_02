@@ -42,32 +42,41 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Sidebar — md+ only */}
-      <aside className="hidden md:flex w-56 bg-white border-r border-gray-100 flex-col shrink-0">
+      {/* ── Sidebar (md+) ── */}
+      <aside className="hidden md:flex w-[232px] gradient-sidebar border-r border-gray-200/40 flex-col shrink-0 relative overflow-hidden">
+        {/* Decorative organic blobs */}
+        <div className="absolute -bottom-16 -left-16 w-44 h-44 bg-green-200/25 rounded-full blur-3xl" />
+        <div className="absolute -top-10 -right-10 w-32 h-32 bg-amber-100/20 rounded-full blur-3xl" />
+
         {/* Logo */}
-        <div className="h-16 flex items-center px-6 border-b border-gray-100">
-          <span className="text-xl font-bold text-green-600 tracking-tight">logly</span>
+        <div className="h-16 flex items-center px-6 relative z-10">
+          <span className="font-display text-xl font-bold text-green-600 tracking-tight">
+            logly
+          </span>
+          <span className="ml-1 text-[10px] font-semibold text-green-400/70 tracking-wide uppercase mt-1">
+            care
+          </span>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
+        <nav className="flex-1 px-3 py-3 space-y-0.5 relative z-10">
           {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
                   isActive
-                    ? "bg-green-50 text-green-700"
-                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                    ? "gradient-primary text-white shadow-md"
+                    : "text-gray-500 hover:bg-white/50 hover:text-gray-700"
                 }`
               }
             >
-              <Icon className="w-4 h-4 shrink-0" />
+              <Icon className="w-[18px] h-[18px] shrink-0" />
               <span className="flex-1">{label}</span>
               {to === "/reminders" && unreadCount > 0 && (
-                <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">
+                <span className="bg-red-400 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
@@ -76,17 +85,17 @@ export default function AppLayout() {
         </nav>
 
         {/* Logout / Withdraw */}
-        <div className="px-3 pb-4 space-y-0.5">
+        <div className="px-3 pb-4 space-y-0.5 relative z-10">
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+            className="flex items-center gap-3 w-full px-3.5 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:bg-red-50 hover:text-red-500 transition-all duration-200"
           >
             <LogOut className="w-4 h-4 shrink-0" />
             로그아웃
           </button>
           <button
             onClick={() => setShowWithdraw(true)}
-            className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-xs font-medium text-gray-300 hover:bg-red-50 hover:text-red-400 transition-colors"
+            className="flex items-center gap-3 w-full px-3.5 py-2 rounded-xl text-xs font-medium text-gray-300 hover:bg-red-50 hover:text-red-400 transition-all duration-200"
           >
             <UserX className="w-3.5 h-3.5 shrink-0" />
             회원 탈퇴
@@ -94,11 +103,13 @@ export default function AppLayout() {
         </div>
       </aside>
 
-      {/* Withdraw confirm modal */}
+      {/* ── Withdraw modal ── */}
       {showWithdraw && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-6 text-center">
-            <UserX className="w-10 h-10 text-red-400 mx-auto mb-3" />
+        <div className="fixed inset-0 bg-black/25 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-6 text-center animate-page-enter">
+            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
+              <UserX className="w-5 h-5 text-red-400" />
+            </div>
             <h3 className="text-base font-bold text-gray-800 mb-1">회원 탈퇴</h3>
             <p className="text-sm text-gray-400 mb-6">
               탈퇴 시 모든 데이터가 비활성화됩니다.<br />정말 탈퇴하시겠습니까?
@@ -106,13 +117,13 @@ export default function AppLayout() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowWithdraw(false)}
-                className="flex-1 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50"
+                className="flex-1 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
               >
                 취소
               </button>
               <button
                 onClick={handleWithdraw}
-                className="flex-1 py-2.5 text-sm font-medium bg-red-500 text-white rounded-lg hover:bg-red-600"
+                className="flex-1 py-2.5 text-sm font-medium bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors"
               >
                 탈퇴하기
               </button>
@@ -121,33 +132,42 @@ export default function AppLayout() {
         </div>
       )}
 
-      {/* Main */}
-      <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
-        <Outlet />
+      {/* ── Main content ── */}
+      <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+        <div className="animate-page-enter">
+          <Outlet />
+        </div>
       </main>
 
-      {/* Bottom tab bar — mobile only */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 flex z-40">
+      {/* ── Bottom tab bar (mobile) ── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 glass border-t border-gray-200/40 flex z-40">
         {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
             className={({ isActive }) =>
-              `relative flex flex-col items-center justify-center flex-1 py-2 gap-0.5 transition-colors ${
+              `relative flex flex-col items-center justify-center flex-1 py-2.5 gap-0.5 transition-all duration-200 ${
                 isActive ? "text-green-600" : "text-gray-400"
               }`
             }
           >
-            <div className="relative">
-              <Icon className="w-5 h-5" />
-              {to === "/reminders" && unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1.5 bg-red-500 text-white text-[9px] font-bold px-1 py-px rounded-full min-w-[14px] text-center leading-none">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </div>
-            <span className="text-[10px] font-medium leading-none">{label}</span>
+            {({ isActive }) => (
+              <>
+                <div className="relative">
+                  <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive ? "scale-110" : ""}`} />
+                  {to === "/reminders" && unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1.5 bg-red-400 text-white text-[9px] font-bold px-1 py-px rounded-full min-w-[14px] text-center leading-none">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] font-semibold leading-none">{label}</span>
+                {isActive && (
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-green-500 rounded-full" />
+                )}
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
