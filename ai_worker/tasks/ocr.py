@@ -117,7 +117,6 @@ class OcrQueueConsumer:
             password=config.REDIS_PASSWORD,
             decode_responses=True,
             socket_connect_timeout=config.REDIS_SOCKET_TIMEOUT_SECONDS,
-            socket_timeout=config.REDIS_SOCKET_TIMEOUT_SECONDS,
         )
 
     async def close(self) -> None:
