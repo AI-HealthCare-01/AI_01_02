@@ -158,9 +158,7 @@ class ChatService:
 
         if intent == "medical":
             try:
-                profile, (rag_docs, needs_clarification) = await asyncio.gather(
-                    profile_task, hybrid_search(message)
-                )
+                profile, (rag_docs, needs_clarification) = await asyncio.gather(profile_task, hybrid_search(message))
                 retrieved_doc_ids = [d.doc_id for d in rag_docs]
                 return profile, rag_docs, needs_clarification, retrieved_doc_ids
             except Exception:
@@ -178,7 +176,9 @@ class ChatService:
         if early is not None:
             async for _ in early:
                 pass
-            last_msg = await ChatMessage.filter(session_id=session.id, role=ChatRole.ASSISTANT).order_by("-created_at").first()
+            last_msg = (
+                await ChatMessage.filter(session_id=session.id, role=ChatRole.ASSISTANT).order_by("-created_at").first()
+            )
             return last_msg  # type: ignore[return-value]
 
         profile, rag_docs, needs_clarification, retrieved_doc_ids = await self._prepare_rag_context(
@@ -192,7 +192,9 @@ class ChatService:
         if clarification_gen is not None:
             async for _ in clarification_gen:
                 pass
-            last_msg = await ChatMessage.filter(session_id=session.id, role=ChatRole.ASSISTANT).order_by("-created_at").first()
+            last_msg = (
+                await ChatMessage.filter(session_id=session.id, role=ChatRole.ASSISTANT).order_by("-created_at").first()
+            )
             return last_msg  # type: ignore[return-value]
 
         # REQ-036: RAG 컨텍스트 + 프로필 컨텍스트로 시스템 프롬프트 구성
@@ -242,7 +244,7 @@ class ChatService:
             assistant_msg.status = ChatMessageStatus.FAILED
             await assistant_msg.save(update_fields=["content", "status", "updated_at"])
             logger.exception("chat_completion failed (session_id=%s)", session.id)
-            raise AppException(ErrorCode.INTERNAL_ERROR)
+            raise AppException(ErrorCode.INTERNAL_ERROR) from None
 
         await assistant_msg.save(update_fields=["content", "status", "updated_at"])
         await self._update_session_activity(session)

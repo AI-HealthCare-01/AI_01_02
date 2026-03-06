@@ -273,7 +273,13 @@ async def process_guide_job(
         if not ocr_job.raw_text:
             raise ValueError(f"OCR result not found: {job.ocr_job_id}")
 
-        medication_guidance, lifestyle_guidance, risk_level, source_references, adherence_rate_percent = await _call_guide_llm(ocr_job.raw_text)
+        (
+            medication_guidance,
+            lifestyle_guidance,
+            risk_level,
+            source_references,
+            adherence_rate_percent,
+        ) = await _call_guide_llm(ocr_job.raw_text)
         completed_at = datetime.now(config.TIMEZONE)
 
         async with in_transaction():
