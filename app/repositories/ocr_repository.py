@@ -1,3 +1,5 @@
+from typing import Any
+
 from app.models.ocr import Document, DocumentType, OcrJob
 
 
@@ -35,8 +37,8 @@ class OcrRepository:
         *,
         job_id: int,
         user_id: int,
-        confirmed_result: dict,
-        needs_user_review: bool
+        confirmed_result: dict[str, Any],
+        needs_user_review: bool,
     ) -> OcrJob | None:
         job = await self.get_user_job(job_id=job_id, user_id=user_id)
         if not job:

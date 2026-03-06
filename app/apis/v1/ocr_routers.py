@@ -9,6 +9,7 @@ from app.dtos.ocr import (
     MedicationSearchItem,
     MedicationSearchResponse,
     OcrConfirmResponse,
+    OcrResultConfirmRequest,
     OcrJobCreateRequest,
     OcrJobCreateResponse,
     OcrJobResultResponse,
@@ -115,26 +116,50 @@ async def confirm_ocr_result(
     user: Annotated[User, Depends(get_request_user)],
     ocr_service: Annotated[OcrService, Depends(OcrService)],
 ) -> Response:
-    result = await ocr_service.confirm_ocr_result(
+    result = await ocr_service.confirm_ocr_review(
         user=user,
         job_id=int(job_id),
         confirmed=request.confirmed,
         corrected_medications=[m.model_dump(exclude_none=True) for m in request.corrected_medications],
         comment=request.comment,
     )
-    structured = result.confirmed_result or result.structured_result or {}
+    structured = result.confirmed_result if isinstance(result.confirmed_result, dict) else {}
+    if not structured:
+        structured = result.structured_result if isinstance(result.structured_result, dict) else {}
+    needs_review = bool(structured.get("needs_user_review", False))
     return Response(
         OcrConfirmResponse(
             job_id=str(result.id),
             extracted_text=result.raw_text or "",
             structured_data=structured,
-            needs_user_review=result.needs_user_review,
+            needs_user_review=needs_review,
             created_at=result.created_at,
             updated_at=result.updated_at,
         ).model_dump(),
         status_code=status.HTTP_200_OK,
     )
 
+@ocr_router.put("/jobs/{job_id}/result/confirm", response_model=OcrJobResultResponse, status_code=status.HTTP_200_OK)
+async def confirm_ocr_job_result(
+    job_id: Annotated[str, Path(pattern=r"^\d+$")],
+    request: OcrResultConfirmRequest,
+    user: Annotated[User, Depends(get_request_user)],
+    ocr_service: Annotated[OcrService, Depends(OcrService)],
+) -> Response:
+    result = await ocr_service.confirm_ocr_result(user=user, job_id=int(job_id), request=request)
+    structured = result.confirmed_result if isinstance(result.confirmed_result, dict) else {}
+    if not structured:
+        structured = result.structured_result if isinstance(result.structured_result, dict) else {}
+    return Response(
+        OcrJobResultResponse(
+            job_id=str(result.id),
+            extracted_text=result.raw_text or "",
+            structured_data=structured,
+            created_at=result.created_at,
+            updated_at=result.updated_at,
+        ).model_dump(),
+        status_code=status.HTTP_200_OK,
+    )
 
 @medication_router.get("/search", response_model=MedicationSearchResponse, status_code=status.HTTP_200_OK)
 async def search_medications(

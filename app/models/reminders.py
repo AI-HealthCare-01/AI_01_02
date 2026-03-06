@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 class ScheduleItemCategory(StrEnum):
     MEDICATION = "MEDICATION"
     MEAL = "MEAL"
+    EXERCISE = "EXERCISE"
     SLEEP = "SLEEP"
 
 

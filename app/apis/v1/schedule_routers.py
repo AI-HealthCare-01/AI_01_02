@@ -31,10 +31,14 @@ async def get_daily_schedule(
     timezone: Annotated[str | None, Query()] = None,
 ) -> Response:
     items = await service.get_daily_schedule(user=user, target_date=target_date, timezone=timezone)
+    done_count, total_count, adherence_rate = service.calculate_medication_adherence(items)
     return Response(
         DailyScheduleResponse(
             date=target_date,
             items=[_serialize_item(i) for i in items],
+            medication_done_count=done_count,
+            medication_total_count=total_count,
+            medication_adherence_rate_percent=adherence_rate,
         ).model_dump(),
         status_code=status.HTTP_200_OK,
     )

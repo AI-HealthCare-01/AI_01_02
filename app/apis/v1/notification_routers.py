@@ -7,11 +7,14 @@ from app.dependencies.security import get_request_user
 from app.dtos.notifications import (
     NotificationInfoResponse,
     NotificationListResponse,
+    NotificationSettingResponse,
+    NotificationSettingUpdateRequest,
     ReadAllNotificationsResponse,
     UnreadCountResponse,
 )
 from app.models.notifications import Notification
 from app.models.users import User
+from app.services.notification_settings import NotificationSettingService
 from app.services.notifications import NotificationService
 
 notification_router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -83,3 +86,33 @@ async def mark_all_notifications_as_read(
     return Response(
         ReadAllNotificationsResponse(updated_count=updated_count).model_dump(), status_code=status.HTTP_200_OK
     )
+
+
+def _serialize_setting(setting) -> NotificationSettingResponse:  # type: ignore[no-untyped-def]
+    return NotificationSettingResponse(
+        home_schedule_enabled=setting.home_schedule_enabled,
+        meal_alarm_enabled=setting.meal_alarm_enabled,
+        medication_alarm_enabled=setting.medication_alarm_enabled,
+        exercise_alarm_enabled=setting.exercise_alarm_enabled,
+        sleep_alarm_enabled=setting.sleep_alarm_enabled,
+        medication_dday_alarm_enabled=setting.medication_dday_alarm_enabled,
+    )
+
+
+@notification_router.get("/settings", response_model=NotificationSettingResponse, status_code=status.HTTP_200_OK)
+async def get_notification_settings(
+    user: Annotated[User, Depends(get_request_user)],
+    setting_service: Annotated[NotificationSettingService, Depends(NotificationSettingService)],
+) -> Response:
+    setting = await setting_service.get_or_create(user=user)
+    return Response(_serialize_setting(setting).model_dump(), status_code=status.HTTP_200_OK)
+
+
+@notification_router.patch("/settings", response_model=NotificationSettingResponse, status_code=status.HTTP_200_OK)
+async def update_notification_settings(
+    request: NotificationSettingUpdateRequest,
+    user: Annotated[User, Depends(get_request_user)],
+    setting_service: Annotated[NotificationSettingService, Depends(NotificationSettingService)],
+) -> Response:
+    setting = await setting_service.update(user=user, data=request)
+    return Response(_serialize_setting(setting).model_dump(), status_code=status.HTTP_200_OK)
