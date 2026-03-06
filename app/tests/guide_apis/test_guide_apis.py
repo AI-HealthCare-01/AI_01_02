@@ -8,7 +8,7 @@ from tortoise.contrib.test import TestCase
 from app.core import config
 from app.main import app
 from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult, GuideRiskLevel
-from app.models.ocr import OcrJob, OcrJobStatus, OcrResult
+from app.models.ocr import OcrJob, OcrJobStatus
 
 
 class TestGuideApis(TestCase):
@@ -72,12 +72,9 @@ class TestGuideApis(TestCase):
     async def _mark_ocr_succeeded(self, *, ocr_job_id: str) -> None:
         ocr_job = await OcrJob.get(id=int(ocr_job_id))
         ocr_job.status = OcrJobStatus.SUCCEEDED
-        await ocr_job.save(update_fields=["status"])
-        await OcrResult.create(
-            job=ocr_job,
-            extracted_text="처방전 OCR 텍스트",
-            structured_data={"summary": "ok"},
-        )
+        ocr_job.raw_text = "처방전 OCR 텍스트"
+        ocr_job.structured_result = {"summary": "ok"}
+        await ocr_job.save(update_fields=["status", "raw_text", "structured_result"])
 
     async def test_create_guide_job_and_get_status_success(self):
         email = "guide_job_success@example.com"
@@ -113,7 +110,7 @@ class TestGuideApis(TestCase):
             response = await client.post("/api/v1/guides/jobs", headers=headers, json={"ocr_job_id": ocr_job_id})
 
         assert response.status_code == status.HTTP_409_CONFLICT
-        assert response.json()["detail"] == "OCR 작업이 아직 완료되지 않았습니다."
+        assert response.json()["code"] == "STATE_CONFLICT"
 
     async def test_create_guide_job_for_other_user_ocr_fails(self):
         owner_email = "guide_owner@example.com"
@@ -133,7 +130,7 @@ class TestGuideApis(TestCase):
             )
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json()["detail"] == "OCR 작업을 찾을 수 없습니다."
+        assert response.json()["code"] == "RESOURCE_NOT_FOUND"
 
     async def test_create_guide_job_queue_publish_failure_marks_job_failed(self):
         email = "guide_queue_failure@example.com"
@@ -151,7 +148,7 @@ class TestGuideApis(TestCase):
                 response = await client.post("/api/v1/guides/jobs", headers=headers, json={"ocr_job_id": ocr_job_id})
 
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-        assert response.json()["detail"] == "가이드 작업 큐 등록에 실패했습니다. 잠시 후 다시 시도해주세요."
+        assert response.json()["code"] == "QUEUE_UNAVAILABLE"
 
         failed_job = await GuideJob.filter(ocr_job_id=int(ocr_job_id)).order_by("-id").first()
         assert failed_job is not None
@@ -175,7 +172,7 @@ class TestGuideApis(TestCase):
             response = await client.get(f"/api/v1/guides/jobs/{guide_job_id}/result", headers=headers)
 
         assert response.status_code == status.HTTP_409_CONFLICT
-        assert response.json()["detail"] == "가이드 작업이 아직 완료되지 않았습니다."
+        assert response.json()["code"] == "STATE_CONFLICT"
 
     async def test_get_guide_result_success(self):
         email = "guide_result_success@example.com"

@@ -34,7 +34,18 @@ class Config(BaseSettings):
     GUIDE_QUEUE_BLOCK_TIMEOUT_SECONDS: int = 1
     HEARTBEAT_INTERVAL_SECONDS: int = 30
     REDIS_HOST: str = "localhost"
+
+    OPENAI_API_KEY: str = ""
+    OPENAI_GUIDE_MODEL: str = "gpt-4o-mini"
+    OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
+
+    CLOVA_OCR_APIGW_URL: str = ""
+    CLOVA_OCR_SECRET: str = ""
+
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     REDIS_PASSWORD: str | None = None
     REDIS_SOCKET_TIMEOUT_SECONDS: float = 1.0
+
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1

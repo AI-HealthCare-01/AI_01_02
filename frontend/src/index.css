@@ -1,0 +1,237 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Logly Design System — "Soft & Organic"
+   Warm sage greens, creamy backgrounds, organic shapes, gentle motion.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@theme {
+  /* ── Sage Green (primary) ─────────────────────────────────────────────────── */
+  --color-green-50:  #f2f7f4;
+  --color-green-100: #e0eee6;
+  --color-green-200: #c1dccc;
+  --color-green-300: #95c3a5;
+  --color-green-400: #6aaa82;
+  --color-green-500: #4f9168;
+  --color-green-600: #3f7856;
+  --color-green-700: #336248;
+
+  /* ── Warm Gray ────────────────────────────────────────────────────────────── */
+  --color-gray-50:  #faf8f5;
+  --color-gray-100: #f2eeea;
+  --color-gray-200: #e5e0d9;
+  --color-gray-300: #cfc9c0;
+  --color-gray-400: #a39d94;
+  --color-gray-500: #7c766e;
+  --color-gray-600: #5a544d;
+  --color-gray-700: #3f3a34;
+  --color-gray-800: #2a2622;
+  --color-gray-900: #1a1714;
+
+  /* ── Soft Coral (danger) ──────────────────────────────────────────────────── */
+  --color-red-50:  #fef3f0;
+  --color-red-100: #fde4de;
+  --color-red-200: #f9c5bb;
+  --color-red-300: #f2a192;
+  --color-red-400: #e8786a;
+  --color-red-500: #d95f52;
+  --color-red-600: #c44a3d;
+
+  /* ── Warm Amber ───────────────────────────────────────────────────────────── */
+  --color-amber-50:  #fef7ee;
+  --color-amber-100: #fcecd6;
+  --color-amber-200: #f8d6a8;
+  --color-amber-400: #f0a562;
+  --color-amber-500: #eb8e3e;
+  --color-amber-600: #d97a2e;
+  --color-amber-700: #b05f1e;
+  --color-amber-800: #8c4b18;
+
+  /* ── Soft Blue ────────────────────────────────────────────────────────────── */
+  --color-blue-50:  #eef4fa;
+  --color-blue-100: #d8e7f4;
+  --color-blue-400: #6a9cc4;
+  --color-blue-600: #4a7ea6;
+
+  /* ── Soft Purple ──────────────────────────────────────────────────────────── */
+  --color-purple-50:  #f4f0fa;
+  --color-purple-100: #e8ddf4;
+  --color-purple-600: #8b6aad;
+
+  /* ── Soft Indigo ──────────────────────────────────────────────────────────── */
+  --color-indigo-50:  #eef0fa;
+  --color-indigo-600: #6366a0;
+
+  /* ── Warm Shadows ─────────────────────────────────────────────────────────── */
+  --shadow-xs:  0 1px 2px rgba(160, 145, 125, 0.06);
+  --shadow-sm:  0 1px 3px rgba(160, 145, 125, 0.09), 0 1px 2px rgba(160, 145, 125, 0.05);
+  --shadow:     0 3px 10px rgba(160, 145, 125, 0.1), 0 1px 3px rgba(160, 145, 125, 0.06);
+  --shadow-md:  0 4px 14px rgba(160, 145, 125, 0.11), 0 2px 4px rgba(160, 145, 125, 0.06);
+  --shadow-lg:  0 8px 24px rgba(160, 145, 125, 0.12), 0 3px 6px rgba(160, 145, 125, 0.06);
+  --shadow-xl:  0 14px 36px rgba(160, 145, 125, 0.14), 0 4px 10px rgba(160, 145, 125, 0.05);
+  --shadow-2xl: 0 24px 50px rgba(160, 145, 125, 0.18);
+
+  /* ── Typography ───────────────────────────────────────────────────────────── */
+  --font-sans:    "Nunito", "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Quicksand", "Nunito", sans-serif;
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────────── */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--color-green-200);
+  color: var(--color-green-700);
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-gray-300);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gray-400);
+}
+
+/* ── Input tweaks ───────────────────────────────────────────────────────────── */
+
+input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: 0.5;
+}
+
+input[type="range"] {
+  accent-color: var(--color-green-500);
+}
+
+/* Focus ring override — warmer */
+*:focus-visible {
+  outline-color: var(--color-green-400);
+}
+
+/* ── Keyframes ──────────────────────────────────────────────────────────────── */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes gentleFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+
+@keyframes gentlePulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+/* ── Animation utilities ────────────────────────────────────────────────────── */
+
+.animate-page-enter {
+  animation: fadeInUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.35s ease-out both;
+}
+
+.animate-float {
+  animation: gentleFloat 6s ease-in-out infinite;
+}
+
+/* Staggered children — each child fades in with a delay */
+.stagger-children > * {
+  animation: fadeInUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 60ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 120ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 180ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 240ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 360ms; }
+.stagger-children > *:nth-child(8) { animation-delay: 420ms; }
+
+/* ── Reusable visual classes ────────────────────────────────────────────────── */
+
+/* Frosted glass */
+.glass {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(14px) saturate(1.6);
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+}
+
+/* Warm card — replaces border cards with warm shadow cards */
+.card-warm {
+  background: white;
+  border-radius: 1rem;
+  box-shadow: 0 2px 8px rgba(160, 145, 125, 0.08), 0 0 0 1px rgba(160, 145, 125, 0.04);
+  transition: box-shadow 0.2s ease;
+}
+.card-warm:hover {
+  box-shadow: 0 4px 16px rgba(160, 145, 125, 0.12), 0 0 0 1px rgba(160, 145, 125, 0.06);
+}
+
+/* Primary gradient */
+.gradient-primary {
+  background: linear-gradient(135deg, #4f9168 0%, #3f7856 40%, #2d6a48 100%);
+}
+
+/* Warm background gradient */
+.gradient-warm-bg {
+  background: linear-gradient(180deg, #faf8f5 0%, #f5f0ea 100%);
+}
+
+/* Sidebar gradient */
+.gradient-sidebar {
+  background: linear-gradient(180deg, #fdfcfa 0%, #f8f4ef 50%, #f3ede5 100%);
+}
+
+/* Organic decorative blob */
+.blob-decoration {
+  border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+  pointer-events: none;
+}

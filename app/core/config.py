@@ -1,5 +1,4 @@
 import os
-import uuid
 import zoneinfo
 from datetime import timedelta, timezone, tzinfo
 from enum import StrEnum
@@ -27,7 +26,7 @@ class Config(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow")
 
     ENV: Env = Env.LOCAL
-    SECRET_KEY: str = f"default-secret-key{uuid.uuid4().hex}"
+    SECRET_KEY: str
     TIMEZONE: tzinfo = Field(default_factory=get_default_timezone)
     TEMPLATE_DIR: str = os.path.join(Path(__file__).resolve().parent.parent, "templates")
     MEDIA_DIR: str = os.path.join(Path(__file__).resolve().parent.parent, "media")
@@ -43,10 +42,25 @@ class Config(BaseSettings):
     GUIDE_QUEUE_KEY: str = "guide:jobs"
     GUIDE_JOB_MAX_RETRIES: int = 3
 
+    CLOVA_OCR_SECRET: str = ""
+    CLOVA_OCR_APIGW_URL: str = ""
+
+    OPENAI_API_KEY: str = ""
+    OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
+    OPENAI_GUIDE_MODEL: str = "gpt-4o-mini"
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+
+    CHROMA_HOST: str = "localhost"
+    CHROMA_PORT: int = 8001
+    CHROMA_COLLECTION: str = "adhd_knowledge"
+    RAG_TOP_K: int = 5
+    RAG_SIMILARITY_THRESHOLD: float = 0.4
+    RAG_BM25_WEIGHT: float = 0.3
+
     DB_HOST: str = "localhost"
     DB_PORT: int = 3306
     DB_USER: str = "root"
-    DB_PASSWORD: str = "pw1234"
+    DB_PASSWORD: str = ""
     DB_NAME: str = "ai_health"
     DB_CONNECT_TIMEOUT: int = 5
     DB_CONNECTION_POOL_MAXSIZE: int = 10
@@ -57,6 +71,9 @@ class Config(BaseSettings):
     REDIS_SOCKET_TIMEOUT_SECONDS: float = 0.2
 
     COOKIE_DOMAIN: str = "localhost"
+
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
 
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60

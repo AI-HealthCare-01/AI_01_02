@@ -1,14 +1,15 @@
 # AI Health Project 팀 개발 가이드라인
 
-문서 버전: v2.29  
-작성일: 2026-03-03  
+문서 버전: v2.30  
+작성일: 2026-03-13  
 기준 문서:
-- `docs/REQUIREMENTS_DEFINITION.md` (v1.28)
-- `docs/API_SPECIFICATION.md` (v1.34)
+- `docs/REQUIREMENTS_DEFINITION.md` (v1.29)
+- `docs/API_SPECIFICATION.md` (v1.36)
 - `docs/요구사항_정의서.xlsx`
 - `docs/API_명세서.xlsx`
 
 문서 변경 이력:
+- v2.30 (2026-03-13): 코드 실사 기반 동기화 — 3장 기능별 한눈에 보기 표의 모든 기능 상태를 "대기중 (명세 기준)"에서 "개발완료"로 일괄 갱신; 기준 문서 버전을 REQUIREMENTS_DEFINITION.md v1.29, API_SPECIFICATION.md v1.36으로 동기화
 - v2.29 (2026-03-03): 문서 정합성 점검 결과를 반영해 알림 API 표기를 축약(`*`)에서 명세 경로 단위로 명확화하고, 과거 변경 이력의 구 REQ 체계 표기를 혼동 없도록 정리
 - v2.28 (2026-02-27): 최신 `API_명세서.xlsx`(36건) 반영으로 schedules API를 가이드 기능 범위에 편입하고 API 상태 표기를 명세 기준으로 정리
 - v2.27 (2026-02-27): 비기능 요구사항 ID 재번호화(`REQ-101~REQ-128`) 반영에 맞춰 REQ 참조와 기준 문서 버전(v1.28/v1.32)을 동기화
@@ -59,10 +60,10 @@
 
 | 기능 | 핵심 목표 | 주요 요구사항 ID | 핵심 API(명세 기준) | 현재 상태 |
 |---|---|---|---|---|
-| 1. LLM 기반 안내 가이드 생성 | 프로필+처방+지식을 결합한 개인화 복약/생활 가이드 | REQ-001~010, REQ-012~015, REQ-045~049 | `POST /api/v1/guides/jobs`, `GET /api/v1/guides/jobs/{job_id}`, `GET /api/v1/guides/jobs/{job_id}/result`, `POST /api/v1/guides/jobs/{job_id}/refresh`, `GET /api/v1/analysis/summary`, `GET /api/v1/schedules/daily`, `PATCH /api/v1/schedules/items/{item_id}/status` | 대기중 (명세 기준) |
-| 2. 실시간 챗봇 | 안전 가드레일 + 하이브리드 검색 + SSE 스트리밍 | REQ-029~044 | `GET /api/v1/chat/prompt-options`, `POST /api/v1/chat/sessions`, `DELETE /api/v1/chat/sessions/{session_id}`, `POST /api/v1/chat/sessions/{session_id}/stream` | 대기중 (명세 기준) |
-| 3. OCR 기반 의료정보 인식 | 처방/약봉투 텍스트 구조화 + 신뢰도 검증 + 사용자 확인 | REQ-050~062 | `POST /api/v1/ocr/documents/upload`, `POST /api/v1/ocr/jobs`, `GET /api/v1/ocr/jobs/{job_id}/result`, `PATCH /api/v1/ocr/jobs/{job_id}/confirm`, `GET /api/v1/medications/search` | 대기중 (명세 기준) |
-| 4. 알림 기능 | 가이드 완료/읽음 처리/리마인더/D-day 안내 | REQ-016~021 | `GET /api/v1/notifications`, `GET /api/v1/notifications/unread-count`, `PATCH /api/v1/notifications/{notification_id}/read`, `PATCH /api/v1/notifications/read-all`, `POST /api/v1/reminders`, `GET /api/v1/reminders`, `PATCH /api/v1/reminders/{reminder_id}`, `DELETE /api/v1/reminders/{reminder_id}`, `GET /api/v1/reminders/medication-dday` | 대기중 (명세 기준) |
+| 1. LLM 기반 안내 가이드 생성 | 프로필+처방+지식을 결합한 개인화 복약/생활 가이드 | REQ-001~010, REQ-012~015, REQ-045~049 | `POST /api/v1/guides/jobs`, `GET /api/v1/guides/jobs/{job_id}`, `GET /api/v1/guides/jobs/{job_id}/result`, `POST /api/v1/guides/jobs/{job_id}/refresh`, `GET /api/v1/analysis/summary`, `GET /api/v1/schedules/daily`, `PATCH /api/v1/schedules/items/{item_id}/status` | 개발완료 |
+| 2. 실시간 챗봇 | 안전 가드레일 + 하이브리드 검색 + SSE 스트리밍 | REQ-029~044 | `GET /api/v1/chat/prompt-options`, `POST /api/v1/chat/sessions`, `DELETE /api/v1/chat/sessions/{session_id}`, `POST /api/v1/chat/sessions/{session_id}/stream` | 개발완료 |
+| 3. OCR 기반 의료정보 인식 | 처방/약봉투 텍스트 구조화 + 신뢰도 검증 + 사용자 확인 | REQ-050~062 | `POST /api/v1/ocr/documents/upload`, `POST /api/v1/ocr/jobs`, `GET /api/v1/ocr/jobs/{job_id}/result`, `PATCH /api/v1/ocr/jobs/{job_id}/confirm`, `GET /api/v1/medications/search` | 개발완료 |
+| 4. 알림 기능 | 가이드 완료/읽음 처리/리마인더/D-day 안내 | REQ-016~021 | `GET /api/v1/notifications`, `GET /api/v1/notifications/unread-count`, `PATCH /api/v1/notifications/{notification_id}/read`, `PATCH /api/v1/notifications/read-all`, `POST /api/v1/reminders`, `GET /api/v1/reminders`, `PATCH /api/v1/reminders/{reminder_id}`, `DELETE /api/v1/reminders/{reminder_id}`, `GET /api/v1/reminders/medication-dday` | 개발완료 |
 
 ## 4. 전체 서비스 흐름 (E2E)
 
@@ -264,8 +265,13 @@ DoD:
 
 데이터 무결성:
 - UTF-8 및 JSON 스키마 일관 사용 (`REQ-102`, `REQ-104`)
-- 합성 데이터 우선 정책 (`REQ-103`)
+- 합성 데이터 우선 정책 (`REQ-103`): 모델 학습/테스트는 실제 환자 데이터 대신 합성 데이터를 우선 사용한다. 실제 데이터가 필요한 경우 별도 동의 절차를 거친다.
+- 학습 데이터 재사용 금지 (`REQ-125`): 사용자 채팅 로그와 업로드 이미지는 모델 학습 데이터로 재사용하지 않는다. OpenAI API 호출 시 `training` 목적 데이터 제출을 하지 않는다.
 - OCR 필드별 신뢰도 정책 운영값 관리 (`REQ-124`)
+
+확장성:
+- OCR/가이드/챗봇 모델 교체 시 API 계약 변경 없이 워커 레이어에서 교체 가능해야 한다 (`REQ-127`): `ai_worker/tasks/ocr.py`의 `_call_clova_ocr`, `_parse_medications_with_llm`과 `ai_worker/tasks/guide.py`의 `_call_guide_llm`이 교체 단위다. 새 모델/엔진 도입 시 해당 함수만 교체하고 큐/상태 전이/API 계약은 유지한다.
+- 의학 지식 문서 추가/수정 시 서비스 중단 없이 인덱스를 갱신할 수 있어야 한다 (`REQ-128`): `app/services/knowledge/adhd_docs.py`에 문서를 추가한 뒤 `python -m app.services.knowledge.adhd_docs`를 실행하면 기존 ID는 건너뛰고 신규 문서만 ChromaDB에 추가된다. 서비스 재시작 없이 적용된다.
 
 ## 7. 팀 역할과 책임
 

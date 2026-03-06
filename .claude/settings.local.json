@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" auth:*)",
+      "Bash(\"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" pr:*)",
+      "Bash(where.exe gh)",
+      "Read(//c/Program Files/GitHub CLI/**)",
+      "Read(//c/Users/이건영/Desktop/AH_FINAL/~/PyCharmProjects/AI_Health_final/$LOCALAPPDATA/Microsoft/WinGet/Packages/**)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" pr:*)",
+      "Bash(python3:*)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run:*)",
+      "Bash(uv run:*)",
+      "Bash(docker info:*)",
+      "Bash(docker compose:*)",
+      "Bash(npm run:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:balsamiq.cloud)",
+      "Bash(cmd.exe:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(xargs grep:*)"
+    ]
+  }
+}

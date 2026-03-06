@@ -97,7 +97,19 @@ services:
     depends_on:
       - fastapi
 
-  # 6. certbot: SSL 인증서 발급담당
+  # 6. ChromaDB (벡터 DB)
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: chromadb
+    restart: always
+    environment:
+      - IS_PERSISTENT=TRUE
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - ws
+
+  # 7. certbot: SSL 인증서 발급담당
   certbot:
     image: certbot/certbot
     container_name: auto-certbot
@@ -115,6 +127,8 @@ volumes:
     name: static_volume
   media_volume:
     name: media_volume
+  chroma_data:
+    name: chroma_data
   certbot-conf:
     name: certbot-conf
   certbot-www:
