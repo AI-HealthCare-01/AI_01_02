@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Check, X, Clock, RefreshCw, Pill, BookOpen, MessageCircle, Bell, NotebookPen, Upload } from "lucide-react";
+import { RefreshCw, Pill, BookOpen, MessageCircle, Bell, NotebookPen, Upload, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import {
   scheduleApi,
@@ -100,28 +100,28 @@ export default function Dashboard() {
   });
 
   return (
-    <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-5">
+    <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-5 stagger-children">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">
             {user ? `안녕하세요, ${user.name}님` : "안녕하세요"}
           </h1>
-          <p className="text-sm text-gray-400 mt-0.5">{dateLabel}</p>
+          <p className="text-sm text-gray-400 mt-0.5 font-medium">{dateLabel}</p>
         </div>
         <button
           onClick={load}
-          className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+          className="p-2.5 rounded-xl hover:bg-white text-gray-400 hover:text-gray-600 hover:shadow-sm transition-all duration-200"
         >
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
 
-      {/* D-day 임박 배너 */}
+      {/* D-day alert banner */}
       {dday.length > 0 && (
-        <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4">
+        <div className="flex items-center justify-between bg-gradient-to-r from-amber-50 to-amber-100/60 border border-amber-200/60 rounded-2xl px-5 py-4">
           <div>
-            <p className="text-sm font-semibold text-amber-800">약 소진 임박 알림</p>
+            <p className="text-sm font-bold text-amber-800">약 소진 임박 알림</p>
             <p className="text-sm text-amber-700 mt-0.5">
               <span className="font-bold">{dday[0].medication_name}</span>이(가){" "}
               <span className="font-bold">D-{dday[0].remaining_days}일</span> 남았습니다.
@@ -129,7 +129,7 @@ export default function Dashboard() {
           </div>
           <button
             onClick={() => navigate("/onboarding/scan")}
-            className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors shrink-0 ml-4"
+            className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-white text-sm font-semibold rounded-xl hover:bg-amber-600 hover:shadow-md transition-all duration-200 shrink-0 ml-4"
           >
             <Upload className="w-3.5 h-3.5" />
             처방전 업로드
@@ -138,7 +138,7 @@ export default function Dashboard() {
       )}
 
       {/* Quick navigation */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-5">
+      <div className="card-warm p-5">
         <div className="flex justify-around">
           {QUICK_NAV.map(({ label, icon: Icon, to, color }) => (
             <button
@@ -146,24 +146,24 @@ export default function Dashboard() {
               onClick={() => navigate(to)}
               className="flex flex-col items-center gap-2 group"
             >
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${color} group-hover:scale-105 transition-transform`}>
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${color} group-hover:scale-110 group-hover:shadow-md transition-all duration-200`}>
                 <Icon className="w-5 h-5" />
               </div>
-              <span className="text-xs text-gray-500 font-medium">{label}</span>
+              <span className="text-xs text-gray-500 font-semibold">{label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* 오늘의 일정 */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-5">
+      {/* Today's schedule */}
+      <div className="card-warm p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-bold text-gray-800">오늘의 일정</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <span className="text-sm font-bold text-green-600">{progress}%</span>
-            <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
               <div
-                className="h-full bg-green-500 rounded-full transition-all duration-500"
+                className="h-full gradient-primary rounded-full transition-all duration-700 ease-out"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -175,7 +175,7 @@ export default function Dashboard() {
         ) : items.length === 0 ? (
           <p className="text-center text-sm text-gray-400 py-6">오늘 등록된 일정이 없습니다.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {pending.map((item) => (
               <ScheduleRow key={item.item_id} item={item} onUpdate={updateStatus} />
             ))}
@@ -186,11 +186,17 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* AI 가이드 카드 */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <div className="flex items-center justify-between">
+      {/* AI Guide card */}
+      <div className="card-warm p-5 relative overflow-hidden">
+        {/* Subtle decorative accent */}
+        <div className="absolute -top-8 -right-8 w-24 h-24 bg-green-100/40 rounded-full blur-2xl pointer-events-none" />
+
+        <div className="flex items-center justify-between relative">
           <div className="flex-1 min-w-0">
-            <h2 className="text-base font-bold text-gray-800 mb-1">AI 가이드</h2>
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles className="w-4 h-4 text-green-500" />
+              <h2 className="text-base font-bold text-gray-800">AI 가이드</h2>
+            </div>
             {guide ? (
               <p className="text-sm text-gray-500 truncate">
                 {guide.safety_notice || guide.medication_guidance?.slice(0, 60) + "..."}
@@ -203,7 +209,7 @@ export default function Dashboard() {
           </div>
           <button
             onClick={() => navigate("/ai-guide")}
-            className="ml-4 px-4 py-2 border border-gray-200 text-sm font-medium text-gray-600 rounded-lg hover:bg-gray-50 transition-colors shrink-0"
+            className="ml-4 px-4 py-2 bg-green-50 text-sm font-semibold text-green-700 rounded-xl hover:bg-green-100 hover:shadow-sm transition-all duration-200 shrink-0"
           >
             상세보기
           </button>
@@ -223,30 +229,30 @@ function ScheduleRow({
   const isPending = item.status === "PENDING";
   return (
     <div
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-opacity ${
-        isPending ? "" : "opacity-50"
+      className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200 ${
+        isPending ? "hover:bg-gray-50" : "opacity-45"
       }`}
     >
-      <span className="text-xs text-gray-400 w-10 shrink-0">{formatTime(item.scheduled_at)}</span>
-      <span className="text-sm text-gray-700 flex-1">{item.title}</span>
+      <span className="text-xs text-gray-400 w-10 shrink-0 font-medium">{formatTime(item.scheduled_at)}</span>
+      <span className="text-sm text-gray-700 flex-1 font-medium">{item.title}</span>
       {isPending ? (
         <div className="flex gap-1.5">
           <button
             onClick={() => onUpdate(item.item_id, "DONE")}
-            className="px-3 py-1 text-xs font-medium bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
+            className="px-3 py-1 text-xs font-semibold bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-all duration-150"
           >
             완료
           </button>
           <button
             onClick={() => onUpdate(item.item_id, "SKIPPED")}
-            className="px-3 py-1 text-xs font-medium bg-gray-50 text-gray-400 rounded-lg hover:bg-gray-100 transition-colors"
+            className="px-3 py-1 text-xs font-semibold bg-gray-100 text-gray-400 rounded-lg hover:bg-gray-200 transition-all duration-150"
           >
             건너뜀
           </button>
         </div>
       ) : (
         <span
-          className={`text-xs font-medium px-2.5 py-1 rounded-lg ${
+          className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${
             item.status === "DONE"
               ? "bg-green-50 text-green-700"
               : "bg-gray-100 text-gray-400"
