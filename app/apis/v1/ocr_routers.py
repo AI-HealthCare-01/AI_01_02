@@ -38,7 +38,7 @@ async def upload_document(
             id=str(document.id),
             document_type=document.document_type,
             file_name=document.file_name,
-            file_path=document.file_path,
+            file_path=document.temp_storage_key,
             file_size=document.file_size,
             mime_type=document.mime_type,
             uploaded_at=document.uploaded_at,
@@ -99,11 +99,11 @@ async def get_ocr_job_result(
     result = await ocr_service.get_ocr_result(user=user, job_id=int(job_id))
     return Response(
         OcrJobResultResponse(
-            job_id=str(result.job_id),
-            extracted_text=result.extracted_text,
-            structured_data=result.structured_data,
-            created_at=result.created_at,
-            updated_at=result.updated_at,
+            job_id=str(result["job_id"]),
+            extracted_text=result["extracted_text"],
+            structured_data=result["structured_data"],
+            created_at=result["created_at"],
+            updated_at=result["updated_at"],
         ).model_dump(),
         status_code=status.HTTP_200_OK,
     )
@@ -123,12 +123,14 @@ async def confirm_ocr_result(
         corrected_medications=[m.model_dump(exclude_none=True) for m in request.corrected_medications],
         comment=request.comment,
     )
-    structured = result.structured_data
+    structured = result.confirmed_result if isinstance(result.confirmed_result, dict) else {}
+    if not structured:
+        structured = result.structured_result if isinstance(result.structured_result, dict) else {}
     needs_review = bool(structured.get("needs_user_review", False))
     return Response(
         OcrConfirmResponse(
-            job_id=str(result.job_id),
-            extracted_text=result.extracted_text,
+            job_id=str(result.id),
+            extracted_text=result.raw_text or "",
             structured_data=structured,
             needs_user_review=needs_review,
             created_at=result.created_at,
@@ -145,11 +147,14 @@ async def confirm_ocr_job_result(
     ocr_service: Annotated[OcrService, Depends(OcrService)],
 ) -> Response:
     result = await ocr_service.confirm_ocr_result(user=user, job_id=int(job_id), request=request)
+    structured = result.confirmed_result if isinstance(result.confirmed_result, dict) else {}
+    if not structured:
+        structured = result.structured_result if isinstance(result.structured_result, dict) else {}
     return Response(
         OcrJobResultResponse(
-            job_id=str(result.job_id),
-            extracted_text=result.extracted_text,
-            structured_data=result.structured_data,
+            job_id=str(result.id),
+            extracted_text=result.raw_text or "",
+            structured_data=structured,
             created_at=result.created_at,
             updated_at=result.updated_at,
         ).model_dump(),

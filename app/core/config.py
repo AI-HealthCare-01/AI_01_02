@@ -45,6 +45,9 @@ class Config(BaseSettings):
     GUIDE_WEEKLY_REFRESH_CHECK_INTERVAL_SECONDS: int = 3600
     GUIDE_WEEKLY_REFRESH_CHECK_BATCH_SIZE: int = 100
 
+    CLOVA_OCR_SECRET: str = ""
+    CLOVA_OCR_APIGW_URL: str = ""
+
     OPENAI_API_KEY: str = ""
     OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
     OPENAI_GUIDE_MODEL: str = "gpt-4o-mini"

@@ -1,7 +1,7 @@
 from typing import Any
 
 from app.models.health_profiles import UserHealthProfile
-from app.models.ocr import OcrJobStatus, OcrResult
+from app.models.ocr import OcrJob, OcrJobStatus
 from app.models.users import User
 from app.services.emergency_guidance import (
     generate_allergy_medication_guidance,
@@ -99,16 +99,29 @@ def _serialize_nutrition_input(profile: UserHealthProfile) -> dict[str, Any]:
     }
 
 
-def _extract_medications_from_ocr_result(result: OcrResult) -> list[dict[str, Any]]:
-    structured = result.structured_data if isinstance(result.structured_data, dict) else {}
+def _extract_medications_from_ocr_job(job: OcrJob) -> list[dict[str, Any]]:
+    confirmed = job.confirmed_result if isinstance(job.confirmed_result, dict) else {}
+    structured = job.structured_result if isinstance(job.structured_result, dict) else {}
+
+    medications = confirmed.get("extracted_medications")
+    if isinstance(medications, list):
+        return [m for m in medications if isinstance(m, dict)]
+
+    medications = structured.get("extracted_medications")
+    if isinstance(medications, list):
+        return [m for m in medications if isinstance(m, dict)]
+
     medications = structured.get("medications")
     if isinstance(medications, list):
         return [m for m in medications if isinstance(m, dict)]
 
-    confirmed = structured.get("confirmed_ocr")
-    if not isinstance(confirmed, dict):
+    confirmed_ocr = confirmed.get("confirmed_ocr") if isinstance(confirmed, dict) else None
+    if not isinstance(confirmed_ocr, dict):
+        confirmed_ocr = structured.get("confirmed_ocr") if isinstance(structured, dict) else None
+    if not isinstance(confirmed_ocr, dict):
         return []
-    extracted = confirmed.get("extracted_medications")
+
+    extracted = confirmed_ocr.get("extracted_medications")
     if not isinstance(extracted, list):
         return []
     return [m for m in extracted if isinstance(m, dict)]
@@ -136,14 +149,11 @@ class AnalysisService:
 
             drug_allergies = basic_info.get("drug_allergies", [])
             if drug_allergies:
-                from app.models.ocr import OcrJob  # noqa: PLC0415
-
                 ocr_jobs = await OcrJob.filter(user_id=user.id, status=OcrJobStatus.SUCCEEDED)
                 for job in ocr_jobs:
-                    result = await OcrResult.get_or_none(job_id=job.id)
-                    if not result:
+                    if not job.structured_result:
                         continue
-                    medications = _extract_medications_from_ocr_result(result)
+                    medications = _extract_medications_from_ocr_job(job)
                     for med in medications:
                         drug_name = str(med.get("drug_name", "") or "")
                         for allergy in drug_allergies:
