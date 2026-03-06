@@ -1,97 +1,18 @@
 import asyncio
-import base64
 import json
 import time
-import uuid
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
 from typing import Any, cast
 
-import httpx
-from openai import AsyncOpenAI
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from tortoise.transactions import in_transaction
 
 from ai_worker.core import config
-from app.models.ocr import OcrFailureCode, OcrJob, OcrJobStatus
-
-_PARSE_SYSTEM_PROMPT = (
-    "처방전/약봉투 OCR 텍스트에서 약물 정보를 추출하세요. "
-    "각 필드 설명: "
-    "drug_name=약품명 전체(제형 포함, mg 숫자만 제외. 예: '콘서타오로스서방정27mg' → '콘서타오로스서방정'), "
-    "dose=약물 함량의 mg 숫자(예: '콘서타오로스서방정27mg' → 27.0), "
-    "frequency_per_day=1일 투여 횟수, "
-    "dosage_per_once=1회 투여 정수(정/캡슐 수), "
-    "dispensed_date=조제일(YYYY-MM-DD), "
-    "total_days=총 투약 일수. "
-    "반드시 JSON으로만 응답하세요: "
-    '{"medications": [{"drug_name": str, "dose": float|null, "frequency_per_day": int|null, '
-    '"dosage_per_once": int|null, "dispensed_date": "YYYY-MM-DD"|null, "total_days": int|null}], '
-    '"overall_confidence": float, "needs_user_review": bool}'
-)
-
-
-async def _call_clova_ocr(file_bytes: bytes, file_name: str) -> tuple[str, list[dict]]:
-    """Clova OCR API 호출 → (extracted_text, raw_blocks)"""
-    if not config.CLOVA_OCR_APIGW_URL or not config.CLOVA_OCR_SECRET:
-        raise ValueError("Clova OCR 설정이 없습니다. CLOVA_OCR_APIGW_URL, CLOVA_OCR_SECRET을 설정하세요.")
-
-    ext = Path(file_name).suffix.lstrip(".").lower()
-    fmt = "pdf" if ext == "pdf" else "jpg"
-    payload = {
-        "version": "V2",
-        "requestId": str(uuid.uuid4()),
-        "timestamp": int(time.time() * 1000),
-        "images": [{"format": fmt, "name": file_name, "data": base64.b64encode(file_bytes).decode()}],
-    }
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            config.CLOVA_OCR_APIGW_URL,
-            headers={"X-OCR-SECRET": config.CLOVA_OCR_SECRET, "Content-Type": "application/json"},
-            content=json.dumps(payload),
-        )
-        response.raise_for_status()
-
-    data = response.json()
-    fields = data.get("images", [{}])[0].get("fields", [])
-    extracted_text = " ".join(f["inferText"] for f in fields if f.get("inferText"))
-    raw_blocks = [
-        {
-            "text": f["inferText"],
-            "bbox": [
-                f["boundingPoly"]["vertices"][0]["x"],
-                f["boundingPoly"]["vertices"][0]["y"],
-                f["boundingPoly"]["vertices"][2]["x"],
-                f["boundingPoly"]["vertices"][2]["y"],
-            ],
-            "confidence": f.get("confidence"),
-        }
-        for f in fields
-        if f.get("inferText") and f.get("boundingPoly", {}).get("vertices")
-    ]
-    return extracted_text, raw_blocks
-
-
-async def _parse_medications_with_llm(extracted_text: str, raw_blocks: list[dict]) -> dict:
-    """LLM으로 약물 정보 파싱 → structured_data"""
-    client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
-    response = await client.chat.completions.create(
-        model=config.OPENAI_CHAT_MODEL,
-        messages=[
-            {"role": "system", "content": _PARSE_SYSTEM_PROMPT},
-            {"role": "user", "content": extracted_text[:3000]},
-        ],
-        temperature=0.0,
-        response_format={"type": "json_object"},
-    )
-    parsed = json.loads(response.choices[0].message.content or "{}")
-    parsed["raw_blocks"] = raw_blocks
-    parsed["processor"] = f"clova-ocr+openai-{config.OPENAI_CHAT_MODEL}"
-    return parsed
-
+from app.models.ocr import OcrFailureCode, OcrJob, OcrJobStatus, OcrResult
 
 ALLOWED_STATUS_TRANSITIONS: dict[OcrJobStatus, set[OcrJobStatus]] = {
     OcrJobStatus.QUEUED: {OcrJobStatus.PROCESSING},
@@ -251,23 +172,33 @@ async def process_ocr_job(
         logger.warning("ocr job not found after claim (job_id=%s)", job_id)
         return False
 
-    absolute_file_path = Path(config.MEDIA_DIR).resolve() / job.document.temp_storage_key
+    absolute_file_path = Path(config.MEDIA_DIR).resolve() / job.document.file_path
     try:
         if not absolute_file_path.exists():
             raise FileNotFoundError(f"document file not found: {absolute_file_path}")
 
         raw_content = absolute_file_path.read_bytes()
-        extracted_text, raw_blocks = await _call_clova_ocr(raw_content, job.document.file_name)
-        structured_data = await _parse_medications_with_llm(extracted_text, raw_blocks)
+        extracted_text = f"OCR placeholder output for {job.document.file_name} ({len(raw_content)} bytes)"
+        structured_data = {
+            "document_type": job.document.document_type,
+            "file_name": job.document.file_name,
+            "file_size": len(raw_content),
+            "processor": "ocr-placeholder-v1",
+        }
         completed_at = datetime.now(config.TIMEZONE)
 
         async with in_transaction():
+            await OcrResult.update_or_create(
+                job_id=job.id,
+                defaults={
+                    "extracted_text": extracted_text,
+                    "structured_data": structured_data,
+                    "updated_at": completed_at,
+                },
+            )
+            _ensure_transition(OcrJobStatus.PROCESSING, OcrJobStatus.SUCCEEDED)
             await OcrJob.filter(id=job.id, status=OcrJobStatus.PROCESSING).update(
                 status=OcrJobStatus.SUCCEEDED,
-                raw_text=extracted_text,
-                text_blocks_json=structured_data.get("raw_blocks"),
-                structured_result=structured_data,
-                needs_user_review=structured_data.get("needs_user_review", True),
                 completed_at=completed_at,
                 error_message=None,
                 failure_code=None,

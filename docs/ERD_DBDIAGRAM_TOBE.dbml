@@ -10,8 +10,7 @@ Project AI_Health_Core_Baseline {
 // Deferred (intentionally excluded):
 // - knowledge_sources / knowledge_documents / knowledge_chunks / vector_index_mappings
 // - prompt_versions / model_versions / inference_audits / external_api_call_logs
-// - chat_message_references / chat_guardrail_events / ocr_results / ocr_medications
-// Note: guide_results IS included (separate 1:1 table with guide_jobs) to match actual ORM.
+// - chat_message_references / chat_guardrail_events / ocr_results / ocr_medications / guide_results
 // Reason: keep first-project schema easy to understand and implement.
 
 // ----------------------------------------------------------------------
@@ -78,18 +77,20 @@ Enum schedule_item_status_enum {
 // ----------------------------------------------------------------------
 Table users {
   id bigint [pk, increment, not null]
-  email varchar(40) [not null, unique]
-  hashed_password varchar(128) [not null]
-  name varchar(20) [not null]
+  email varchar(120) [not null, unique]
+  hashed_password varchar(255) [not null]
+  name varchar(50) [not null]
   gender gender_enum [not null]
   birthday date [not null]
-  phone_number varchar(11) [not null, unique]
+  phone_number varchar(20) [not null, unique]
   is_active boolean [not null, default: true]
-  last_login datetime(6)
+  withdrawn_at datetime(6)
+  token_version int [not null, default: 0]
+  last_login_at datetime(6)
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
 
-  Note: 'Core account table. Withdrawal uses soft delete (is_active=false) + Redis JTI blacklist for immediate token invalidation (no withdrawn_at/token_version columns in ORM). Supports REQ-024~028.'
+  Note: 'Core account table for signup/login/profile APIs. Account withdrawal uses soft delete (is_active=false), withdrawn_at timestamp, and token_version bump for immediate token invalidation. Supports REQ-024~028.'
 
   indexes {
     (email) [name: 'idx_users_email', unique]
@@ -141,8 +142,6 @@ Table ocr_jobs {
   user_id bigint [not null]
   document_id bigint [not null]
   status async_job_status_enum [not null, default: 'QUEUED']
-  retry_count int [not null, default: 0]
-  max_retries int [not null, default: 3]
   failure_code varchar(50)
   error_message longtext
   raw_text longtext
@@ -150,6 +149,9 @@ Table ocr_jobs {
   structured_result json
   confirmed_result json
   needs_user_review boolean [not null, default: false]
+  field_confidences_json json
+  ocr_engine_version varchar(50)
+  parser_version varchar(50)
   queued_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   started_at datetime(6)
   completed_at datetime(6)
@@ -160,8 +162,7 @@ Table ocr_jobs {
 
   indexes {
     (user_id, status) [name: 'idx_ocr_jobs_user_status']
-    (document_id, created_at) [name: 'idx_ocr_jobs_document_id']
-    (status, retry_count) [name: 'idx_ocr_jobs_status_retry']
+    (document_id) [name: 'idx_ocr_jobs_document_id']
   }
 }
 
@@ -194,38 +195,23 @@ Table guide_jobs {
   status async_job_status_enum [not null, default: 'QUEUED']
   failure_code varchar(50)
   error_message longtext
-  retry_count int [not null, default: 0]
-  max_retries int [not null, default: 3]
+  risk_level varchar(20)
+  guide_result json
+  input_trace_json json
+  prompt_version varchar(50)
+  model_version varchar(50)
+  model_params_json json
   queued_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   started_at datetime(6)
   completed_at datetime(6)
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
 
-  Note: 'Guide job lifecycle table. Result payload stored in guide_results (1:1). Supports REQ-001~009, REQ-118.'
+  Note: 'Unified guide job+result table for /guides/jobs, /guides/jobs/{job_id}, /guides/jobs/{job_id}/result, /guides/jobs/{job_id}/refresh. Stores prompt/model versions and input trace for explainability/reproducibility (REQ-112, REQ-123).'
 
   indexes {
     (user_id, status) [name: 'idx_guide_jobs_user_status']
-    (ocr_job_id, created_at) [name: 'idx_guide_jobs_ocr_job_id']
-    (status, retry_count) [name: 'idx_guide_jobs_status_retry']
-  }
-}
-
-Table guide_results {
-  id bigint [pk, increment, not null]
-  job_id bigint [not null, unique]
-  medication_guidance longtext [not null]
-  lifestyle_guidance longtext [not null]
-  risk_level varchar(20) [not null, default: 'MEDIUM']
-  safety_notice longtext [not null]
-  structured_data json [not null]
-  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
-
-  Note: 'Guide result payload (1:1 with guide_jobs). structured_data holds source_references and adherence_rate_percent. Supports REQ-003~009, REQ-112, REQ-123.'
-
-  indexes {
-    (job_id) [name: 'idx_guide_results_job_id', unique]
+    (ocr_job_id) [name: 'idx_guide_jobs_ocr_job_id']
   }
 }
 
@@ -286,7 +272,7 @@ Table notifications {
   id bigint [pk, increment, not null]
   user_id bigint [not null]
   type notification_type_enum [not null, default: 'SYSTEM']
-  title varchar(100) [not null]
+  title varchar(120) [not null]
   message longtext [not null]
   payload json
   is_read boolean [not null, default: false]
@@ -356,7 +342,6 @@ Ref: users.id < ocr_jobs.user_id [delete: cascade]
 Ref: documents.id < ocr_jobs.document_id [delete: cascade]
 Ref: users.id < guide_jobs.user_id [delete: cascade]
 Ref: ocr_jobs.id < guide_jobs.ocr_job_id [delete: cascade]
-Ref: guide_jobs.id - guide_results.job_id [delete: cascade]
 Ref: users.id < chat_sessions.user_id [delete: cascade]
 Ref: chat_sessions.id < chat_messages.session_id [delete: cascade]
 Ref: users.id < notifications.user_id [delete: cascade]

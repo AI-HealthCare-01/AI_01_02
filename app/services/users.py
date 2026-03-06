@@ -37,6 +37,3 @@ class UserManageService:
                 )
             await user.refresh_from_db()
         return user
-
-    async def deactivate_user(self, user: User, *, access_jti: str, refresh_jti: str | None) -> None:
-        await self.auth_service.deactivate_user(user, access_jti=access_jti, refresh_jti=refresh_jti)

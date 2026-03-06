@@ -5,22 +5,6 @@ from pydantic import BaseModel, Field
 from app.models.guides import GuideFailureCode, GuideJobStatus, GuideRiskLevel
 
 
-class GuideSourceReference(BaseModel):
-    title: str
-    source: str
-    url: str | None = None
-    used_at: datetime | None = None
-
-
-class GuideRefreshRequest(BaseModel):
-    reason: str | None = None
-
-
-class GuideRefreshResponse(BaseModel):
-    refreshed_job_id: str
-    status: GuideJobStatus
-
-
 class GuideJobCreateRequest(BaseModel):
     ocr_job_id: str = Field(pattern=r"^\d+$")
 
@@ -52,8 +36,6 @@ class GuideJobResultResponse(BaseModel):
     lifestyle_guidance: str
     risk_level: GuideRiskLevel
     safety_notice: str
-    source_references: list[GuideSourceReference] = []
-    adherence_rate_percent: float | None = None
     structured_data: dict
     created_at: datetime
     updated_at: datetime

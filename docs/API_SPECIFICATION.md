@@ -1,7 +1,7 @@
 # AI Health Project API 명세서
 
-문서 버전: v1.37  
-작성일: 2026-03-13  
+문서 버전: v1.34  
+작성일: 2026-03-03  
 원본:
 - `docs/요구사항_정의서.xlsx`
 - `docs/API_명세서.xlsx`
@@ -10,9 +10,6 @@
 문서 목적: 객체 모델 명세와 API 계약 명세를 독립 문서로 관리한다.
 
 문서 변경 이력:
-- v1.37 (2026-03-13): 코드 실사 기반 동기화 — 11.6 `ChatSession` 객체에 `title` 필드 추가; 12.6 에러코드 표에 `AUTH_ACCOUNT_INACTIVE` 항목 추가
-- v1.36 (2026-03-13): 코드 실사 기반 동기화 — 12.3(OCR/가이드/분석/일정), 12.4(챗봇), 12.5(알림/리마인더) API 상태를 "대기중"에서 "개발완료"로 일괄 갱신; 12.8 동기화 목록과 실제 구현 상태 일치 확인
-- v1.35 (2026-03-03): 문서 정합성 점검 반영으로 변경 이력의 과거 REQ 번호 표기를 현행 번호와 함께 명시해 혼동을 줄이고 기준 문서 버전을 최신으로 갱신
 - v1.34 (2026-03-03): 문서 정합성 점검 반영으로 변경 이력의 과거 REQ 번호 표기를 현행 번호와 함께 명시해 혼동을 줄이고 기준 문서 버전을 최신으로 갱신
 - v1.33 (2026-02-27): 최신 `API_명세서.xlsx`(36건) 기준으로 schedules API 2건을 계약 표/동기화 목록에 반영하고, 미등록 API 갭(12.9)을 재정리
 - v1.32 (2026-02-27): 비기능 요구사항 ID 재번호화(`REQ-101~REQ-128`)를 반영해 정책 메모/참조 REQ를 동기화하고 기준 요구사항 문서 버전을 v1.28로 갱신
@@ -59,11 +56,9 @@
 
 | 객체명 | 필드 | 타입 | 필수/선택 | 설명 |
 |---|---|---|---|---|
-| ApiError | code | string | 필수 | 시스템 오류 코드 (`AUTH_INVALID_TOKEN`, `RESOURCE_NOT_FOUND` 등) |
-| ApiError | message | string | 필수 | 사용자 노출 에러 메시지 |
-| ApiError | detail | object \| string \| null | 선택(nullable) | 상세 원인, 필드 오류 목록(개발자용) |
-| ApiError | action_hint | string \| null | 선택(nullable) | 사용자 다음 행동 안내 문구 |
-| ApiError | retryable | bool | 필수 | 재시도 가능 여부 |
+| ApiError | code | string | 필수 | 시스템 오류 코드 (`AUTH_INVALID_TOKEN`, `OCR_LOW_CONFIDENCE` 등) |
+| ApiError | message | string | 필수 | 사용자/개발자 공통 에러 메시지 |
+| ApiError | detail | object \| string \| null | 선택(nullable) | 상세 원인, 필드 오류 목록 |
 | ApiError | request_id | string | 선택 | 추적용 요청 ID |
 | ApiError | timestamp | string(datetime) | 필수 | 에러 발생 시각 |
 | PaginationMeta | limit | int | 필수 | 페이지 크기 |
@@ -76,7 +71,8 @@
 | ErrorMessageMapping | retryable | bool | 필수 | 재시도 가능 여부 |
 
 정책 메모:
-- `ApiError` 객체 표준화는 REQ-012 기준으로 구현 완료되었다. 모든 엔드포인트는 `AppException`/`ErrorCode` 기반 `ApiError` 응답을 반환한다.
+- 현재 구현(v1) 실패 응답은 FastAPI 기본 형식(`{"detail":"..."}`)을 사용한다.
+- `ApiError` 객체 표준화는 목표 계약이며, 점진 반영한다.
 - 외부 API 식별자(`id`, `*_id`, path 파라미터)는 언어/플랫폼 정밀도 이슈를 피하기 위해 string으로 계약한다.
 
 ### 11.2 인증/사용자 객체
@@ -222,7 +218,6 @@
 | ChatSessionCreateRequest | title | string | 선택 | 세션 제목 |
 | ChatSession | id | string | 필수 | 세션 ID |
 | ChatSession | status | enum(`ACTIVE`,`CLOSED`) | 필수 | 세션 상태 |
-| ChatSession | title | string \| null | 선택 | 세션 제목 |
 | ChatSession | last_activity_at | string(datetime) | 선택 | 마지막 활동 시각 |
 | ChatSession | auto_close_after_minutes | int | 선택 | 자동 종료 기준(분) |
 | ChatPromptOption | id | string | 필수 | 객관식 프롬프트 식별자 |
@@ -296,7 +291,8 @@
   - 파일 업로드: `multipart/form-data`
   - 스트리밍: `text/event-stream`
 - 성공 응답: HTTP 표준코드 + 객체 본문
-- 실패 응답: `ApiError` 객체 (`code`, `message`, `detail`, `action_hint`, `retryable`, `request_id`, `timestamp`) 표준 구조를 사용한다 (REQ-012 구현 완료)
+- 실패 응답(현재 구현): FastAPI 기본 오류 객체 `{"detail":"..."}` 중심(엔드포인트별 HTTP 상태코드를 우선 계약으로 본다)
+- 실패 응답(목표 계약): `ApiError` 객체 표준화 + `ErrorMessageMapping` 기반 사용자 메시지 매핑(`REQ-111`)
 - 외부 API의 식별자(`id`, `*_id`, path 파라미터)는 string 계약을 따른다.
 - 본 문서는 `docs/API_명세서.xlsx` 기준 사용자/서비스 API 계약 범위를 다룬다.
 
@@ -304,14 +300,14 @@
 
 | Method | Path | 상태 | Request (필수/선택) | Success Response |
 |---|---|---|---|---|
-| POST | `/api/v1/auth/signup` | 개발완료 | `SignUpRequest` (필수: `email,password,name,gender,birth_date,phone_number`) | `201 {"detail":"회원가입이 성공적으로 완료되었습니다."}` |
-| POST | `/api/v1/auth/login` | 개발완료 | `LoginRequest` (필수: `email,password`) | `200 LoginResponse` + `refresh_token` 쿠키 |
-| GET | `/api/v1/auth/token/refresh` | 개발완료 | 쿠키 `refresh_token` (필수) | `200 {"access_token":"..."}` |
-| GET | `/api/v1/users/me` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 UserInfo` |
-| PATCH | `/api/v1/users/me` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `UserUpdateRequest` (모든 필드 선택) | `200 UserInfo` |
-| DELETE | `/api/v1/users/me` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수) | `204` |
-| PUT | `/api/v1/profiles/health` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `HealthProfileUpsertRequest` (`basic_info` 필수) | `200 HealthProfile` |
-| GET | `/api/v1/profiles/health` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 HealthProfile` |
+| POST | `/api/v1/auth/signup` | 대기중 | `SignUpRequest` (필수: `email,password,name,gender,birth_date,phone_number`) | `201 {"detail":"회원가입이 성공적으로 완료되었습니다."}` |
+| POST | `/api/v1/auth/login` | 대기중 | `LoginRequest` (필수: `email,password`) | `200 LoginResponse` + `refresh_token` 쿠키 |
+| GET | `/api/v1/auth/token/refresh` | 대기중 | 쿠키 `refresh_token` (필수) | `200 {"access_token":"..."}` |
+| GET | `/api/v1/users/me` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 UserInfo` |
+| PATCH | `/api/v1/users/me` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), `UserUpdateRequest` (모든 필드 선택) | `200 UserInfo` |
+| DELETE | `/api/v1/users/me` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수) | `204` |
+| PUT | `/api/v1/profiles/health` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), `HealthProfileUpsertRequest` (`basic_info` 필수) | `200 HealthProfile` |
+| GET | `/api/v1/profiles/health` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 HealthProfile` |
 
 정책 메모:
 - 현재 구현(v1)에서 `signup`은 `birth_date`를, `users/me` 조회/수정은 `birthday`를 사용한다.
@@ -323,19 +319,19 @@
 
 | Method | Path | 상태 | Request (필수/선택) | Success Response |
 |---|---|---|---|---|
-| POST | `/api/v1/ocr/documents/upload` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), multipart: `document_type`(필수), `file`(필수) | `201 OcrDocument` |
-| POST | `/api/v1/ocr/jobs` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `{"document_id": string}` (필수) | `202 OcrJobCreateResponse` |
-| GET | `/api/v1/ocr/jobs/{job_id}` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 OcrJobStatus` |
-| GET | `/api/v1/ocr/jobs/{job_id}/result` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 OcrJobResult` |
-| PATCH | `/api/v1/ocr/jobs/{job_id}/confirm` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수), `OcrReviewConfirmRequest` (`confirmed` 필수) | `200 OcrResult(계획)` |
-| GET | `/api/v1/medications/search` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `q`(필수), `limit`(선택, 기본 10) | `200 MedicationSearchResponse` |
-| POST | `/api/v1/guides/jobs` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `{"ocr_job_id": string}` (필수) | `202 GuideJobCreateResponse` |
-| GET | `/api/v1/guides/jobs/{job_id}` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 GuideJobStatus` |
-| GET | `/api/v1/guides/jobs/{job_id}/result` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 GuideJobResult` |
-| POST | `/api/v1/guides/jobs/{job_id}/refresh` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수), `GuideRefreshRequest`(선택) | `202 GuideRefreshResponse` |
-| GET | `/api/v1/analysis/summary` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query: `date_from,date_to`(선택) | `200 AnalysisSummary` |
-| GET | `/api/v1/schedules/daily` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `date`(필수), `timezone`(선택) | `200 DailyScheduleResponse` |
-| PATCH | `/api/v1/schedules/items/{item_id}/status` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `item_id`(string, 필수), `ScheduleItemStatusUpdateRequest` (`status` 필수) | `200 ScheduleItem` |
+| POST | `/api/v1/ocr/documents/upload` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), multipart: `document_type`(필수), `file`(필수) | `201 OcrDocument` |
+| POST | `/api/v1/ocr/jobs` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), `{"document_id": string}` (필수) | `202 OcrJobCreateResponse` |
+| GET | `/api/v1/ocr/jobs/{job_id}` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 OcrJobStatus` |
+| GET | `/api/v1/ocr/jobs/{job_id}/result` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 OcrJobResult` |
+| PATCH | `/api/v1/ocr/jobs/{job_id}/confirm` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수), `OcrReviewConfirmRequest` (`confirmed` 필수) | `200 OcrResult(계획)` |
+| GET | `/api/v1/medications/search` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), query `q`(필수), `limit`(선택, 기본 10) | `200 MedicationSearchResponse` |
+| POST | `/api/v1/guides/jobs` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), `{"ocr_job_id": string}` (필수) | `202 GuideJobCreateResponse` |
+| GET | `/api/v1/guides/jobs/{job_id}` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 GuideJobStatus` |
+| GET | `/api/v1/guides/jobs/{job_id}/result` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 GuideJobResult` |
+| POST | `/api/v1/guides/jobs/{job_id}/refresh` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수), `GuideRefreshRequest`(선택) | `202 GuideRefreshResponse` |
+| GET | `/api/v1/analysis/summary` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), query: `date_from,date_to`(선택) | `200 AnalysisSummary` |
+| GET | `/api/v1/schedules/daily` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), query `date`(필수), `timezone`(선택) | `200 DailyScheduleResponse` |
+| PATCH | `/api/v1/schedules/items/{item_id}/status` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `item_id`(string, 필수), `ScheduleItemStatusUpdateRequest` (`status` 필수) | `200 ScheduleItem` |
 
 정책 메모:
 - OCR/파싱 완료 후 원본 업로드 이미지는 즉시 폐기하며, DB/클라우드 스토리지에 파일 형태로 보관하지 않는다 (`REQ-126`).
@@ -349,12 +345,12 @@
 
 | Method | Path | 상태 | Request (필수/선택) | Success Response |
 |---|---|---|---|---|
-| GET | `/api/v1/chat/prompt-options` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 ChatPromptOptionsResponse` |
-| POST | `/api/v1/chat/sessions` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `{"title": string}` (선택) | `201 ChatSession` |
-| GET | `/api/v1/chat/sessions/{session_id}/messages` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `session_id`(string, 필수), query `limit,offset`(선택) | `200 {"items": ChatMessage[], "meta": PaginationMeta}` |
-| POST | `/api/v1/chat/sessions/{session_id}/messages` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `ChatMessageSendRequest` (`message` 필수, `stream` 선택) | `200 ChatMessage` |
-| POST | `/api/v1/chat/sessions/{session_id}/stream` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `ChatMessageSendRequest` (`message` 필수) | `200 text/event-stream (ChatStreamEvent)` |
-| DELETE | `/api/v1/chat/sessions/{session_id}` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `session_id`(string, 필수) | `204` |
+| GET | `/api/v1/chat/prompt-options` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 ChatPromptOptionsResponse` |
+| POST | `/api/v1/chat/sessions` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), `{"title": string}` (선택) | `201 ChatSession` |
+| GET | `/api/v1/chat/sessions/{session_id}/messages` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `session_id`(string, 필수), query `limit,offset`(선택) | `200 {"items": ChatMessage[], "meta": PaginationMeta}` |
+| POST | `/api/v1/chat/sessions/{session_id}/messages` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), `ChatMessageSendRequest` (`message` 필수, `stream` 선택) | `200 ChatMessage` |
+| POST | `/api/v1/chat/sessions/{session_id}/stream` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), `ChatMessageSendRequest` (`message` 필수) | `200 text/event-stream (ChatStreamEvent)` |
+| DELETE | `/api/v1/chat/sessions/{session_id}` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `session_id`(string, 필수) | `204` |
 
 정책 메모:
 - 챗봇 진입 시 객관식 대화 프롬프트를 제공한다 (`REQ-030`).
@@ -372,15 +368,15 @@
 
 | Method | Path | 상태 | Request (필수/선택) | Success Response |
 |---|---|---|---|---|
-| GET | `/api/v1/notifications` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `limit,offset,is_read`(선택) | `200 {"items": Notification[], "unread_count": int}` |
-| GET | `/api/v1/notifications/unread-count` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 {"unread_count": int}` |
-| PATCH | `/api/v1/notifications/{notification_id}/read` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `notification_id`(string, 필수) | `200 Notification` |
-| PATCH | `/api/v1/notifications/read-all` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 {"updated_count": int}` |
-| POST | `/api/v1/reminders` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `MedicationReminderUpsertRequest` (`medication_name,schedule_times` 필수) | `201 Reminder` |
-| GET | `/api/v1/reminders` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `enabled`(선택) | `200 {"items": Reminder[]}` |
-| PATCH | `/api/v1/reminders/{reminder_id}` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `reminder_id`(string, 필수), `MedicationReminderUpsertRequest` (모든 필드 선택) | `200 Reminder` |
-| DELETE | `/api/v1/reminders/{reminder_id}` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `reminder_id`(string, 필수) | `204` |
-| GET | `/api/v1/reminders/medication-dday` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `days`(선택, 기본 7) | `200 {"items": DdayReminder[]}` |
+| GET | `/api/v1/notifications` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), query `limit,offset,is_read`(선택) | `200 {"items": Notification[], "unread_count": int}` |
+| GET | `/api/v1/notifications/unread-count` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 {"unread_count": int}` |
+| PATCH | `/api/v1/notifications/{notification_id}/read` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `notification_id`(string, 필수) | `200 Notification` |
+| PATCH | `/api/v1/notifications/read-all` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 {"updated_count": int}` |
+| POST | `/api/v1/reminders` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), `MedicationReminderUpsertRequest` (`medication_name,schedule_times` 필수) | `201 Reminder` |
+| GET | `/api/v1/reminders` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), query `enabled`(선택) | `200 {"items": Reminder[]}` |
+| PATCH | `/api/v1/reminders/{reminder_id}` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `reminder_id`(string, 필수), `MedicationReminderUpsertRequest` (모든 필드 선택) | `200 Reminder` |
+| DELETE | `/api/v1/reminders/{reminder_id}` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), path `reminder_id`(string, 필수) | `204` |
+| GET | `/api/v1/reminders/medication-dday` | 대기중 | 헤더 `Authorization: Bearer <access_token>` (필수), query `days`(선택, 기본 7) | `200 {"items": DdayReminder[]}` |
 
 정책 메모:
 - 약 소진 D-day 계산은 조제일/복용주기/복용개수 기준으로 오차 없이 수행해야 한다 (`REQ-021`, `REQ-121`).
@@ -388,29 +384,24 @@
 ### 12.6 대표 에러 코드 매핑
 
 정책 메모:
-- 모든 엔드포인트는 `AppException`/`ErrorCode` 기반 `ApiError` 구조를 반환한다 (REQ-012 구현 완료).
-- 프론트엔드는 `code` 기반으로 `message`/`action_hint`를 매핑해 일관된 UX를 제공한다 (`REQ-111`, `REQ-120`).
+- 현재 구현(v1) 다수 엔드포인트는 `detail` 문자열 기반 오류 응답을 사용한다.
+- 아래 `code` 매핑은 표준화 목표 코드이며, 구현 범위에 따라 단계적으로 반영한다.
+- 프론트엔드는 `error_code -> user_message/action_hint` 테이블을 유지해 일관된 UX를 제공한다 (`REQ-012`, `REQ-111`, `REQ-120`).
 
-| HTTP | code | 발생 상황 | action_hint |
+| HTTP | code 예시 | 발생 상황 | action_hint |
 |---|---|---|---|
-| 423 | `AUTH_ACCOUNT_INACTIVE` | 비활성화 계정 접근 | - |
-| 400 | `VALIDATION_ERROR` | 필수 필드 누락, 형식 오류 | 입력 항목 수정 후 다시 시도 |
-| 400 | `FILE_INVALID_TYPE` | 허용되지 않는 파일 확장자 | 다른 파일을 선택해주세요. |
-| 401 | `AUTH_INVALID_TOKEN` | 토큰 누락/유효하지 않음 | 로그인 페이지로 이동 |
-| 401 | `AUTH_TOKEN_EXPIRED` | 토큰 만료 | 로그인 페이지로 이동 |
-| 403 | `AUTH_FORBIDDEN` | 권한 없는 리소스 접근 | - |
-| 404 | `RESOURCE_NOT_FOUND` | 대상 리소스 없음 | - |
-| 409 | `STATE_CONFLICT` | 처리 상태 미충족(예: OCR 미완료 상태에서 가이드 요청) | 작업 상태를 확인 후 다시 시도해주세요. |
-| 409 | `DUPLICATE_EMAIL` | 이이메일 중복 | 다른 이메일을 입력해주세요. |
-| 409 | `DUPLICATE_PHONE` | 휴대폰 번호 중복 | 다른 번호를 입력해주세요. |
-| 413 | `FILE_TOO_LARGE` | 파일 크기 제한 초과 | 파일 크기를 줄인 후 다시 시도해주세요. |
-| 422 | `VALIDATION_ERROR` | 입력값 검증 실패(RequestValidationError) | 입력 항목 수정 후 다시 시도 |
-| 422 | `OCR_LOW_CONFIDENCE` | OCR 신뢰도 임계값 미달 | 재촬영 또는 직접 수정 |
-| 429 | `RATE_LIMITED` | 요청 과다 | 잠시 후 재시도 |
-| 500 | `INTERNAL_ERROR` | 서버 내부 오류 | 잠시 후 재시도 |
-| 503 | `OCR_QUEUE_UNAVAILABLE` | OCR 비동기 작업 큐 등록 실패 | 잠시 후 재시도 |
-| 503 | `QUEUE_UNAVAILABLE` | 비동기 작업 큐 등록 실패(서비스 일시 불가) | 잠시 후 재시도 |
-| 504 | `EXTERNAL_SERVICE_TIMEOUT` | 외부 LLM/OCR 타임아웃 | 잠시 후 재시도 |
+| 400 | `VALIDATION_ERROR` | 필수 필드 누락, 형식 오류 | `edit` |
+| 401 | `AUTH_INVALID_TOKEN` | 토큰 누락/만료 | `retry` |
+| 403 | `AUTH_FORBIDDEN` | 권한 없는 리소스 접근 | `contact_support` |
+| 404 | `RESOURCE_NOT_FOUND` | 대상 리소스 없음 | `edit` |
+| 409 | `STATE_CONFLICT` | 처리 상태 미충족(예: OCR 미완료 상태에서 가이드 요청) | `retry` |
+| 413 | `FILE_TOO_LARGE` | 파일 크기 제한 초과 | `reupload` |
+| 422 | `OCR_LOW_CONFIDENCE` | OCR 신뢰도 임계값 미달 | `edit` |
+| 429 | `RATE_LIMITED` | 요청 과다 | `retry` |
+| 500 | `INTERNAL_ERROR` | 서버 내부 오류 | `retry` |
+| 502 | `UPSTREAM_OCR_ERROR` | 외부 OCR API 실패 | `retry` |
+| 503 | `QUEUE_UNAVAILABLE` | 비동기 작업 큐 등록 실패(서비스 일시 불가) | `retry` |
+| 504 | `UPSTREAM_TIMEOUT` | 외부 LLM/OCR 타임아웃 | `retry` |
 
 ### 12.7 운영 안정성 연계 정책 (비계약)
 
@@ -425,42 +416,42 @@
 
 | 도메인 | Method | Path | 기능 요약 | 완료 상태 |
 |---|---|---|---|---|
-| V1 | POST | `/api/v1/auth/signup` | 회원가입 | 개발완료 |
-| V1 | POST | `/api/v1/auth/login` | 로그인 | 개발완료 |
-| V1 | GET | `/api/v1/auth/token/refresh` | 액세스 토큰 재발급 | 개발완료 |
-| V1 | GET | `/api/v1/users/me` | 내 정보 조회 | 개발완료 |
-| V1 | PATCH | `/api/v1/users/me` | 내 정보 수정 | 개발완료 |
-| V1 | DELETE | `/api/v1/users/me` | 회원 탈퇴(소프트 삭제) | 개발완료 |
-| V1 | PUT | `/api/v1/profiles/health` | 건강 프로필 저장/갱신 | 개발완료 |
-| V1 | GET | `/api/v1/profiles/health` | 건강 프로필 조회 | 개발완료 |
-| V1 | POST | `/api/v1/ocr/documents/upload` | OCR 문서 업로드 | 개발완료 |
-| V1 | POST | `/api/v1/ocr/jobs` | OCR 작업 생성 | 개발완료 |
-| V1 | GET | `/api/v1/ocr/jobs/{job_id}` | OCR 작업 상태 조회 | 개발완료 |
-| V1 | GET | `/api/v1/ocr/jobs/{job_id}/result` | OCR 결과 조회 | 개발완료 |
-| V1 | PATCH | `/api/v1/ocr/jobs/{job_id}/confirm` | OCR 수정 확정 | 개발완료 |
-| V1 | GET | `/api/v1/medications/search` | 약물명 자동완성 검색 | 개발완료 |
-| V1 | POST | `/api/v1/guides/jobs` | 가이드 작업 생성 | 개발완료 |
-| V1 | GET | `/api/v1/guides/jobs/{job_id}` | 가이드 작업 상태 조회 | 개발완료 |
-| V1 | GET | `/api/v1/guides/jobs/{job_id}/result` | 가이드 결과 조회 | 개발완료 |
-| V1 | POST | `/api/v1/guides/jobs/{job_id}/refresh` | 가이드 재생성 작업 생성 | 개발완료 |
-| V1 | GET | `/api/v1/analysis/summary` | 분석 요약 조회 | 개발완료 |
-| V1 | GET | `/api/v1/schedules/daily` | 일일 일정 조회 | 개발완료 |
-| V1 | PATCH | `/api/v1/schedules/items/{item_id}/status` | 일정 항목 상태 업데이트 | 개발완료 |
-| V1 | GET | `/api/v1/chat/prompt-options` | 챗봇 객관식 프롬프트 조회 | 개발완료 |
-| V1 | POST | `/api/v1/chat/sessions` | 챗봇 세션 생성 | 개발완료 |
-| V1 | GET | `/api/v1/chat/sessions/{session_id}/messages` | 세션 메시지 목록 조회 | 개발완료 |
-| V1 | POST | `/api/v1/chat/sessions/{session_id}/messages` | 세션 메시지 전송/응답 | 개발완료 |
-| V1 | POST | `/api/v1/chat/sessions/{session_id}/stream` | 세션 메시지 스트리밍 응답 | 개발완료 |
-| V1 | DELETE | `/api/v1/chat/sessions/{session_id}` | 챗봇 세션 삭제 | 개발완료 |
-| V1 | GET | `/api/v1/notifications` | 알림 목록 조회 | 개발완료 |
-| V1 | GET | `/api/v1/notifications/unread-count` | 미읽음 알림 개수 조회 | 개발완료 |
-| V1 | PATCH | `/api/v1/notifications/{notification_id}/read` | 알림 단건 읽음 처리 | 개발완료 |
-| V1 | PATCH | `/api/v1/notifications/read-all` | 알림 전체 읽음 처리 | 개발완료 |
-| V1 | POST | `/api/v1/reminders` | 복약 리마인더 생성 | 개발완료 |
-| V1 | GET | `/api/v1/reminders` | 복약 리마인더 조회 | 개발완료 |
-| V1 | PATCH | `/api/v1/reminders/{reminder_id}` | 복약 리마인더 수정 | 개발완료 |
-| V1 | DELETE | `/api/v1/reminders/{reminder_id}` | 복약 리마인더 삭제 | 개발완료 |
-| V1 | GET | `/api/v1/reminders/medication-dday` | 약 소진 D-day 조회 | 개발완료 |
+| V1 | POST | `/api/v1/auth/signup` | 회원가입 | 대기중 |
+| V1 | POST | `/api/v1/auth/login` | 로그인 | 대기중 |
+| V1 | GET | `/api/v1/auth/token/refresh` | 액세스 토큰 재발급 | 대기중 |
+| V1 | GET | `/api/v1/users/me` | 내 정보 조회 | 대기중 |
+| V1 | PATCH | `/api/v1/users/me` | 내 정보 수정 | 대기중 |
+| V1 | DELETE | `/api/v1/users/me` | 회원 탈퇴(소프트 삭제) | 대기중 |
+| V1 | PUT | `/api/v1/profiles/health` | 건강 프로필 저장/갱신 | 대기중 |
+| V1 | GET | `/api/v1/profiles/health` | 건강 프로필 조회 | 대기중 |
+| V1 | POST | `/api/v1/ocr/documents/upload` | OCR 문서 업로드 | 대기중 |
+| V1 | POST | `/api/v1/ocr/jobs` | OCR 작업 생성 | 대기중 |
+| V1 | GET | `/api/v1/ocr/jobs/{job_id}` | OCR 작업 상태 조회 | 대기중 |
+| V1 | GET | `/api/v1/ocr/jobs/{job_id}/result` | OCR 결과 조회 | 대기중 |
+| V1 | PATCH | `/api/v1/ocr/jobs/{job_id}/confirm` | OCR 수정 확정 | 대기중 |
+| V1 | GET | `/api/v1/medications/search` | 약물명 자동완성 검색 | 대기중 |
+| V1 | POST | `/api/v1/guides/jobs` | 가이드 작업 생성 | 대기중 |
+| V1 | GET | `/api/v1/guides/jobs/{job_id}` | 가이드 작업 상태 조회 | 대기중 |
+| V1 | GET | `/api/v1/guides/jobs/{job_id}/result` | 가이드 결과 조회 | 대기중 |
+| V1 | POST | `/api/v1/guides/jobs/{job_id}/refresh` | 가이드 재생성 작업 생성 | 대기중 |
+| V1 | GET | `/api/v1/analysis/summary` | 분석 요약 조회 | 대기중 |
+| V1 | GET | `/api/v1/schedules/daily` | 일일 일정 조회 | 대기중 |
+| V1 | PATCH | `/api/v1/schedules/items/{item_id}/status` | 일정 항목 상태 업데이트 | 대기중 |
+| V1 | GET | `/api/v1/chat/prompt-options` | 챗봇 객관식 프롬프트 조회 | 대기중 |
+| V1 | POST | `/api/v1/chat/sessions` | 챗봇 세션 생성 | 대기중 |
+| V1 | GET | `/api/v1/chat/sessions/{session_id}/messages` | 세션 메시지 목록 조회 | 대기중 |
+| V1 | POST | `/api/v1/chat/sessions/{session_id}/messages` | 세션 메시지 전송/응답 | 대기중 |
+| V1 | POST | `/api/v1/chat/sessions/{session_id}/stream` | 세션 메시지 스트리밍 응답 | 대기중 |
+| V1 | DELETE | `/api/v1/chat/sessions/{session_id}` | 챗봇 세션 삭제 | 대기중 |
+| V1 | GET | `/api/v1/notifications` | 알림 목록 조회 | 대기중 |
+| V1 | GET | `/api/v1/notifications/unread-count` | 미읽음 알림 개수 조회 | 대기중 |
+| V1 | PATCH | `/api/v1/notifications/{notification_id}/read` | 알림 단건 읽음 처리 | 대기중 |
+| V1 | PATCH | `/api/v1/notifications/read-all` | 알림 전체 읽음 처리 | 대기중 |
+| V1 | POST | `/api/v1/reminders` | 복약 리마인더 생성 | 대기중 |
+| V1 | GET | `/api/v1/reminders` | 복약 리마인더 조회 | 대기중 |
+| V1 | PATCH | `/api/v1/reminders/{reminder_id}` | 복약 리마인더 수정 | 대기중 |
+| V1 | DELETE | `/api/v1/reminders/{reminder_id}` | 복약 리마인더 삭제 | 대기중 |
+| V1 | GET | `/api/v1/reminders/medication-dday` | 약 소진 D-day 조회 | 대기중 |
 
 ### 12.9 요구사항 기반 미등록 API 갭 (2026-02-27)
 

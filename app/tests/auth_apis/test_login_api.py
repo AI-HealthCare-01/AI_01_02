@@ -33,5 +33,5 @@ class TestLoginAPI(TestCase):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post("/api/v1/auth/login", json=login_data)
 
-        # AuthService.authenticate 에서 실패 시 AUTH_INVALID_TOKEN(401) 발생
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        # AuthService.authenticate 에서 실패 시 HTTP_400_BAD_REQUEST 발생
+        assert response.status_code == status.HTTP_400_BAD_REQUEST

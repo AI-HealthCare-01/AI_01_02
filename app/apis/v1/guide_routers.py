@@ -9,8 +9,6 @@ from app.dtos.guides import (
     GuideJobCreateResponse,
     GuideJobResultResponse,
     GuideJobStatusResponse,
-    GuideRefreshRequest,
-    GuideRefreshResponse,
 )
 from app.models.users import User
 from app.services.guides import GuideService
@@ -75,32 +73,9 @@ async def get_guide_job_result(
             lifestyle_guidance=result.lifestyle_guidance,
             risk_level=result.risk_level,
             safety_notice=result.safety_notice,
-            source_references=result.structured_data.get("source_references", []),
-            adherence_rate_percent=result.structured_data.get("adherence_rate_percent"),
             structured_data=result.structured_data,
             created_at=result.created_at,
             updated_at=result.updated_at,
         ).model_dump(),
         status_code=status.HTTP_200_OK,
-    )
-
-
-@guide_router.post(
-    "/jobs/{job_id}/refresh",
-    response_model=GuideRefreshResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def refresh_guide_job(
-    job_id: Annotated[str, Path(pattern=r"^\d+$")],
-    user: Annotated[User, Depends(get_request_user)],
-    guide_service: Annotated[GuideService, Depends(GuideService)],
-    request: GuideRefreshRequest | None = None,
-) -> Response:
-    new_job = await guide_service.refresh_guide_job(user=user, job_id=int(job_id))
-    return Response(
-        GuideRefreshResponse(
-            refreshed_job_id=str(new_job.id),
-            status=new_job.status,
-        ).model_dump(),
-        status_code=status.HTTP_202_ACCEPTED,
     )

@@ -61,9 +61,6 @@ class UserRepository:
     async def update_last_login(self, user_id: int) -> None:
         await self._model.filter(id=user_id).update(last_login=datetime.now(config.TIMEZONE))
 
-    async def deactivate_user(self, user_id: int) -> None:
-        await self._model.filter(id=user_id).update(is_active=False)
-
     async def update_instance(self, user: User, data: dict[str, Any]) -> None:
         update_fields = []
         for key, value in data.items():

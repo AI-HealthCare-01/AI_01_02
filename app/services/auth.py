@@ -1,14 +1,8 @@
-from collections.abc import Awaitable
-from typing import cast
-
+from fastapi.exceptions import HTTPException
 from pydantic import EmailStr
-from redis.asyncio import Redis
-from redis.exceptions import RedisError
+from starlette import status
 from tortoise.transactions import in_transaction
 
-from app.core import config
-from app.core.exceptions import AppException, ErrorCode
-from app.core.logger import default_logger as logger
 from app.dtos.auth import LoginRequest, SignUpRequest
 from app.models.users import User
 from app.repositories.user_repository import UserRepository
@@ -16,44 +10,6 @@ from app.services.jwt import JwtService
 from app.utils.common import normalize_phone_number
 from app.utils.jwt.tokens import AccessToken, RefreshToken
 from app.utils.security import hash_password, verify_password
-
-TOKEN_BLACKLIST_PREFIX = "token:blacklist:"
-TOKEN_BLACKLIST_TTL_SECONDS = (config.REFRESH_TOKEN_EXPIRE_MINUTES + 1) * 60
-
-_redis_client: Redis | None = None
-
-
-def _get_redis_client() -> Redis:
-    global _redis_client
-    if _redis_client is None:
-        _redis_client = Redis(
-            host=config.REDIS_HOST,
-            port=config.REDIS_PORT,
-            db=config.REDIS_DB,
-            password=config.REDIS_PASSWORD,
-            decode_responses=True,
-            socket_connect_timeout=config.REDIS_SOCKET_TIMEOUT_SECONDS,
-            socket_timeout=config.REDIS_SOCKET_TIMEOUT_SECONDS,
-        )
-    return _redis_client
-
-
-async def blacklist_jti(jti: str, ttl_seconds: int = TOKEN_BLACKLIST_TTL_SECONDS) -> None:
-    client = _get_redis_client()
-    try:
-        await cast(Awaitable, client.setex(f"{TOKEN_BLACKLIST_PREFIX}{jti}", ttl_seconds, "1"))
-    except RedisError:
-        logger.warning("failed to blacklist jti=%s — token revocation may not take effect", jti, exc_info=True)
-
-
-async def is_jti_blacklisted(jti: str) -> bool:
-    client = _get_redis_client()
-    try:
-        result = await cast(Awaitable, client.exists(f"{TOKEN_BLACKLIST_PREFIX}{jti}"))
-        return bool(result)
-    except RedisError:
-        logger.warning("failed to check jti blacklist — treating as not blacklisted", exc_info=True)
-        return False
 
 
 class AuthService:
@@ -89,19 +45,19 @@ class AuthService:
         email = str(data.email)
         user = await self.user_repo.get_user_by_email(email)
         if not user:
-            raise AppException(
-                ErrorCode.AUTH_INVALID_TOKEN, developer_message="이메일 또는 비밀번호가 올바르지 않습니다."
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="이메일 또는 비밀번호가 올바르지 않습니다."
             )
 
         # 비밀번호 검증
         if not verify_password(data.password, user.hashed_password):
-            raise AppException(
-                ErrorCode.AUTH_INVALID_TOKEN, developer_message="이메일 또는 비밀번호가 올바르지 않습니다."
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="이메일 또는 비밀번호가 올바르지 않습니다."
             )
 
         # 활성 사용자 체크
         if not user.is_active:
-            raise AppException(ErrorCode.AUTH_ACCOUNT_INACTIVE)
+            raise HTTPException(status_code=status.HTTP_423_LOCKED, detail="비활성화된 계정입니다.")
 
         return user
 
@@ -111,15 +67,8 @@ class AuthService:
 
     async def check_email_exists(self, email: str | EmailStr, *, exclude_user_id: int | None = None) -> None:
         if await self.user_repo.exists_by_email(str(email), exclude_user_id=exclude_user_id):
-            raise AppException(ErrorCode.DUPLICATE_EMAIL)
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="이미 사용중인 이메일입니다.")
 
     async def check_phone_number_exists(self, phone_number: str, *, exclude_user_id: int | None = None) -> None:
         if await self.user_repo.exists_by_phone_number(phone_number, exclude_user_id=exclude_user_id):
-            raise AppException(ErrorCode.DUPLICATE_PHONE)
-
-    async def deactivate_user(self, user: User, *, access_jti: str, refresh_jti: str | None) -> None:
-        async with in_transaction():
-            await self.user_repo.deactivate_user(user.id)
-        await blacklist_jti(access_jti)
-        if refresh_jti:
-            await blacklist_jti(refresh_jti)
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="이미 사용중인 휴대폰 번호입니다.")

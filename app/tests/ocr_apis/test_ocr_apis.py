@@ -8,7 +8,7 @@ from tortoise.contrib.test import TestCase
 
 from app.core import config
 from app.main import app
-from app.models.ocr import Document, OcrFailureCode, OcrJob, OcrJobStatus
+from app.models.ocr import Document, OcrFailureCode, OcrJob, OcrJobStatus, OcrResult
 
 
 class TestOcrApis(TestCase):
@@ -81,7 +81,7 @@ class TestOcrApis(TestCase):
             )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "지원하지 않는 파일 형식" in response.json()["message"]
+        assert "허용되지 않는 파일 형식" in response.json()["detail"]
 
     async def test_upload_document_too_large(self):
         email = "ocr_upload_large@example.com"
@@ -142,7 +142,7 @@ class TestOcrApis(TestCase):
             )
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json()["code"] == "RESOURCE_NOT_FOUND"
+        assert response.json()["detail"] == "문서를 찾을 수 없습니다."
 
     async def test_create_ocr_job_queue_publish_failure_marks_job_failed(self):
         email = "ocr_queue_failure@example.com"
@@ -162,7 +162,7 @@ class TestOcrApis(TestCase):
                 )
 
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-        assert "OCR" in response.json()["message"]
+        assert response.json()["detail"] == "OCR 작업 큐 등록에 실패했습니다. 잠시 후 다시 시도해주세요."
 
         failed_job = await OcrJob.filter(document_id=int(document["id"])).order_by("-id").first()
         assert failed_job is not None
@@ -172,7 +172,7 @@ class TestOcrApis(TestCase):
         assert failed_job.error_message == "[PROCESSING_ERROR] OCR queue publish failed."
 
         document_record = await Document.get(id=int(document["id"]))
-        stored_path = Path(config.MEDIA_DIR) / document_record.temp_storage_key
+        stored_path = Path(config.MEDIA_DIR) / document_record.file_path
         assert stored_path.exists() is False
 
     async def test_get_ocr_job_of_other_user_fails(self):
@@ -195,7 +195,7 @@ class TestOcrApis(TestCase):
             response = await client.get(f"/api/v1/ocr/jobs/{owner_job_id}", headers=other_headers)
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json()["code"] == "RESOURCE_NOT_FOUND"
+        assert response.json()["detail"] == "OCR 작업을 찾을 수 없습니다."
 
     async def test_ocr_resources_created_in_db(self):
         email = "ocr_db_resource@example.com"
@@ -230,7 +230,7 @@ class TestOcrApis(TestCase):
             response = await client.get(f"/api/v1/ocr/jobs/{job_id}/result", headers=headers)
 
         assert response.status_code == status.HTTP_409_CONFLICT
-        assert response.json()["code"] == "STATE_CONFLICT"
+        assert response.json()["detail"] == "OCR 작업이 아직 완료되지 않았습니다."
 
     async def test_get_ocr_result_success(self):
         email = "ocr_result_success@example.com"
@@ -247,9 +247,12 @@ class TestOcrApis(TestCase):
 
             job = await OcrJob.get(id=int(job_id))
             job.status = OcrJobStatus.SUCCEEDED
-            job.raw_text = "테스트 OCR 결과"
-            job.structured_result = {"summary": "ok"}
-            await job.save(update_fields=["status", "raw_text", "structured_result"])
+            await job.save(update_fields=["status"])
+            await OcrResult.create(
+                job=job,
+                extracted_text="테스트 OCR 결과",
+                structured_data={"summary": "ok"},
+            )
 
             response = await client.get(f"/api/v1/ocr/jobs/{job_id}/result", headers=headers)
 

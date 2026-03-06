@@ -1,12 +1,11 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, status
 from fastapi.responses import JSONResponse as Response
 
 from app.core import config
 from app.core.config import Env
-from app.core.exceptions import AppException, ErrorCode
 from app.dtos.auth import LoginRequest, LoginResponse, SignUpRequest, TokenRefreshResponse
 from app.services.auth import AuthService
 from app.services.jwt import JwtService
@@ -40,7 +39,6 @@ async def login(
         value=str(refresh_token),
         httponly=True,
         secure=True if config.ENV == Env.PROD else False,
-        samesite="lax",
         domain=config.COOKIE_DOMAIN or None,
         expires=refresh_token_exp,
         max_age=config.REFRESH_TOKEN_EXPIRE_MINUTES * 60,
@@ -54,7 +52,7 @@ async def token_refresh(
     refresh_token: Annotated[str | None, Cookie()] = None,
 ) -> Response:
     if not refresh_token:
-        raise AppException(ErrorCode.AUTH_INVALID_TOKEN, developer_message="Refresh token is missing.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token is missing.")
     access_token = jwt_service.refresh_jwt(refresh_token)
     return Response(
         content=TokenRefreshResponse(access_token=str(access_token)).model_dump(), status_code=status.HTTP_200_OK

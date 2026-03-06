@@ -1,9 +1,9 @@
 # AI Health 4인 스윔레인 (REQ/API 기준)
 
 기준 문서:
-- `docs/REQUIREMENTS_DEFINITION.md` (v1.29)
-- `docs/API_SPECIFICATION.md` (v1.36)
-- `docs/TEAM_DEVELOPMENT_GUIDELINE.md` (v2.30)
+- `docs/REQUIREMENTS_DEFINITION.md` (v1.28)
+- `docs/API_SPECIFICATION.md` (v1.34)
+- `docs/TEAM_DEVELOPMENT_GUIDELINE.md` (v2.29)
 
 ## 1) 역할(레인) 정의
 

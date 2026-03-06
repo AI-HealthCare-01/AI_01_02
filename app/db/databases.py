@@ -10,10 +10,6 @@ TORTOISE_APP_MODELS = [
     "app.models.ocr",
     "app.models.notifications",
     "app.models.users",
-    "app.models.profiles",
-    "app.models.medications",
-    "app.models.reminders",
-    "app.models.chat",
 ]
 
 TORTOISE_ORM = {

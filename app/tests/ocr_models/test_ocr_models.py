@@ -1,6 +1,6 @@
 from tortoise.contrib.test import TestCase
 
-from app.models.ocr import Document, DocumentType, OcrJob, OcrJobStatus
+from app.models.ocr import Document, DocumentType, OcrJob, OcrJobStatus, OcrResult
 from app.models.users import Gender, User
 
 
@@ -22,7 +22,7 @@ class TestOcrModels(TestCase):
             user=user,
             document_type=DocumentType.PRESCRIPTION,
             file_name="prescription_001.png",
-            temp_storage_key="documents/1/prescription_001.png",
+            file_path="/tmp/prescription_001.png",
             file_size=1024,
             mime_type="image/png",
         )
@@ -34,25 +34,27 @@ class TestOcrModels(TestCase):
         assert job.status == OcrJobStatus.QUEUED
         assert job.error_message is None
 
-    async def test_ocr_job_result_stored_inline(self):
+    async def test_create_ocr_result_one_to_one(self):
         user = await self._create_user(email="ocr_result@example.com", phone_number="01033334444")
 
         document = await Document.create(
             user=user,
             document_type=DocumentType.MEDICAL_RECORD,
             file_name="medical_record_001.pdf",
-            temp_storage_key="documents/1/medical_record_001.pdf",
+            file_path="/tmp/medical_record_001.pdf",
             file_size=2048,
             mime_type="application/pdf",
         )
-        job = await OcrJob.create(
-            user=user,
-            document=document,
-            status=OcrJobStatus.SUCCEEDED,
-            raw_text="복약 지시: 하루 두 번 복용",
-            structured_result={"medications": [{"name": "A", "frequency": "BID"}]},
+        job = await OcrJob.create(user=user, document=document, status=OcrJobStatus.PROCESSING)
+
+        result = await OcrResult.create(
+            job=job,
+            extracted_text="복약 지시: 하루 두 번 복용",
+            structured_data={"medications": [{"name": "A", "frequency": "BID"}]},
         )
 
-        await job.refresh_from_db()
-        assert job.raw_text == "복약 지시: 하루 두 번 복용"
-        assert job.structured_result["medications"][0]["name"] == "A"
+        await job.fetch_related("result")
+
+        assert result.job_id == job.id
+        assert job.result.id == result.id
+        assert job.result.structured_data["medications"][0]["name"] == "A"

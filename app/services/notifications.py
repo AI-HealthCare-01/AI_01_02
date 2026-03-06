@@ -1,6 +1,6 @@
+from fastapi import HTTPException, status
 from tortoise.transactions import in_transaction
 
-from app.core.exceptions import AppException, ErrorCode
 from app.models.notifications import Notification
 from app.models.users import User
 from app.repositories.notification_repository import NotificationRepository
@@ -33,7 +33,7 @@ class NotificationService:
     async def mark_as_read(self, *, user: User, notification_id: int) -> Notification:
         notification = await self.repo.get_user_notification(notification_id=notification_id, user_id=user.id)
         if not notification:
-            raise AppException(ErrorCode.RESOURCE_NOT_FOUND, developer_message="알림을 찾을 수 없습니다.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="알림을 찾을 수 없습니다.")
         async with in_transaction():
             await self.repo.mark_as_read(notification)
             await notification.refresh_from_db()

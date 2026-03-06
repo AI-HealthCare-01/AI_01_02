@@ -4,7 +4,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from tortoise import fields, models
-from tortoise.fields.relational import ForeignKeyRelation
+from tortoise.fields.relational import ForeignKeyRelation, OneToOneRelation
 
 if TYPE_CHECKING:
     from app.models.users import User
@@ -39,11 +39,10 @@ class Document(models.Model):
     )
     document_type = fields.CharEnumField(enum_type=DocumentType)
     file_name = fields.CharField(max_length=255)
-    temp_storage_key = fields.CharField(max_length=500)
+    file_path = fields.CharField(max_length=500)
     file_size = fields.BigIntField()
     mime_type = fields.CharField(max_length=100)
     uploaded_at = fields.DatetimeField(auto_now_add=True)
-    disposed_at = fields.DatetimeField(null=True)
 
     class Meta:
         table = "documents"
@@ -69,13 +68,6 @@ class OcrJob(models.Model):
     max_retries = fields.IntField(default=3)
     failure_code = fields.CharEnumField(enum_type=OcrFailureCode, null=True)
     error_message = fields.TextField(null=True)
-
-    raw_text = fields.TextField(null=True)
-    text_blocks_json: list[dict[str, Any]] = fields.JSONField(null=True)
-    structured_result: dict[str, Any] = fields.JSONField(null=True, default=dict)
-    confirmed_result: dict[str, Any] = fields.JSONField(null=True, default=dict)
-    needs_user_review = fields.BooleanField(default=False)
-
     queued_at = fields.DatetimeField(auto_now_add=True)
     started_at = fields.DatetimeField(null=True)
     completed_at = fields.DatetimeField(null=True)
@@ -85,3 +77,20 @@ class OcrJob(models.Model):
     class Meta:
         table = "ocr_jobs"
         indexes = (("user_id", "status"), ("document_id", "created_at"), ("status", "retry_count"))
+
+
+class OcrResult(models.Model):
+    id = fields.BigIntField(primary_key=True)
+    job_id: int
+    job: OneToOneRelation[OcrJob] = fields.OneToOneField(
+        "models.OcrJob",
+        related_name="result",
+        on_delete=fields.CASCADE,
+    )
+    extracted_text = fields.TextField()
+    structured_data: dict[str, Any] = fields.JSONField(default=dict)
+    created_at = fields.DatetimeField(auto_now_add=True)
+    updated_at = fields.DatetimeField(auto_now=True)
+
+    class Meta:
+        table = "ocr_results"
