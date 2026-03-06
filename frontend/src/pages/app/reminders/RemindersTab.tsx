@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Plus, Trash2, Bell, BellOff, Clock, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { reminderApi, Reminder, DdayReminder } from "@/lib/api";
+import { toUserMessage } from "@/lib/errorMessages";
 
 export default function RemindersTab() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -14,8 +15,8 @@ export default function RemindersTab() {
       const [r, d] = await Promise.all([reminderApi.list(), reminderApi.getDday(30)]);
       setReminders(r.items);
       setDday(d.items);
-    } catch {
-      toast.error("알람 목록을 불러오지 못했습니다.");
+    } catch (err) {
+      toast.error(toUserMessage(err));
     } finally {
       setLoading(false);
     }
@@ -34,8 +35,8 @@ export default function RemindersTab() {
         enabled: !r.enabled,
       });
       setReminders((prev) => prev.map((x) => (x.id === r.id ? updated : x)));
-    } catch {
-      toast.error("업데이트에 실패했습니다.");
+    } catch (err) {
+      toast.error(toUserMessage(err));
     }
   }
 
@@ -44,8 +45,8 @@ export default function RemindersTab() {
       await reminderApi.delete(id);
       setReminders((prev) => prev.filter((r) => r.id !== id));
       toast.success("알람이 삭제되었습니다.");
-    } catch {
-      toast.error("삭제에 실패했습니다.");
+    } catch (err) {
+      toast.error(toUserMessage(err));
     }
   }
 
@@ -167,7 +168,7 @@ function ReminderForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =
       onSaved();
       onClose();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "저장에 실패했습니다.");
+      toast.error(toUserMessage(err));
     } finally {
       setLoading(false);
     }

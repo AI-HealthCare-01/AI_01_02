@@ -2,20 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { Loader2, AlertTriangle, Search } from "lucide-react";
 import { toast } from "sonner";
-import { ocrApi, guideApi, OcrMedication } from "@/lib/api";
-
-const BASE = "/api/v1";
+import { ocrApi, guideApi, OcrMedication, request } from "@/lib/api";
+import { toUserMessage } from "@/lib/errorMessages";
 
 async function searchMedications(q: string): Promise<string[]> {
   if (!q.trim()) return [];
-  const token = localStorage.getItem("access_token");
-  const res = await fetch(
-    `${BASE}/medications/search?q=${encodeURIComponent(q)}&limit=8`,
-    { headers: token ? { Authorization: `Bearer ${token}` } : {} },
-  );
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.items ?? []).map((i: { name: string }) => i.name);
+  try {
+    const data = await request<{ items: { name: string }[] }>(
+      `/medications/search?q=${encodeURIComponent(q)}&limit=8`,
+    );
+    return (data.items ?? []).map((i) => i.name);
+  } catch {
+    return [];
+  }
 }
 
 function isLowConfidence(val: number | null | undefined) {
@@ -168,12 +167,12 @@ export default function OcrResult() {
       setLoadingResult(true);
       ocrApi.getJobResult(savedJobId)
         .then((res) => {
-          const meds = res.structured_data?.medications ?? [];
+          const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
         })
-        .catch(() => toast.error("결과를 불러오지 못했습니다."))
+        .catch((err) => toast.error(toUserMessage(err)))
         .finally(() => setLoadingResult(false));
     }
   }, []); // eslint-disable-line
@@ -189,10 +188,10 @@ export default function OcrResult() {
       for (let i = 0; i < 30; i++) {
         await new Promise((r) => setTimeout(r, 2000));
         const status = await ocrApi.getJobStatus(job_id);
-        if (status.status === "COMPLETED") {
+        if (status.status === "SUCCEEDED") {
           localStorage.setItem("ocr_job_id", job_id);
           const res = await ocrApi.getJobResult(job_id);
-          const meds = res.structured_data?.medications ?? [];
+          const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
@@ -204,7 +203,7 @@ export default function OcrResult() {
       }
       throw new Error("분석 시간이 초과되었습니다.");
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "오류가 발생했습니다.");
+      toast.error(toUserMessage(err));
       setPhase("preview");
     }
   }
@@ -221,7 +220,7 @@ export default function OcrResult() {
       localStorage.setItem("guide_job_id", guide.job_id);
       navigate("/ai-guide");
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "오류가 발생했습니다.");
+      toast.error(toUserMessage(err));
       setPhase("result");
     }
   }

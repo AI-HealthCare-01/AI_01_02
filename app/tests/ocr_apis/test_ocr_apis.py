@@ -8,7 +8,7 @@ from tortoise.contrib.test import TestCase
 
 from app.core import config
 from app.main import app
-from app.models.ocr import Document, OcrFailureCode, OcrJob, OcrJobStatus, OcrResult
+from app.models.ocr import Document, OcrFailureCode, OcrJob, OcrJobStatus
 
 
 class TestOcrApis(TestCase):
@@ -172,7 +172,7 @@ class TestOcrApis(TestCase):
         assert failed_job.error_message == "[PROCESSING_ERROR] OCR queue publish failed."
 
         document_record = await Document.get(id=int(document["id"]))
-        stored_path = Path(config.MEDIA_DIR) / document_record.file_path
+        stored_path = Path(config.MEDIA_DIR) / document_record.temp_storage_key
         assert stored_path.exists() is False
 
     async def test_get_ocr_job_of_other_user_fails(self):
@@ -247,12 +247,9 @@ class TestOcrApis(TestCase):
 
             job = await OcrJob.get(id=int(job_id))
             job.status = OcrJobStatus.SUCCEEDED
-            await job.save(update_fields=["status"])
-            await OcrResult.create(
-                job=job,
-                extracted_text="테스트 OCR 결과",
-                structured_data={"summary": "ok"},
-            )
+            job.raw_text = "테스트 OCR 결과"
+            job.structured_result = {"summary": "ok"}
+            await job.save(update_fields=["status", "raw_text", "structured_result"])
 
             response = await client.get(f"/api/v1/ocr/jobs/{job_id}/result", headers=headers)
 

@@ -15,6 +15,7 @@ const ERROR_MAP: Record<string, ErrorMeta> = {
   DUPLICATE_PHONE:           { message: "이미 사용 중인 전화번호입니다.", action: "다른 번호를 입력해주세요." },
   STATE_CONFLICT:            { message: "현재 상태에서 처리할 수 없습니다.", action: "작업 상태를 확인 후 다시 시도해주세요." },
   OCR_LOW_CONFIDENCE:        { message: "사진 인식 품질이 낮습니다.", action: "더 선명한 사진으로 다시 촬영해주세요." },
+  AUTH_ACCOUNT_INACTIVE:     { message: "비활성화된 계정입니다.", action: "고객센터에 문의해주세요." },
   RATE_LIMITED:              { message: "요청이 너무 많습니다.", action: "잠시 후 다시 시도해주세요." },
   INTERNAL_ERROR:            { message: "서버 오류가 발생했습니다.", action: "잠시 후 다시 시도해주세요." },
   OCR_QUEUE_UNAVAILABLE:     { message: "OCR 처리 서비스가 일시적으로 불가합니다.", action: "잠시 후 다시 시도해주세요." },
@@ -40,6 +41,8 @@ export function toUserMessage(error: unknown): string {
   if (raw.includes("HTTP 403")) return ERROR_MAP.AUTH_FORBIDDEN.message;
   if (raw.includes("HTTP 404")) return ERROR_MAP.RESOURCE_NOT_FOUND.message;
   if (raw.includes("HTTP 409")) return ERROR_MAP.STATE_CONFLICT.message;
+  if (raw.includes("HTTP 413")) return `${ERROR_MAP.FILE_TOO_LARGE.message} ${ERROR_MAP.FILE_TOO_LARGE.action}`;
+  if (raw.includes("HTTP 423")) return `${ERROR_MAP.AUTH_ACCOUNT_INACTIVE.message} ${ERROR_MAP.AUTH_ACCOUNT_INACTIVE.action}`;
   if (raw.includes("HTTP 429")) return ERROR_MAP.RATE_LIMITED.message;
   if (raw.includes("HTTP 5"))   return ERROR_MAP.INTERNAL_ERROR.message;
 

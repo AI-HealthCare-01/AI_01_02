@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import { Bell, ChevronDown, ChevronUp, RefreshCw, AlertTriangle } from "lucide-react";
-import { guideApi, GuideJobResult, GuideStatus } from "@/lib/api";
+import { useNavigate } from "react-router";
+import { Bell, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Clock } from "lucide-react";
+import { toast } from "sonner";
+import { guideApi, ocrApi, reminderApi, GuideJobResult, GuideStatus, OcrMedication } from "@/lib/api";
+import { toUserMessage } from "@/lib/errorMessages";
 
 // ── 아코디언 ──────────────────────────────────────────────────────────────────
 
@@ -34,9 +37,52 @@ function Accordion({ title, children }: { title: string; children: React.ReactNo
 // ── 메인 ─────────────────────────────────────────────────────────────────────
 
 export default function AiGuide() {
+  const navigate = useNavigate();
   const [status, setStatus] = useState<GuideStatus | "IDLE">("IDLE");
   const [result, setResult] = useState<GuideJobResult | null>(null);
   const [error, setError] = useState("");
+  const [detectedMeds, setDetectedMeds] = useState<OcrMedication[]>([]);
+  const [creatingReminders, setCreatingReminders] = useState(false);
+  const [remindersDismissed, setRemindersDismissed] = useState(false);
+
+  async function loadDetectedMedications() {
+    const ocrJobId = localStorage.getItem("ocr_job_id");
+    if (!ocrJobId) return;
+    try {
+      const ocrResult = await ocrApi.getJobResult(ocrJobId);
+      const meds = ocrResult.structured_data?.medications ?? [];
+      if (meds.length > 0) {
+        const existing = await reminderApi.list();
+        const existingNames = new Set(existing.items.map((r) => r.medication_name));
+        setDetectedMeds(meds.filter((m) => !existingNames.has(m.drug_name)));
+      }
+    } catch {
+      // OCR 결과 로드 실패 시 무시
+    }
+  }
+
+  async function createRemindersForMeds() {
+    setCreatingReminders(true);
+    try {
+      await Promise.all(
+        detectedMeds.map((med) =>
+          reminderApi.create({
+            medication_name: med.drug_name,
+            schedule_times: ["09:00", "13:00", "19:00"].slice(0, med.frequency_per_day ?? 3),
+            total_days: med.total_days ?? undefined,
+            daily_intake_count: med.frequency_per_day ?? undefined,
+          }),
+        ),
+      );
+      toast.success("리마인더가 설정되었습니다.");
+      setDetectedMeds([]);
+      navigate("/reminders");
+    } catch (err: unknown) {
+      toast.error(toUserMessage(err));
+    } finally {
+      setCreatingReminders(false);
+    }
+  }
 
   async function loadGuide() {
     const jobId = localStorage.getItem("guide_job_id");
@@ -45,12 +91,14 @@ export default function AiGuide() {
       return;
     }
     setError("");
+    setRemindersDismissed(false);
     try {
       const s = await guideApi.getJobStatus(jobId);
-      if (s.status === "COMPLETED") {
+      if (s.status === "SUCCEEDED") {
         const r = await guideApi.getJobResult(jobId);
         setResult(r);
-        setStatus("COMPLETED");
+        setStatus("SUCCEEDED");
+        loadDetectedMedications();
       } else if (s.status === "FAILED") {
         setStatus("FAILED");
         setError(s.error_message ?? "가이드 생성에 실패했습니다.");
@@ -69,10 +117,11 @@ export default function AiGuide() {
       await new Promise((r) => setTimeout(r, 2000));
       try {
         const s = await guideApi.getJobStatus(jobId);
-        if (s.status === "COMPLETED") {
+        if (s.status === "SUCCEEDED") {
           const r = await guideApi.getJobResult(jobId);
           setResult(r);
-          setStatus("COMPLETED");
+          setStatus("SUCCEEDED");
+          loadDetectedMedications();
           return;
         }
         if (s.status === "FAILED") {
@@ -150,7 +199,7 @@ export default function AiGuide() {
       )}
 
       {/* 생성 완료 */}
-      {status === "COMPLETED" && result && (
+      {status === "SUCCEEDED" && result && (
         <div className="space-y-4">
           {/* 완료 배너 */}
           <div className="bg-green-600 text-white rounded-xl px-6 py-5 flex items-center gap-4">
@@ -172,6 +221,47 @@ export default function AiGuide() {
           )}
           {result.safety_notice && (
             <Accordion title="주의사항">{result.safety_notice}</Accordion>
+          )}
+
+          {/* 리마인더 설정 제안 (REQ-060) */}
+          {detectedMeds.length > 0 && !remindersDismissed && (
+            <div className="border border-green-200 rounded-xl p-5 bg-green-50">
+              <div className="flex items-center gap-2 mb-3">
+                <Clock className="w-4 h-4 text-green-600" />
+                <p className="text-sm font-semibold text-green-700">복약 리마인더 설정</p>
+              </div>
+              <p className="text-sm text-gray-600 mb-3">
+                감지된 약물에 대해 복약 리마인더를 자동으로 설정할 수 있습니다.
+              </p>
+              <ul className="space-y-1 mb-4">
+                {detectedMeds.map((med, i) => (
+                  <li key={i} className="text-sm text-gray-700 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 bg-green-400 rounded-full shrink-0" />
+                    {med.drug_name}
+                    {med.frequency_per_day && (
+                      <span className="text-xs text-gray-400">
+                        (1일 {med.frequency_per_day}회)
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setRemindersDismissed(true)}
+                  className="flex-1 py-2.5 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-white transition-colors"
+                >
+                  나중에
+                </button>
+                <button
+                  onClick={createRemindersForMeds}
+                  disabled={creatingReminders}
+                  className="flex-1 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                >
+                  {creatingReminders ? "설정중..." : "리마인더 설정"}
+                </button>
+              </div>
+            </div>
           )}
 
           {/* 참고 자료 */}

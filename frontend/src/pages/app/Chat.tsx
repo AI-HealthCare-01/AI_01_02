@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Send, Plus, Loader2, MessageCircle, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { chatApi } from "@/lib/api";
+import { toUserMessage } from "@/lib/errorMessages";
 
 // ── 세션 목록 (localStorage) ────────────────────────────────────────────────
 
@@ -91,20 +92,30 @@ export default function Chat() {
         },
       ]);
       setMobileView("chat");
-    } catch {
-      toast.error("채팅 세션을 시작하지 못했습니다.");
+    } catch (err) {
+      toast.error(toUserMessage(err));
     }
   }
 
   function selectSession(s: StoredSession) {
     setActiveSessionId(s.id);
-    setMessages([
-      {
-        role: "assistant",
-        content: "안녕하세요! 복약, 부작용에 대해서 무엇이든 질문하세요.",
-      },
-    ]);
+    setMessages([{ role: "assistant", content: "안녕하세요! 복약, 부작용에 대해서 무엇이든 질문하세요." }]);
     setMobileView("chat");
+    chatApi.getMessages(s.id, { limit: 50 })
+      .then((r) => {
+        if (r.items.length === 0) return;
+        setMessages(r.items.map((m) => ({
+          role: m.role === "USER" ? "user" : "assistant",
+          content: m.content,
+        })));
+      })
+      .catch(() => {
+        // 세션이 서버에 없으면 localStorage에서 제거 후 새 세션 생성
+        const next = loadSessions().filter((x) => x.id !== s.id);
+        saveSessions(next);
+        setSessions(next);
+        startNewSession();
+      });
   }
 
   async function deleteCurrentSession() {

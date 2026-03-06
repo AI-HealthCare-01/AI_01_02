@@ -12,6 +12,7 @@ import {
   DdayReminder,
   GuideJobResult,
 } from "@/lib/api";
+import { toUserMessage } from "@/lib/errorMessages";
 
 function formatDate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -23,7 +24,7 @@ function formatTime(iso: string) {
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING: "예정",
-  COMPLETED: "완료",
+  DONE: "완료",
   SKIPPED: "건너뜀",
 };
 
@@ -66,7 +67,7 @@ export default function Dashboard() {
     if (jobId) {
       try {
         const status = await guideApi.getJobStatus(jobId);
-        if (status.status === "COMPLETED") {
+        if (status.status === "SUCCEEDED") {
           const result = await guideApi.getJobResult(jobId);
           setGuide(result);
         }
@@ -78,12 +79,12 @@ export default function Dashboard() {
 
   useEffect(() => { load(); }, []); // eslint-disable-line
 
-  async function updateStatus(itemId: string, status: "COMPLETED" | "SKIPPED") {
+  async function updateStatus(itemId: string, status: "DONE" | "SKIPPED") {
     try {
       const updated = await scheduleApi.updateStatus(itemId, status);
       setItems((prev) => prev.map((it) => (it.item_id === itemId ? updated : it)));
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "업데이트에 실패했습니다.");
+      toast.error(toUserMessage(err));
     }
   }
 
@@ -217,7 +218,7 @@ function ScheduleRow({
   onUpdate,
 }: {
   item: ScheduleItem;
-  onUpdate: (id: string, status: "COMPLETED" | "SKIPPED") => void;
+  onUpdate: (id: string, status: "DONE" | "SKIPPED") => void;
 }) {
   const isPending = item.status === "PENDING";
   return (
@@ -231,7 +232,7 @@ function ScheduleRow({
       {isPending ? (
         <div className="flex gap-1.5">
           <button
-            onClick={() => onUpdate(item.item_id, "COMPLETED")}
+            onClick={() => onUpdate(item.item_id, "DONE")}
             className="px-3 py-1 text-xs font-medium bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
           >
             완료
@@ -240,13 +241,13 @@ function ScheduleRow({
             onClick={() => onUpdate(item.item_id, "SKIPPED")}
             className="px-3 py-1 text-xs font-medium bg-gray-50 text-gray-400 rounded-lg hover:bg-gray-100 transition-colors"
           >
-            예정
+            건너뜀
           </button>
         </div>
       ) : (
         <span
           className={`text-xs font-medium px-2.5 py-1 rounded-lg ${
-            item.status === "COMPLETED"
+            item.status === "DONE"
               ? "bg-green-50 text-green-700"
               : "bg-gray-100 text-gray-400"
           }`}

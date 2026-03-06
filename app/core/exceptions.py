@@ -144,12 +144,12 @@ _ERROR_META: dict[ErrorCode, tuple[int, str, str | None, bool]] = {
 class AppException(Exception):  # noqa: N818
     """도메인 에러 코드 기반 표준 예외."""
 
-    def __init__(self, code: ErrorCode, *, developer_message: str | None = None) -> None:
+    def __init__(self, code: ErrorCode, *, developer_message: str | None = None, action_hint: str | None = None) -> None:
         meta = _ERROR_META[code]
         self.code = code
         self.http_status: int = meta[0]
         self.user_message: str = meta[1]
-        self.action_hint: str | None = meta[2]
+        self.action_hint: str | None = action_hint if action_hint is not None else meta[2]
         self.retryable: bool = meta[3]
         self.developer_message = developer_message
         super().__init__(developer_message or self.user_message)

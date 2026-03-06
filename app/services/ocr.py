@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -89,36 +90,19 @@ class OcrService:
                 max_retries=config.OCR_JOB_MAX_RETRIES,
             )
 
-        try:
-            # For immediate response in a real testing block, we do synchronous queue bypass here 
-            # (In production, this is done by a background worker handling Redis queue)
-            # await self.queue_publisher.enqueue_job(job.id)
-            await self._process_job_locally(job.id, document.temp_storage_key)
-        except Exception as err:
-            failed_at = datetime.now(config.TIMEZONE)
-            await OcrJob.filter(id=job.id, status=OcrJobStatus.QUEUED).update(
-                status=OcrJobStatus.FAILED,
-                failure_code=OcrFailureCode.PROCESSING_ERROR,
-                error_message=f"[PROCESSING_ERROR] OCR queue publish or execution failed. {str(err)}",
-                started_at=datetime.now(config.TIMEZONE),
-                completed_at=failed_at,
-            )
-            self._dispose_uploaded_document_file(temp_storage_key=document.temp_storage_key, job_id=job.id)
-            default_logger.exception("ocr queue publish failed (job_id=%s)", job.id)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="OCR 작업 큐 등록/처리에 실패했습니다.",
-            ) from err
+        # Run OCR processing in background so the HTTP response returns immediately.
+        # The frontend polls GET /ocr/jobs/{id} until status changes to SUCCEEDED/FAILED.
+        asyncio.create_task(self._process_job_locally(job.id, document.temp_storage_key))
 
         return job
 
     async def _process_job_locally(self, job_id: int, temp_storage_key: str) -> None:
+        """Run Clova OCR + OpenAI parsing. Designed to run as a background task."""
         file_path = Path(config.MEDIA_DIR).resolve() / temp_storage_key
-        # Update state to PROCESSING
-        started_at = datetime.now(config.TIMEZONE)
-        await OcrJob.filter(id=job_id).update(status=OcrJobStatus.PROCESSING, started_at=started_at)
-        
-        try: 
+        try:
+            started_at = datetime.now(config.TIMEZONE)
+            await OcrJob.filter(id=job_id).update(status=OcrJobStatus.PROCESSING, started_at=started_at)
+
             clova_resp = await call_clova_ocr(file_path)
             raw_text = " ".join([
                 field.get("inferText", "")
@@ -135,17 +119,21 @@ class OcrService:
                 text_blocks_json=text_blocks_json,
                 structured_result=structured_result,
                 needs_user_review=structured_result.get("needs_user_review", True),
-                completed_at=datetime.now(config.TIMEZONE)
+                completed_at=datetime.now(config.TIMEZONE),
             )
         except Exception as err:
-             await OcrJob.filter(id=job_id).update(
-                status=OcrJobStatus.FAILED,
-                error_message=str(err),
-                completed_at=datetime.now(config.TIMEZONE)
-             )
-             raise err
+            default_logger.exception("ocr local processing failed (job_id=%s)", job_id)
+            try:
+                await OcrJob.filter(id=job_id).update(
+                    status=OcrJobStatus.FAILED,
+                    failure_code=OcrFailureCode.PROCESSING_ERROR,
+                    error_message=f"[PROCESSING_ERROR] {err}"[:1000],
+                    completed_at=datetime.now(config.TIMEZONE),
+                )
+            except Exception:
+                default_logger.exception("failed to mark ocr job as FAILED (job_id=%s)", job_id)
         finally:
-             self._dispose_uploaded_document_file(temp_storage_key=temp_storage_key, job_id=job_id)
+            self._dispose_uploaded_document_file(temp_storage_key=temp_storage_key, job_id=job_id)
 
     async def get_ocr_job(self, *, user: User, job_id: int) -> OcrJob:
         job = await self.repo.get_user_job(job_id=job_id, user_id=user.id)

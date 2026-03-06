@@ -4,7 +4,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from tortoise import fields, models
-from tortoise.fields.relational import ForeignKeyRelation, OneToOneRelation
+from tortoise.fields.relational import ForeignKeyRelation
 
 if TYPE_CHECKING:
     from app.models.users import User
@@ -43,6 +43,7 @@ class Document(models.Model):
     file_size = fields.BigIntField()
     mime_type = fields.CharField(max_length=100)
     uploaded_at = fields.DatetimeField(auto_now_add=True)
+    disposed_at = fields.DatetimeField(null=True)
 
     class Meta:
         table = "documents"
@@ -68,13 +69,13 @@ class OcrJob(models.Model):
     max_retries = fields.IntField(default=3)
     failure_code = fields.CharEnumField(enum_type=OcrFailureCode, null=True)
     error_message = fields.TextField(null=True)
-    
+
     raw_text = fields.TextField(null=True)
     text_blocks_json: list[dict[str, Any]] = fields.JSONField(null=True)
     structured_result: dict[str, Any] = fields.JSONField(null=True, default=dict)
     confirmed_result: dict[str, Any] = fields.JSONField(null=True, default=dict)
     needs_user_review = fields.BooleanField(default=False)
-    
+
     queued_at = fields.DatetimeField(auto_now_add=True)
     started_at = fields.DatetimeField(null=True)
     completed_at = fields.DatetimeField(null=True)
