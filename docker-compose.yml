@@ -52,6 +52,8 @@ services:
         - linux/arm64
     image: ${DOCKER_USER}/${DOCKER_REPOSITORY}:app-${APP_VERSION}
     env_file: .env
+    environment:
+      REDIS_HOST: redis
     command: |
       sh -c "uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
@@ -82,6 +84,8 @@ services:
         - linux/arm64
     image: ${DOCKER_USER}/${DOCKER_REPOSITORY}:ai-${AI_WORKER_VERSION}
     env_file: .env
+    environment:
+      REDIS_HOST: redis
     restart: always
     mem_limit: 4G
     volumes:
