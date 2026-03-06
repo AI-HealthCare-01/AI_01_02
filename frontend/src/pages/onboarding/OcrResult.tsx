@@ -51,7 +51,7 @@ function MedRow({
 
   const nameLow = isLowConfidence(med.confidence);
   const inputCls = (low: boolean, disabled: boolean) =>
-    `border rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-green-500 ${
+    `border rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-green-500 ${
       disabled ? "bg-gray-50 text-gray-500 cursor-default" : low ? "border-amber-400 bg-amber-50" : "border-gray-200 bg-white"
     }`;
 
@@ -233,14 +233,14 @@ export default function OcrResult() {
 
   if (loadingResult) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen gradient-warm-bg flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-green-600" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-10">
+    <div className="min-h-screen gradient-warm-bg p-6 md:p-10">
       <div className="max-w-2xl mx-auto space-y-4">
         {/* Header */}
         <div>
@@ -255,7 +255,7 @@ export default function OcrResult() {
         </div>
 
         {/* 이미지 미리보기 */}
-        {phase !== "summary" && <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        {phase !== "summary" && <div className="bg-white/85 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden">
           <p className="text-xs font-semibold text-gray-500 px-4 pt-4 mb-2">처방전 스캔</p>
           {preview ? (
             <img src={preview} alt="처방전" className="w-full object-contain" />
@@ -270,19 +270,19 @@ export default function OcrResult() {
             <button
               onClick={() => navigate("/onboarding/scan")}
               disabled={phase === "analyzing" || phase === "confirming"}
-              className="flex-1 py-2.5 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40"
+              className="flex-1 py-2.5 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-all duration-200 disabled:opacity-40"
             >
               다시 업로드
             </button>
             <button
               onClick={phase === "preview" ? handleAnalyze : undefined}
               disabled={phase === "analyzing" || phase === "result" || phase === "confirming"}
-              className={`flex-1 py-2.5 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors ${
+              className={`flex-1 py-2.5 text-sm rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-200 ${
                 phase === "result" || phase === "confirming"
-                  ? "bg-green-700 text-white cursor-default"
+                  ? "gradient-primary text-white cursor-default"
                   : phase === "analyzing"
-                  ? "bg-green-600 text-white opacity-80 cursor-not-allowed"
-                  : "bg-green-600 text-white hover:bg-green-700"
+                  ? "gradient-primary text-white opacity-80 cursor-not-allowed"
+                  : "gradient-primary text-white hover:shadow-lg"
               }`}
             >
               {phase === "analyzing" && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -293,7 +293,7 @@ export default function OcrResult() {
 
         {/* REQ-060: 복약 요약 화면 */}
         {phase === "summary" && (
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="card-warm p-5">
             <div className="mb-4">
               <p className="text-sm font-semibold text-green-700">복약 요약</p>
               <p className="text-xs text-gray-400 mt-1">확인된 복약 정보입니다. AI 가이드에서 상세 분석을 확인하세요.</p>
@@ -325,13 +325,13 @@ export default function OcrResult() {
             <div className="flex gap-3 mt-5">
               <button
                 onClick={() => navigate("/")}
-                className="flex-1 py-2.5 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 py-2.5 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-all duration-200"
               >
                 홈으로
               </button>
               <button
                 onClick={() => navigate("/ai-guide")}
-                className="flex-1 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+                className="flex-1 py-2.5 gradient-primary text-white text-sm rounded-xl font-bold transition-all duration-200"
               >
                 AI 가이드 보기
               </button>
@@ -341,7 +341,7 @@ export default function OcrResult() {
 
         {/* 스캔된 약 정보 */}
         {(phase === "result" || phase === "confirming") && (
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="card-warm p-5">
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm font-semibold text-gray-700">스캔된 약 정보</p>
               {hasLowConfidence && (
@@ -366,14 +366,14 @@ export default function OcrResult() {
               <button
                 onClick={() => setEditable((v) => !v)}
                 disabled={phase === "confirming"}
-                className="flex-1 py-2.5 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40"
+                className="flex-1 py-2.5 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-all duration-200 disabled:opacity-40"
               >
                 {editable ? "수정 완료" : "약 정보 수정하기"}
               </button>
               <button
                 onClick={handleConfirm}
                 disabled={phase === "confirming" || medications.length === 0}
-                className="flex-1 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 gradient-primary text-white text-sm rounded-xl font-bold transition-all duration-200 disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {phase === "confirming" && <Loader2 className="w-4 h-4 animate-spin" />}
                 확인 및 저장

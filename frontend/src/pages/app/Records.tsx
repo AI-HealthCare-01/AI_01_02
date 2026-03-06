@@ -172,18 +172,18 @@ export default function Records() {
         {/* Left column */}
         <div className="md:col-span-2 space-y-4">
           {/* Date navigator */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-4">
+          <div className="card-warm p-4">
             <div className="flex items-center justify-between">
               <button
                 onClick={() => goDay(-1)}
-                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+                className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 transition-all duration-200"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <span className="text-sm font-semibold text-gray-700">{dateLabel}</span>
               <button
                 onClick={() => goDay(1)}
-                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+                className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 transition-all duration-200"
                 disabled={toDateStr(selectedDate) >= toDateStr(new Date())}
               >
                 <ChevronRight className="w-4 h-4" />
@@ -192,7 +192,7 @@ export default function Records() {
           </div>
 
           {/* 오늘의 일정 */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <div className="card-warm p-5">
             <h3 className="text-sm font-bold text-gray-700 mb-3">오늘의 일정</h3>
             {loading ? (
               <p className="text-center text-sm text-gray-400 py-6">불러오는 중...</p>
@@ -204,7 +204,7 @@ export default function Records() {
                   <div key={item.item_id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl ${item.status !== "PENDING" ? "opacity-50" : ""}`}>
                     <span className="text-xs text-gray-400 w-10 shrink-0">{formatTime(item.scheduled_at)}</span>
                     <span className="text-sm text-gray-700 flex-1 truncate">{item.title}</span>
-                    <span className={`text-xs font-medium px-2.5 py-1 rounded-lg ${
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-xl ${
                       item.status === "DONE" ? "bg-green-50 text-green-700" :
                       item.status === "SKIPPED" ? "bg-gray-100 text-gray-400" :
                       "bg-blue-50 text-blue-600"
@@ -218,7 +218,7 @@ export default function Records() {
           </div>
 
           {/* 생활 패턴 */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <div className="card-warm p-5">
             <h3 className="text-sm font-bold text-gray-700 mb-3">생활 패턴</h3>
             <div className="flex gap-3 flex-wrap">
               {LIFE_PATTERNS.map(({ label, value, icon: Icon, color }) => (
@@ -235,7 +235,7 @@ export default function Records() {
         {/* Right column */}
         <div className="space-y-4">
           {/* 이번 주 복약 */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <div className="card-warm p-5">
             <h3 className="text-sm font-bold text-gray-700 mb-4">이번 주 복약</h3>
             <div className="space-y-2">
               {weeklyData.map(({ label, done, hasItems }) => (
@@ -258,7 +258,7 @@ export default function Records() {
             </div>
 
             <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-              <span className="text-sm font-medium text-gray-600">복약 준수율</span>
+              <span className="text-sm font-semibold text-gray-600">복약 준수율</span>
               <span className="text-lg font-bold text-green-600">
                 {adherenceRate !== null ? `${adherenceRate}%` : "—"}
               </span>
@@ -268,7 +268,7 @@ export default function Records() {
           {/* 일상 정보 수정 버튼 */}
           <button
             onClick={() => setShowEdit(true)}
-            className="w-full py-3 bg-red-500 text-white text-sm font-medium rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
+            className="w-full py-3 bg-red-400 hover:bg-red-500 text-white text-sm font-bold rounded-xl hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2"
           >
             <Edit2 className="w-4 h-4" />
             일상 정보 수정하기
@@ -349,11 +349,11 @@ function EditModal({
     }
   }
 
-  const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent";
+  const inputCls = "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent";
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 my-4">
+    <div className="fixed inset-0 bg-black/25 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 my-4 animate-page-enter">
         <h3 className="text-base font-bold text-gray-800 mb-5">일상 정보 수정</h3>
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
           <p className="text-xs font-semibold text-gray-400 uppercase">수면</p>
@@ -401,7 +401,7 @@ function EditModal({
             <div className="flex gap-3">
               {[true, false].map((v) => (
                 <button key={String(v)} type="button" onClick={() => setSmoking(v)}
-                  className={`flex-1 py-2 rounded-lg text-sm border transition-colors ${smoking === v ? "bg-green-600 text-white border-green-600" : "border-gray-200 text-gray-500"}`}>
+                  className={`flex-1 py-2 rounded-xl text-sm border transition-all duration-200 ${smoking === v ? "gradient-primary text-white border-green-600 font-bold" : "border-gray-200 text-gray-500"}`}>
                   {v ? "예" : "아니오"}
                 </button>
               ))}
@@ -421,7 +421,7 @@ function EditModal({
             <div className="flex gap-3">
               {[true, false].map((v) => (
                 <button key={String(v)} type="button" onClick={() => setRegularMeals(v)}
-                  className={`flex-1 py-2 rounded-lg text-sm border transition-colors ${regularMeals === v ? "bg-green-600 text-white border-green-600" : "border-gray-200 text-gray-500"}`}>
+                  className={`flex-1 py-2 rounded-xl text-sm border transition-all duration-200 ${regularMeals === v ? "gradient-primary text-white border-green-600 font-bold" : "border-gray-200 text-gray-500"}`}>
                   {v ? "예" : "아니오"}
                 </button>
               ))}
@@ -429,8 +429,8 @@ function EditModal({
           </div>
         </div>
         <div className="flex gap-3 mt-6">
-          <button onClick={onClose} className="flex-1 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">취소</button>
-          <button onClick={handleSave} disabled={loading} className="flex-1 py-2.5 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60">
+          <button onClick={onClose} className="flex-1 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all duration-200">취소</button>
+          <button onClick={handleSave} disabled={loading} className="flex-1 py-2.5 text-sm font-bold gradient-primary text-white rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-60">
             {loading ? "저장 중..." : "저장"}
           </button>
         </div>

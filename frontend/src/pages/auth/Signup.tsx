@@ -61,18 +61,22 @@ export default function Signup() {
   }
 
   const inputCls =
-    "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent";
-  const labelCls = "block text-sm font-medium text-gray-700 mb-1.5";
+    "w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm bg-white/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-400/50 focus:border-green-400 transition-all duration-200";
+  const labelCls = "block text-sm font-semibold text-gray-600 mb-1.5";
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen gradient-warm-bg flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Organic decorative blobs */}
+      <div className="absolute top-[-6%] left-[-5%] w-72 h-72 bg-green-200/25 rounded-full blur-3xl" />
+      <div className="absolute bottom-[-10%] right-[-6%] w-80 h-80 bg-amber-100/20 rounded-full blur-3xl" />
+
+      <div className="w-full max-w-sm relative z-10 animate-page-enter">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-green-600 tracking-tight">logly</h1>
-          <p className="text-gray-400 text-sm mt-1">회원가입</p>
+          <h1 className="font-display text-3xl font-bold text-green-600 tracking-tight">logly</h1>
+          <p className="text-gray-400 text-sm mt-1 font-medium">회원가입</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+        <div className="bg-white/85 backdrop-blur-sm rounded-2xl shadow-lg p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className={labelCls}>이름</label>
@@ -140,10 +144,10 @@ export default function Signup() {
                     key={g}
                     type="button"
                     onClick={() => set("gender", g)}
-                    className={`flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-all duration-200 ${
                       form.gender === g
-                        ? "bg-green-600 text-white border-green-600"
-                        : "border-gray-200 text-gray-500 hover:border-green-400"
+                        ? "gradient-primary text-white border-transparent shadow-sm"
+                        : "border-gray-200 text-gray-500 hover:border-green-300 bg-white/70"
                     }`}
                   >
                     {g === "MALE" ? "남성" : "여성"}
@@ -159,7 +163,7 @@ export default function Signup() {
                 <select
                   value={birth.year}
                   onChange={(e) => setBirth((b) => ({ ...b, year: e.target.value }))}
-                  className="flex-1 border border-gray-200 rounded-lg px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="flex-1 border border-gray-200 rounded-xl px-2 py-2.5 text-sm bg-white/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-400/50"
                 >
                   <option value="">년도</option>
                   {YEARS.map((y) => (
@@ -171,7 +175,7 @@ export default function Signup() {
                 <select
                   value={birth.month}
                   onChange={(e) => setBirth((b) => ({ ...b, month: e.target.value }))}
-                  className="w-20 border border-gray-200 rounded-lg px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-20 border border-gray-200 rounded-xl px-2 py-2.5 text-sm bg-white/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-400/50"
                 >
                   <option value="">월</option>
                   {MONTHS.map((m) => (
@@ -183,7 +187,7 @@ export default function Signup() {
                 <select
                   value={birth.day}
                   onChange={(e) => setBirth((b) => ({ ...b, day: e.target.value }))}
-                  className="w-20 border border-gray-200 rounded-lg px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-20 border border-gray-200 rounded-xl px-2 py-2.5 text-sm bg-white/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-400/50"
                 >
                   <option value="">일</option>
                   {DAYS.map((d) => (
@@ -198,7 +202,7 @@ export default function Signup() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-60 mt-2"
+              className="w-full gradient-primary text-white py-2.5 rounded-xl text-sm font-bold hover:shadow-lg transition-all duration-200 disabled:opacity-60 mt-2"
             >
               {loading ? "가입 중..." : "회원가입"}
             </button>
@@ -206,7 +210,7 @@ export default function Signup() {
 
           <p className="text-center text-sm text-gray-400 mt-6">
             이미 계정이 있으신가요?{" "}
-            <Link to="/login" className="text-green-600 font-medium hover:underline">
+            <Link to="/login" className="text-green-600 font-semibold hover:text-green-700 transition-colors">
               로그인
             </Link>
           </p>

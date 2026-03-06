@@ -46,7 +46,7 @@ export default function Lifestyle() {
   }
 
   const inputCls =
-    "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent";
+    "w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm bg-white/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-400/50 focus:border-green-400 transition-all duration-200";
 
   return (
     <OnboardingShell step={2} title="생활 습관" subtitle="일상 생활 패턴을 알려주세요">
@@ -60,10 +60,10 @@ export default function Lifestyle() {
                 key={value}
                 type="button"
                 onClick={() => setExercise(value)}
-                className={`flex-1 py-3 rounded-lg border text-center transition-colors ${
+                className={`flex-1 py-3 rounded-xl border text-center transition-all duration-200 ${
                   exercise === value
-                    ? "bg-green-600 text-white border-green-600"
-                    : "border-gray-200 text-gray-500 hover:border-green-400"
+                    ? "gradient-primary text-white border-transparent shadow-sm"
+                    : "border-gray-200 text-gray-500 hover:border-green-300 bg-white/70"
                 }`}
               >
                 <p className="text-sm font-semibold">{label}</p>
@@ -115,10 +115,10 @@ export default function Lifestyle() {
                 key={s}
                 type="button"
                 onClick={() => toggle(substances, setSubstances, s)}
-                className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+                className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all duration-200 ${
                   substances.includes(s)
-                    ? "bg-green-600 text-white border-green-600"
-                    : "border-gray-200 text-gray-500 hover:border-green-400"
+                    ? "gradient-primary text-white border-transparent shadow-sm"
+                    : "border-gray-200 text-gray-500 hover:border-green-300 bg-white/70"
                 }`}
               >
                 {s}
@@ -138,7 +138,7 @@ export default function Lifestyle() {
         </button>
         <button
           onClick={handleNext}
-          className="px-6 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+          className="px-6 py-2.5 gradient-primary text-white text-sm font-bold rounded-xl hover:shadow-lg transition-all duration-200"
         >
           다음 단계
         </button>
