@@ -167,7 +167,7 @@ export default function OcrResult() {
       setLoadingResult(true);
       ocrApi.getJobResult(savedJobId)
         .then((res) => {
-          const meds = res.structured_data?.medications ?? [];
+          const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
@@ -191,7 +191,7 @@ export default function OcrResult() {
         if (status.status === "SUCCEEDED") {
           localStorage.setItem("ocr_job_id", job_id);
           const res = await ocrApi.getJobResult(job_id);
-          const meds = res.structured_data?.medications ?? [];
+          const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");

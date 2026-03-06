@@ -244,6 +244,7 @@ export interface OcrJobResult {
   job_id: string;
   extracted_text: string;
   structured_data: {
+    extracted_medications?: OcrMedication[];
     medications?: OcrMedication[];
     needs_user_review?: boolean;
     [key: string]: unknown;
