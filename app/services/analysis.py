@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Any
 
 from app.models.health_profiles import UserHealthProfile
@@ -128,7 +129,7 @@ def _extract_medications_from_ocr_job(job: OcrJob) -> list[dict[str, Any]]:
 
 
 class AnalysisService:
-    async def get_summary(self, *, user: User) -> dict:
+    async def get_summary(self, *, user: User, date_from: date | None = None, date_to: date | None = None) -> dict:
         profile = await UserHealthProfile.get_or_none(user_id=user.id)
 
         risk_flags = []

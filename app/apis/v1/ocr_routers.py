@@ -126,13 +126,12 @@ async def confirm_ocr_result(
     structured = result.confirmed_result if isinstance(result.confirmed_result, dict) else {}
     if not structured:
         structured = result.structured_result if isinstance(result.structured_result, dict) else {}
-    needs_review = bool(structured.get("needs_user_review", False))
     return Response(
         OcrConfirmResponse(
             job_id=str(result.id),
             extracted_text=result.raw_text or "",
             structured_data=structured,
-            needs_user_review=needs_review,
+            needs_user_review=result.needs_user_review,
             created_at=result.created_at,
             updated_at=result.updated_at,
         ).model_dump(),

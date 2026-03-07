@@ -136,9 +136,9 @@ export default function NotificationsTab() {
           <div className="flex gap-2 mb-4">
             <button
               onClick={() => setFilter("all")}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-all duration-200 ${
                 filter === "all"
-                  ? "bg-green-600 text-white border-green-600"
+                  ? "gradient-primary text-white border-transparent shadow-sm"
                   : "border-gray-200 text-gray-500 hover:border-gray-300"
               }`}
             >
@@ -146,9 +146,9 @@ export default function NotificationsTab() {
             </button>
             <button
               onClick={() => setFilter("unread")}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-all duration-200 ${
                 filter === "unread"
-                  ? "bg-green-600 text-white border-green-600"
+                  ? "gradient-primary text-white border-transparent shadow-sm"
                   : "border-gray-200 text-gray-500 hover:border-gray-300"
               }`}
             >
@@ -170,10 +170,10 @@ export default function NotificationsTab() {
                 <div
                   key={n.id}
                   onClick={() => !n.is_read && markRead(n.id)}
-                  className={`flex items-center gap-3 bg-white border rounded-xl px-4 py-3.5 transition-colors ${
+                  className={`flex items-center gap-3 bg-white/80 rounded-xl px-4 py-3.5 shadow-sm transition-all duration-200 ${
                     n.is_read
-                      ? "border-gray-100 cursor-default"
-                      : "border-gray-200 hover:bg-gray-50 cursor-pointer"
+                      ? "cursor-default"
+                      : "hover:bg-gray-50 cursor-pointer"
                   }`}
                 >
                   <div className="shrink-0">{TYPE_ICON[n.type]}</div>
@@ -202,7 +202,7 @@ export default function NotificationsTab() {
           <button
             onClick={markAllRead}
             disabled={unread.length === 0}
-            className="w-full py-2.5 text-sm font-medium border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full py-2.5 text-sm font-medium border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             모두 읽음
           </button>

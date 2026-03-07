@@ -16,10 +16,17 @@ from redis.exceptions import RedisError, TimeoutError as RedisTimeoutError
 from tortoise.transactions import in_transaction
 
 from ai_worker.core import config
-from app.models.ocr import OcrFailureCode, OcrJob, OcrJobStatus, OcrResult
+from app.models.ocr import OcrFailureCode, OcrJob, OcrJobStatus
 
 _PARSE_SYSTEM_PROMPT = (
     "처방전/약봉투 OCR 텍스트에서 약물 정보를 추출하세요. "
+    "각 필드 설명: "
+    "drug_name=약품명 전체(제형 포함, mg 숫자만 제외. 예: '콘서타오로스서방정27mg' → '콘서타오로스서방정'), "
+    "dose=약물 함량의 mg 숫자(예: '콘서타오로스서방정27mg' → 27.0), "
+    "frequency_per_day=1일 투여 횟수, "
+    "dosage_per_once=1회 투여 정수(정/캡슐 수), "
+    "dispensed_date=조제일(YYYY-MM-DD), "
+    "total_days=총 투약 일수. "
     "반드시 JSON으로만 응답하세요: "
     '{"medications": [{"drug_name": str, "dose": float|null, "frequency_per_day": int|null, '
     '"dosage_per_once": int|null, "dispensed_date": "YYYY-MM-DD"|null, "total_days": int|null}], '
@@ -247,7 +254,7 @@ async def process_ocr_job(
         logger.warning("ocr job not found after claim (job_id=%s)", job_id)
         return False
 
-    absolute_file_path = Path(config.MEDIA_DIR).resolve() / job.document.file_path
+    absolute_file_path = Path(config.MEDIA_DIR).resolve() / job.document.temp_storage_key
     try:
         if not absolute_file_path.exists():
             raise FileNotFoundError(f"document file not found: {absolute_file_path}")
@@ -258,17 +265,12 @@ async def process_ocr_job(
         completed_at = datetime.now(config.TIMEZONE)
 
         async with in_transaction():
-            await OcrResult.update_or_create(
-                job_id=job.id,
-                defaults={
-                    "extracted_text": extracted_text,
-                    "structured_data": structured_data,
-                    "updated_at": completed_at,
-                },
-            )
-            _ensure_transition(OcrJobStatus.PROCESSING, OcrJobStatus.SUCCEEDED)
             await OcrJob.filter(id=job.id, status=OcrJobStatus.PROCESSING).update(
                 status=OcrJobStatus.SUCCEEDED,
+                raw_text=extracted_text,
+                text_blocks_json=structured_data.get("raw_blocks"),
+                structured_result=structured_data,
+                needs_user_review=structured_data.get("needs_user_review", True),
                 completed_at=completed_at,
                 error_message=None,
                 failure_code=None,

@@ -17,6 +17,7 @@ AI Health Final은 ADHD 환자/보호자 지원을 위한 백엔드 프로젝트
   - 인증/인가 (`/api/v1/auth/*`, `/api/v1/users/me`) — REQ-024~REQ-028
   - 건강 프로필 저장/조회 (`/api/v1/profiles/health`) — REQ-045~REQ-047
   - OCR 업로드/작업/상태/결과/확정 (`/api/v1/ocr/*`) — REQ-050~REQ-058, REQ-061~REQ-062
+  - OCR 실패 처리, 가이드 생성 실패 처리 — REQ-022~REQ-023
   - 약물명 자동완성 검색 (`/api/v1/medications/search`) — REQ-062
   - 가이드 작업/상태/결과/갱신 (`/api/v1/guides/*`) — REQ-001~REQ-009
   - 분석 요약 (`/api/v1/analysis/summary`) — REQ-013~REQ-015

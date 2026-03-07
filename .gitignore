@@ -15,7 +15,8 @@ wheels/
 .coverage.*
 AGENT.md
 AGENTS.md
-
+CLAUDE.md
+.claude/
 # Media and Local DB
 app/media/
 *.sqlite3

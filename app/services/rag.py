@@ -41,6 +41,7 @@ def _get_bm25() -> tuple[BM25Okapi, list[dict]]:
     return BM25Okapi(tokenized), ADHD_DOCUMENTS
 
 
+@lru_cache(maxsize=1)
 def _get_chroma_collection() -> chromadb.Collection:
     client = chromadb.HttpClient(host=config.CHROMA_HOST, port=config.CHROMA_PORT)
     return client.get_or_create_collection(
@@ -50,9 +51,9 @@ def _get_chroma_collection() -> chromadb.Collection:
 
 
 async def _embed(text: str) -> list[float]:
-    from openai import AsyncOpenAI
+    from app.services.llm import get_openai_client  # noqa: PLC0415
 
-    client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
+    client = get_openai_client()
     response = await client.embeddings.create(model=config.OPENAI_EMBEDDING_MODEL, input=[text])
     return response.data[0].embedding
 
@@ -68,8 +69,9 @@ async def hybrid_search(query: str) -> tuple[list[RagResult], bool]:
     dense_weight = 1.0 - bm25_weight
 
     # BM25 검색 (동기, 스레드풀에서 실행)
-    bm25, docs = await asyncio.get_event_loop().run_in_executor(None, _get_bm25)
-    bm25_scores_raw: list[float] = await asyncio.get_event_loop().run_in_executor(None, bm25.get_scores, query.split())
+    loop = asyncio.get_running_loop()
+    bm25, docs = await loop.run_in_executor(None, _get_bm25)
+    bm25_scores_raw: list[float] = await loop.run_in_executor(None, bm25.get_scores, query.split())
 
     # BM25 점수 정규화 (0~1)
     bm25_max = max(bm25_scores_raw) if max(bm25_scores_raw) > 0 else 1.0
@@ -78,8 +80,8 @@ async def hybrid_search(query: str) -> tuple[list[RagResult], bool]:
     # Dense 벡터 검색
     try:
         query_embedding = await _embed(query)
-        collection = await asyncio.get_event_loop().run_in_executor(None, _get_chroma_collection)
-        chroma_result = await asyncio.get_event_loop().run_in_executor(
+        collection = await loop.run_in_executor(None, _get_chroma_collection)
+        chroma_result = await loop.run_in_executor(
             None,
             lambda: collection.query(
                 query_embeddings=[query_embedding],  # type: ignore[arg-type]

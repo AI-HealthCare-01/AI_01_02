@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Send, Plus, Loader2, MessageCircle, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { chatApi } from "@/lib/api";
+import { toUserMessage } from "@/lib/errorMessages";
 
-// ── 세션 목록 (localStorage) ────────────────────────────────────────────────
+// ── Session list (localStorage) ──────────────────────────────────────────────
 
 interface StoredSession {
   id: string;
@@ -36,15 +37,13 @@ function dateLabel(iso: string) {
   return d.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
 }
 
-// ── 메시지 타입 ─────────────────────────────────────────────────────────────
+const WELCOME_MESSAGE = "안녕하세요! 복약, 부작용에 대해서 무엇이든 질문하세요.";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
   streaming?: boolean;
 }
-
-// ── 메인 컴포넌트 ──────────────────────────────────────────────────────────
 
 export default function Chat() {
   const [sessions, setSessions] = useState<StoredSession[]>(loadSessions);
@@ -53,13 +52,11 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [promptOptions, setPromptOptions] = useState<{ id: string; label: string }[]>([]);
-  // 모바일: 대화목록 보기 vs 채팅 보기
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatApi.getPromptOptions().then((r) => setPromptOptions(r.items)).catch(() => {});
-    // 저장된 세션 없으면 새 세션 자동 시작
     const stored = loadSessions();
     if (stored.length === 0) {
       startNewSession();
@@ -84,27 +81,31 @@ export default function Chat() {
       saveSessions(next);
       setSessions(next);
       setActiveSessionId(session.id);
-      setMessages([
-        {
-          role: "assistant",
-          content: "안녕하세요! 복약, 부작용에 대해서 무엇이든 질문하세요.",
-        },
-      ]);
+      setMessages([{ role: "assistant", content: WELCOME_MESSAGE }]);
       setMobileView("chat");
-    } catch {
-      toast.error("채팅 세션을 시작하지 못했습니다.");
+    } catch (err) {
+      toast.error(toUserMessage(err));
     }
   }
 
   function selectSession(s: StoredSession) {
     setActiveSessionId(s.id);
-    setMessages([
-      {
-        role: "assistant",
-        content: "안녕하세요! 복약, 부작용에 대해서 무엇이든 질문하세요.",
-      },
-    ]);
+    setMessages([{ role: "assistant", content: WELCOME_MESSAGE }]);
     setMobileView("chat");
+    chatApi.getMessages(s.id, { limit: 50 })
+      .then((r) => {
+        if (r.items.length === 0) return;
+        setMessages(r.items.map((m) => ({
+          role: m.role === "USER" ? "user" : "assistant",
+          content: m.content,
+        })));
+      })
+      .catch(() => {
+        const next = loadSessions().filter((x) => x.id !== s.id);
+        saveSessions(next);
+        setSessions(next);
+        startNewSession();
+      });
   }
 
   async function deleteCurrentSession() {
@@ -125,10 +126,9 @@ export default function Chat() {
     const msg = (text ?? input).trim();
     if (!msg || !activeSessionId || streaming) return;
 
-    // 첫 유저 메시지로 세션 제목 업데이트
     const isFirst = messages.filter((m) => m.role === "user").length === 0;
     if (isFirst) {
-      const title = msg.length > 20 ? msg.slice(0, 20) + "…" : msg;
+      const title = msg.length > 20 ? msg.slice(0, 20) + "..." : msg;
       const next = sessions.map((s) =>
         s.id === activeSessionId ? { ...s, title } : s,
       );
@@ -137,27 +137,28 @@ export default function Chat() {
     }
 
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: msg }]);
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: msg },
+      { role: "assistant", content: "", streaming: true },
+    ]);
     setStreaming(true);
-
-    const assistantIdx = messages.length + 1;
-    setMessages((prev) => [...prev, { role: "assistant", content: "", streaming: true }]);
 
     try {
       let accumulated = "";
       for await (const chunk of chatApi.streamMessage(activeSessionId, msg)) {
         accumulated += chunk;
         setMessages((prev) =>
-          prev.map((m, i) => (i === assistantIdx ? { ...m, content: accumulated } : m)),
+          prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: accumulated } : m)),
         );
       }
       setMessages((prev) =>
-        prev.map((m, i) => (i === assistantIdx ? { ...m, streaming: false } : m)),
+        prev.map((m, i) => (i === prev.length - 1 ? { ...m, streaming: false } : m)),
       );
     } catch {
       setMessages((prev) =>
         prev.map((m, i) =>
-          i === assistantIdx
+          i === prev.length - 1
             ? { role: "assistant", content: "오류가 발생했습니다. 다시 시도해주세요." }
             : m,
         ),
@@ -170,19 +171,19 @@ export default function Chat() {
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
   return (
-    <div className="flex h-full">
-      {/* ── 대화 목록 패널 ── */}
+    <div className="flex h-[calc(100dvh-5rem)] md:h-dvh">
+      {/* ── Session list panel ── */}
       <div
         className={`
           ${mobileView === "list" ? "flex" : "hidden"} md:flex
-          w-full md:w-64 shrink-0 flex-col border-r border-gray-100 bg-white
+          w-full md:w-64 shrink-0 flex-col border-r border-gray-200/40 gradient-sidebar
         `}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200/40">
           <h2 className="text-base font-bold text-gray-800">대화 목록</h2>
           <button
             onClick={() => startNewSession()}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-1.5 rounded-xl hover:bg-white/60 text-gray-400 hover:text-gray-600 transition-all duration-200"
             title="새 대화"
           >
             <Plus className="w-4 h-4" />
@@ -197,15 +198,17 @@ export default function Chat() {
               <button
                 key={s.id}
                 onClick={() => selectSession(s)}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-50 ${
-                  s.id === activeSessionId ? "bg-green-50" : ""
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/50 transition-all duration-200 border-b border-gray-100/50 ${
+                  s.id === activeSessionId ? "bg-white/60" : ""
                 }`}
               >
-                <div className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center shrink-0">
-                  <MessageCircle className="w-3.5 h-3.5 text-gray-400" />
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                  s.id === activeSessionId ? "bg-green-100 border-2 border-green-300" : "border-2 border-gray-200"
+                }`}>
+                  <MessageCircle className={`w-3.5 h-3.5 ${s.id === activeSessionId ? "text-green-600" : "text-gray-400"}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium truncate ${
+                  <p className={`text-sm font-semibold truncate ${
                     s.id === activeSessionId ? "text-green-700" : "text-gray-700"
                   }`}>
                     {s.title}
@@ -218,62 +221,61 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* ── 채팅 패널 ── */}
+      {/* ── Chat panel ── */}
       <div
         className={`
           ${mobileView === "chat" ? "flex" : "hidden"} md:flex
           flex-1 flex-col min-w-0
         `}
       >
-        {/* 헤더 */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-white">
-          {/* 모바일: 뒤로가기 */}
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-200/40 bg-white/60 backdrop-blur-sm">
           <button
             onClick={() => setMobileView("list")}
             className="md:hidden p-1 text-gray-400 hover:text-gray-600"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <div className="w-9 h-9 rounded-full border-2 border-gray-300 flex items-center justify-center shrink-0">
-            <MessageCircle className="w-4 h-4 text-gray-400" />
+          <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center shrink-0 shadow-sm">
+            <MessageCircle className="w-4 h-4 text-white" />
           </div>
           <span className="text-base font-bold text-gray-800">loguri AI</span>
           <div className="flex-1" />
           {activeSession && (
             <button
               onClick={deleteCurrentSession}
-              className="text-xs text-gray-400 hover:text-red-400 transition-colors"
+              className="text-xs text-gray-400 hover:text-red-400 transition-colors font-medium"
             >
               대화 삭제
             </button>
           )}
         </div>
 
-        {/* 메시지 영역 */}
+        {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-4">
           {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}>
               {msg.role === "assistant" && (
-                <div className="w-7 h-7 rounded-full border-2 border-gray-200 flex items-center justify-center shrink-0 mr-2 mt-0.5">
-                  <MessageCircle className="w-3 h-3 text-gray-400" />
+                <div className="w-7 h-7 rounded-full gradient-primary flex items-center justify-center shrink-0 mr-2 mt-0.5 shadow-sm">
+                  <MessageCircle className="w-3 h-3 text-white" />
                 </div>
               )}
               <div
                 className={`max-w-[72%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                   msg.role === "user"
-                    ? "bg-green-600 text-white rounded-br-sm"
-                    : "bg-white border border-gray-200 text-gray-700 rounded-bl-sm"
+                    ? "gradient-primary text-white rounded-br-md shadow-md"
+                    : "bg-white border border-gray-200/60 text-gray-700 rounded-bl-md shadow-sm"
                 }`}
               >
                 {msg.content}
                 {msg.streaming && (
-                  <span className="inline-block w-1.5 h-4 bg-green-400 animate-pulse ml-1 rounded-sm align-middle" />
+                  <span className="inline-block w-1.5 h-4 bg-green-300 animate-pulse ml-1 rounded-sm align-middle" />
                 )}
               </div>
             </div>
           ))}
 
-          {/* 퀵 프롬프트 */}
+          {/* Quick prompts */}
           {promptOptions.length > 0 && messages.length <= 1 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {promptOptions.slice(0, 4).map((opt) => (
@@ -281,7 +283,7 @@ export default function Chat() {
                   key={opt.id}
                   onClick={() => sendMessage(opt.label)}
                   disabled={streaming}
-                  className="px-4 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 hover:border-green-400 hover:text-green-700 bg-white transition-colors"
+                  className="px-4 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 hover:border-green-300 hover:text-green-700 hover:bg-green-50/50 bg-white transition-all duration-200 font-medium"
                 >
                   {opt.label}
                 </button>
@@ -292,8 +294,8 @@ export default function Chat() {
           <div ref={bottomRef} />
         </div>
 
-        {/* 입력창 */}
-        <div className="px-4 md:px-8 pb-6 pt-2 bg-white border-t border-gray-100">
+        {/* Input */}
+        <div className="px-4 md:px-8 pb-6 pt-2 bg-white/80 backdrop-blur-sm border-t border-gray-200/40">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -307,12 +309,12 @@ export default function Chat() {
               onChange={(e) => setInput(e.target.value)}
               disabled={streaming || !activeSessionId}
               placeholder="복약, 부작용에 대해서 질문하세요"
-              className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-400/50 focus:border-green-400 transition-all duration-200"
             />
             <button
               type="submit"
               disabled={!input.trim() || streaming || !activeSessionId}
-              className="px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors disabled:opacity-40 flex items-center"
+              className="px-4 py-3 gradient-primary text-white rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-40 flex items-center"
             >
               {streaming ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

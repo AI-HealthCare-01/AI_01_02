@@ -17,7 +17,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const refresh = useCallback(() => {
     if (!getToken()) return;
     notificationApi
-      .list({ limit: 1 })
+      .getUnreadCount()
       .then((r) => setUnreadCount(r.unread_count))
       .catch(() => {});
   }, []);

@@ -8,7 +8,7 @@ from tortoise.contrib.test import TestCase
 from app.core import config
 from app.main import app
 from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult, GuideRiskLevel
-from app.models.ocr import OcrJob, OcrJobStatus, OcrResult
+from app.models.ocr import OcrJob, OcrJobStatus
 
 
 class TestGuideApis(TestCase):
@@ -72,12 +72,9 @@ class TestGuideApis(TestCase):
     async def _mark_ocr_succeeded(self, *, ocr_job_id: str) -> None:
         ocr_job = await OcrJob.get(id=int(ocr_job_id))
         ocr_job.status = OcrJobStatus.SUCCEEDED
-        await ocr_job.save(update_fields=["status"])
-        await OcrResult.create(
-            job=ocr_job,
-            extracted_text="처방전 OCR 텍스트",
-            structured_data={"summary": "ok"},
-        )
+        ocr_job.raw_text = "처방전 OCR 텍스트"
+        ocr_job.structured_result = {"summary": "ok"}
+        await ocr_job.save(update_fields=["status", "raw_text", "structured_result"])
 
     async def test_create_guide_job_and_get_status_success(self):
         email = "guide_job_success@example.com"

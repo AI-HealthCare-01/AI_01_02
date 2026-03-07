@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import OnboardingShell from "./OnboardingShell";
 import { profileApi, HealthProfileUpsertRequest } from "@/lib/api";
+import { toUserMessage } from "@/lib/errorMessages";
 
 export default function Sleep() {
   const navigate = useNavigate();
@@ -37,14 +38,14 @@ export default function Sleep() {
       sessionStorage.removeItem("onboarding_lifestyle");
       navigate("/onboarding/scan");
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "저장에 실패했습니다.");
+      toast.error(toUserMessage(err));
     } finally {
       setLoading(false);
     }
   }
 
   const inputCls =
-    "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent";
+    "w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm bg-white/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-400/50 focus:border-green-400 transition-all duration-200";
 
   return (
     <OnboardingShell step={3} title="수면 패턴" subtitle="수면 습관을 알려주세요">
@@ -130,7 +131,7 @@ export default function Sleep() {
         <button
           onClick={handleSubmit}
           disabled={loading}
-          className="px-6 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
+          className="px-6 py-2.5 gradient-primary text-white text-sm font-bold rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-60"
         >
           {loading ? "저장 중..." : "다음 단계 →"}
         </button>

@@ -15,7 +15,7 @@ from ai_worker.core import config
 from app.models.health_profiles import UserHealthProfile
 from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult, GuideRiskLevel
 from app.models.notifications import Notification, NotificationType
-from app.models.ocr import OcrJobStatus, OcrResult
+from app.models.ocr import OcrJobStatus
 
 # REQ-049: 프롬프트 버전 관리
 GUIDE_PROMPT_VERSION = "v1.2"
@@ -654,17 +654,15 @@ async def process_guide_job(
         if job.ocr_job.status != OcrJobStatus.SUCCEEDED:
             raise ValueError(f"OCR job not ready: {job.ocr_job_id}")
 
-        ocr_result = await OcrResult.get_or_none(job_id=job.ocr_job_id)
-        if not ocr_result:
-            raise ValueError(f"OCR result not found: {job.ocr_job_id}")
-
         profile = await UserHealthProfile.get_or_none(user_id=job.user_id)
         if not profile:
             raise ValueError(f"User health profile not found: {job.user_id}")
 
         confirmed_ocr = {}
-        if isinstance(ocr_result.structured_data, dict):
-            confirmed_ocr = cast(dict[str, Any], ocr_result.structured_data.get("confirmed_ocr", {}))
+        if isinstance(job.ocr_job.confirmed_result, dict):
+            confirmed_ocr = cast(dict[str, Any], job.ocr_job.confirmed_result.get("confirmed_ocr", {}))
+        if not confirmed_ocr and isinstance(job.ocr_job.structured_result, dict):
+            confirmed_ocr = cast(dict[str, Any], job.ocr_job.structured_result.get("confirmed_ocr", {}))
 
         medication_guide = _build_medication_guide(confirmed_ocr)
         flags = _build_lifestyle_flags(profile)
@@ -692,10 +690,11 @@ async def process_guide_job(
                     "safety_notice": GUIDE_SAFETY_NOTICE,
                     "structured_data": {
                         "source_ocr_job_id": job.ocr_job_id,
-                        "source_ocr_result_id": ocr_result.id,
                         "generator": f"openai-{config.OPENAI_GUIDE_MODEL}" if config.OPENAI_API_KEY else "guide-fallback",
                         "prompt_version": GUIDE_PROMPT_VERSION,
                         "model_version": config.OPENAI_GUIDE_MODEL,
+                        "source_references": [],
+                        "adherence_rate_percent": profile.weekly_adherence_rate,
                         "source_attributions": [
                             "사용자 건강 프로필 입력 데이터",
                             "사용자 확인 OCR 처방 데이터",

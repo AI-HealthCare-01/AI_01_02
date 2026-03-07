@@ -1,5 +1,6 @@
 import asyncio
 import re
+import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -121,13 +122,27 @@ if config.SENTRY_DSN:
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
-    """REQ-105: 모든 요청에 X-Request-ID를 생성/전파하고 응답 헤더에 포함."""
+    """REQ-105: 모든 요청에 X-Request-ID를 생성/전파하고 응답 헤더에 포함.
+    REQ-113~116: 요청 처리 시간을 측정하여 X-Process-Time 헤더로 반환."""
 
     async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[override]
         request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
         request.state.request_id = request_id
+        start = time.perf_counter()
         response = await call_next(request)
+        elapsed_ms = (time.perf_counter() - start) * 1000
         response.headers["X-Request-ID"] = request_id
+        response.headers["X-Process-Time"] = f"{elapsed_ms:.1f}ms"
+        if elapsed_ms > 3000:
+            logger.warning(
+                "slow_request",
+                extra={
+                    "path": request.url.path,
+                    "method": request.method,
+                    "elapsed_ms": round(elapsed_ms, 1),
+                    "request_id": request_id,
+                },
+            )
         return response
 
 

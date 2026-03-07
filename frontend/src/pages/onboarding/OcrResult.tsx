@@ -2,24 +2,32 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { Loader2, AlertTriangle, Search } from "lucide-react";
 import { toast } from "sonner";
-import { ocrApi, guideApi, OcrMedication } from "@/lib/api";
-
-const BASE = "/api/v1";
+import { ocrApi, guideApi, OcrMedication, request } from "@/lib/api";
+import { toUserMessage } from "@/lib/errorMessages";
 
 async function searchMedications(q: string): Promise<string[]> {
   if (!q.trim()) return [];
-  const token = localStorage.getItem("access_token");
-  const res = await fetch(
-    `${BASE}/medications/search?q=${encodeURIComponent(q)}&limit=8`,
-    { headers: token ? { Authorization: `Bearer ${token}` } : {} },
-  );
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.items ?? []).map((i: { name: string }) => i.name);
+  try {
+    const data = await request<{ items: { name: string }[] }>(
+      `/medications/search?q=${encodeURIComponent(q)}&limit=8`,
+    );
+    return (data.items ?? []).map((i) => i.name);
+  } catch {
+    return [];
+  }
 }
 
 function isLowConfidence(val: number | null | undefined) {
   return val !== null && val !== undefined && val < 0.85;
+}
+
+function extractMedications(data: Record<string, unknown> | undefined): OcrMedication[] {
+  if (!data || typeof data !== "object") return [];
+  const meds = data.medications;
+  if (Array.isArray(meds)) return meds as OcrMedication[];
+  const extracted = data.extracted_medications;
+  if (Array.isArray(extracted)) return extracted as OcrMedication[];
+  return [];
 }
 
 // ── MedRow ────────────────────────────────────────────────────────────────────
@@ -52,7 +60,7 @@ function MedRow({
 
   const nameLow = isLowConfidence(med.confidence);
   const inputCls = (low: boolean, disabled: boolean) =>
-    `border rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-green-500 ${
+    `border rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-green-500 ${
       disabled ? "bg-gray-50 text-gray-500 cursor-default" : low ? "border-amber-400 bg-amber-50" : "border-gray-200 bg-white"
     }`;
 
@@ -141,7 +149,7 @@ function MedRow({
 
 // ── 메인 ─────────────────────────────────────────────────────────────────────
 
-type Phase = "preview" | "analyzing" | "result" | "confirming";
+type Phase = "preview" | "analyzing" | "result" | "confirming" | "summary";
 
 export default function OcrResult() {
   const navigate = useNavigate();
@@ -168,12 +176,12 @@ export default function OcrResult() {
       setLoadingResult(true);
       ocrApi.getJobResult(savedJobId)
         .then((res) => {
-          const meds = res.structured_data?.medications ?? [];
+          const meds = extractMedications(res.structured_data);
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
         })
-        .catch(() => toast.error("결과를 불러오지 못했습니다."))
+        .catch((err) => toast.error(toUserMessage(err)))
         .finally(() => setLoadingResult(false));
     }
   }, []); // eslint-disable-line
@@ -192,7 +200,7 @@ export default function OcrResult() {
         if (status.status === "SUCCEEDED") {
           localStorage.setItem("ocr_job_id", job_id);
           const res = await ocrApi.getJobResult(job_id);
-          const meds = res.structured_data?.medications ?? [];
+          const meds = extractMedications(res.structured_data);
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
@@ -204,7 +212,7 @@ export default function OcrResult() {
       }
       throw new Error("분석 시간이 초과되었습니다.");
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "오류가 발생했습니다.");
+      toast.error(toUserMessage(err));
       setPhase("preview");
     }
   }
@@ -213,15 +221,18 @@ export default function OcrResult() {
     setMedications((prev) => prev.map((m, i) => (i === index ? { ...m, [field]: value } : m)));
   }
 
+  const [guideJobId, setGuideJobId] = useState<string | null>(null);
+
   async function handleConfirm() {
     setPhase("confirming");
     try {
       await ocrApi.confirmResult(jobId, true, medications);
       const guide = await guideApi.createJob(jobId);
       localStorage.setItem("guide_job_id", guide.job_id);
-      navigate("/ai-guide");
+      setGuideJobId(guide.job_id);
+      setPhase("summary");
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "오류가 발생했습니다.");
+      toast.error(toUserMessage(err));
       setPhase("result");
     }
   }
@@ -231,23 +242,29 @@ export default function OcrResult() {
 
   if (loadingResult) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen gradient-warm-bg flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-green-600" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-10">
+    <div className="min-h-screen gradient-warm-bg p-6 md:p-10">
       <div className="max-w-2xl mx-auto space-y-4">
         {/* Header */}
         <div>
-          <h1 className="text-xl font-bold text-green-700">처방전 분석</h1>
-          <p className="text-sm text-gray-400 mt-1">업로드한 처방전을 분석하고 약 정보를 확인하세요.</p>
+          <h1 className="text-xl font-bold text-green-700">
+            {phase === "summary" ? "처방전 분석 완료" : "처방전 분석"}
+          </h1>
+          <p className="text-sm text-gray-400 mt-1">
+            {phase === "summary"
+              ? "복약 정보가 저장되었습니다. AI 가이드를 통해 상세 분석을 확인하세요."
+              : "업로드한 처방전을 분석하고 약 정보를 확인하세요."}
+          </p>
         </div>
 
         {/* 이미지 미리보기 */}
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        {phase !== "summary" && <div className="bg-white/85 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden">
           <p className="text-xs font-semibold text-gray-500 px-4 pt-4 mb-2">처방전 스캔</p>
           {preview ? (
             <img src={preview} alt="처방전" className="w-full object-contain" />
@@ -262,30 +279,78 @@ export default function OcrResult() {
             <button
               onClick={() => navigate("/onboarding/scan")}
               disabled={phase === "analyzing" || phase === "confirming"}
-              className="flex-1 py-2.5 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40"
+              className="flex-1 py-2.5 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-all duration-200 disabled:opacity-40"
             >
               다시 업로드
             </button>
             <button
               onClick={phase === "preview" ? handleAnalyze : undefined}
               disabled={phase === "analyzing" || phase === "result" || phase === "confirming"}
-              className={`flex-1 py-2.5 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors ${
+              className={`flex-1 py-2.5 text-sm rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-200 ${
                 phase === "result" || phase === "confirming"
-                  ? "bg-green-700 text-white cursor-default"
+                  ? "gradient-primary text-white cursor-default"
                   : phase === "analyzing"
-                  ? "bg-green-600 text-white opacity-80 cursor-not-allowed"
-                  : "bg-green-600 text-white hover:bg-green-700"
+                  ? "gradient-primary text-white opacity-80 cursor-not-allowed"
+                  : "gradient-primary text-white hover:shadow-lg"
               }`}
             >
               {phase === "analyzing" && <Loader2 className="w-4 h-4 animate-spin" />}
               {analyzeBtnLabel}
             </button>
           </div>
-        </div>
+        </div>}
+
+        {/* REQ-060: 복약 요약 화면 */}
+        {phase === "summary" && (
+          <div className="card-warm p-5">
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-green-700">복약 요약</p>
+              <p className="text-xs text-gray-400 mt-1">확인된 복약 정보입니다. AI 가이드에서 상세 분석을 확인하세요.</p>
+            </div>
+
+            <div className="space-y-3">
+              {medications.map((med, i) => (
+                <div key={i} className="flex items-center justify-between border border-gray-100 rounded-lg p-3 bg-gray-50">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{med.drug_name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {[
+                        med.dose ? `${med.dose}mg` : null,
+                        med.dosage_per_once ? `1회 ${med.dosage_per_once}정` : null,
+                        med.frequency_per_day ? `1일 ${med.frequency_per_day}회` : null,
+                        med.total_days ? `${med.total_days}일분` : null,
+                      ].filter(Boolean).join(" · ") || "용량 정보 없음"}
+                    </p>
+                  </div>
+                  {med.dispensed_date && (
+                    <span className="text-xs text-gray-400 ml-3 shrink-0">
+                      조제일 {med.dispensed_date}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={() => navigate("/")}
+                className="flex-1 py-2.5 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-all duration-200"
+              >
+                홈으로
+              </button>
+              <button
+                onClick={() => navigate("/ai-guide")}
+                className="flex-1 py-2.5 gradient-primary text-white text-sm rounded-xl font-bold transition-all duration-200"
+              >
+                AI 가이드 보기
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* 스캔된 약 정보 */}
         {(phase === "result" || phase === "confirming") && (
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="card-warm p-5">
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm font-semibold text-gray-700">스캔된 약 정보</p>
               {hasLowConfidence && (
@@ -310,14 +375,14 @@ export default function OcrResult() {
               <button
                 onClick={() => setEditable((v) => !v)}
                 disabled={phase === "confirming"}
-                className="flex-1 py-2.5 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40"
+                className="flex-1 py-2.5 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-all duration-200 disabled:opacity-40"
               >
                 {editable ? "수정 완료" : "약 정보 수정하기"}
               </button>
               <button
                 onClick={handleConfirm}
                 disabled={phase === "confirming" || medications.length === 0}
-                className="flex-1 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 gradient-primary text-white text-sm rounded-xl font-bold transition-all duration-200 disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {phase === "confirming" && <Loader2 className="w-4 h-4 animate-spin" />}
                 확인 및 저장
