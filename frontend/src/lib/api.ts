@@ -100,7 +100,7 @@ export interface ScheduleItem {
   category: string;
   title: string;
   scheduled_at: string;
-  status: "PENDING" | "COMPLETED" | "SKIPPED";
+  status: "PENDING" | "DONE" | "SKIPPED";
   completed_at: string | null;
 }
 
@@ -108,7 +108,7 @@ export const scheduleApi = {
   getDaily: (date: string) =>
     request<{ date: string; items: ScheduleItem[] }>(`/schedules/daily?date=${date}`),
 
-  updateStatus: (itemId: string, status: "PENDING" | "COMPLETED" | "SKIPPED") =>
+  updateStatus: (itemId: string, status: "PENDING" | "DONE" | "SKIPPED") =>
     request<ScheduleItem>(`/schedules/items/${itemId}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
@@ -195,7 +195,7 @@ export interface OcrMedication {
   confidence: number | null;
 }
 
-export type OcrStatus = "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
+export type OcrStatus = "QUEUED" | "PROCESSING" | "SUCCEEDED" | "FAILED";
 
 export interface OcrJobStatusResponse {
   job_id: string;
@@ -259,7 +259,7 @@ export interface GuideSourceReference {
   url?: string;
 }
 
-export type GuideStatus = "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
+export type GuideStatus = "QUEUED" | "PROCESSING" | "SUCCEEDED" | "FAILED";
 
 export interface GuideJobResult {
   job_id: string;
@@ -398,7 +398,7 @@ export const reminderApi = {
 };
 
 // ── Notifications ─────────────────────────────────────
-export type NotificationType = "SYSTEM" | "HEALTH_ALERT" | "REPORT_READY" | "GUIDE_READY";
+export type NotificationType = "SYSTEM" | "HEALTH_ALERT" | "REPORT_READY" | "GUIDE_READY" | "MEDICATION_DDAY";
 
 export interface ApiNotification {
   id: string;

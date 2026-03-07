@@ -23,7 +23,7 @@ function formatTime(iso: string) {
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING: "예정",
-  COMPLETED: "완료",
+  DONE: "완료",
   SKIPPED: "건너뜀",
 };
 
@@ -66,7 +66,7 @@ export default function Dashboard() {
     if (jobId) {
       try {
         const status = await guideApi.getJobStatus(jobId);
-        if (status.status === "COMPLETED") {
+        if (status.status === "SUCCEEDED") {
           const result = await guideApi.getJobResult(jobId);
           setGuide(result);
         }
@@ -78,7 +78,7 @@ export default function Dashboard() {
 
   useEffect(() => { load(); }, []); // eslint-disable-line
 
-  async function updateStatus(itemId: string, status: "COMPLETED" | "SKIPPED") {
+  async function updateStatus(itemId: string, status: "DONE" | "SKIPPED") {
     try {
       const updated = await scheduleApi.updateStatus(itemId, status);
       setItems((prev) => prev.map((it) => (it.item_id === itemId ? updated : it)));
@@ -217,7 +217,7 @@ function ScheduleRow({
   onUpdate,
 }: {
   item: ScheduleItem;
-  onUpdate: (id: string, status: "COMPLETED" | "SKIPPED") => void;
+  onUpdate: (id: string, status: "DONE" | "SKIPPED") => void;
 }) {
   const isPending = item.status === "PENDING";
   return (
@@ -231,7 +231,7 @@ function ScheduleRow({
       {isPending ? (
         <div className="flex gap-1.5">
           <button
-            onClick={() => onUpdate(item.item_id, "COMPLETED")}
+            onClick={() => onUpdate(item.item_id, "DONE")}
             className="px-3 py-1 text-xs font-medium bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
           >
             완료
@@ -246,7 +246,7 @@ function ScheduleRow({
       ) : (
         <span
           className={`text-xs font-medium px-2.5 py-1 rounded-lg ${
-            item.status === "COMPLETED"
+            item.status === "DONE"
               ? "bg-green-50 text-green-700"
               : "bg-gray-100 text-gray-400"
           }`}

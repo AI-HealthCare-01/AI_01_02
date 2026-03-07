@@ -24,7 +24,7 @@ async function calcAdherence(): Promise<number | null> {
   );
   const medItems = results.flatMap((r) => r.items.filter((it) => it.category === "MEDICATION"));
   if (medItems.length === 0) return null;
-  const completed = medItems.filter((it) => it.status === "COMPLETED");
+  const completed = medItems.filter((it) => it.status === "DONE");
   return Math.round((completed.length / medItems.length) * 100);
 }
 
@@ -64,7 +64,7 @@ export default function Medications() {
       if (jobId) {
         try {
           const s = await guideApi.getJobStatus(jobId);
-          if (s.status === "COMPLETED") {
+          if (s.status === "SUCCEEDED") {
             const r = await guideApi.getJobResult(jobId);
             setGuide(r);
           }
