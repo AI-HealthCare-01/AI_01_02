@@ -159,7 +159,7 @@ export default function OcrResult() {
       setLoadingResult(true);
       ocrApi.getJobResult(savedJobId)
         .then((res) => {
-          const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
+          const meds = (res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? []) as OcrMedication[];
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
@@ -183,7 +183,7 @@ export default function OcrResult() {
         if (status.status === "SUCCEEDED" || status.status === "COMPLETED") {
           localStorage.setItem("ocr_job_id", job_id);
           const res = await ocrApi.getJobResult(job_id);
-          const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
+          const meds = (res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? []) as OcrMedication[];
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
@@ -270,10 +270,10 @@ export default function OcrResult() {
               onClick={phase === "preview" ? handleAnalyze : undefined}
               disabled={phase === "analyzing" || phase === "result" || phase === "confirming"}
               className={`flex-1 py-2.5 text-sm rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-200 ${phase === "result" || phase === "confirming"
-                  ? "gradient-primary text-white cursor-default"
-                  : phase === "analyzing"
-                    ? "gradient-primary text-white opacity-80 cursor-not-allowed"
-                    : "gradient-primary text-white hover:shadow-lg"
+                ? "gradient-primary text-white cursor-default"
+                : phase === "analyzing"
+                  ? "gradient-primary text-white opacity-80 cursor-not-allowed"
+                  : "gradient-primary text-white hover:shadow-lg"
                 }`}
             >
               {phase === "analyzing" && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -360,8 +360,8 @@ export default function OcrResult() {
                 onClick={() => setEditable((v) => !v)}
                 disabled={phase === "confirming" || medications.length === 0}
                 className={`flex-1 py-2.5 border text-sm rounded-xl transition-all duration-200 disabled:opacity-40 ${editable
-                    ? "bg-gray-800 text-white border-gray-800 hover:bg-gray-900"
-                    : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                  ? "bg-gray-800 text-white border-gray-800 hover:bg-gray-900"
+                  : "border-gray-200 text-gray-500 hover:bg-gray-50"
                   }`}
               >
                 {editable ? "수정 완료" : "약 정보 수정하기"}
