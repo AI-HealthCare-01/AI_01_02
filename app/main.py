@@ -1,3 +1,4 @@
+print("1번: 메인 파일 맨 위쪽 읽는 중!")
 import asyncio
 import re
 import time
@@ -232,3 +233,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> ORJSO
         retryable=True,
         request_id=_get_request_id(request),
     )
+
+if __name__ == "__main__":
+    print("2번: 서버 실행 블록 진입!")
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

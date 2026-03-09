@@ -32,24 +32,7 @@ class GuideService:
             )
 
         try:
-            # Bypass guide queue locally
-            # await self.queue_publisher.enqueue_job(job.id)
-            await GuideJob.filter(id=job.id).update(
-                status=GuideJobStatus.SUCCEEDED,
-                completed_at=datetime.now(config.TIMEZONE)
-            )
-            # Create a dummy guide result
-            from app.models.guides import GuideRiskLevel
-            import json
-            await GuideResult.create(
-                job_id=job.id,
-                medication_guidance="이 약들은 도파민 재흡수를 억제하고 우울증과 무기력을 조절하는데 도움을 줍니다. 용법에 맞게 잘 복용하세요! (로컬 테스트용 임시 가이드)",
-                lifestyle_guidance="규칙적인 수면과 가벼운 운동이 약물 치료 효과를 높입니다.",
-                risk_level=GuideRiskLevel.LOW,
-                safety_notice="부작용이 심할 경우 즉시 복용을 중지하고 전문의와 상담하세요.",
-                structured_data={"dummy": "data"},
-                created_at=datetime.now(config.TIMEZONE)
-            )
+            await self.queue_publisher.enqueue_job(job.id)
         except RuntimeError as err:
             failed_at = datetime.now(config.TIMEZONE)
             await GuideJob.filter(id=job.id, status=GuideJobStatus.QUEUED).update(
