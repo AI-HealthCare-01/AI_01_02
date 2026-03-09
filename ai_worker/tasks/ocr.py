@@ -83,7 +83,7 @@ async def _parse_medications_with_llm(extracted_text: str, raw_blocks: list[dict
         model=config.OPENAI_CHAT_MODEL,
         messages=[
             {"role": "system", "content": _PARSE_SYSTEM_PROMPT},
-            {"role": "user", "content": extracted_text[:3000]},
+            {"role": "user", "content": str(extracted_text)[:3000]},
         ],
         temperature=0.0,
         response_format={"type": "json_object"},
