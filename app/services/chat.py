@@ -197,6 +197,7 @@ class ChatService:
             try:
                 rag_docs, needs_clarification = await hybrid_search(message)
                 retrieved_doc_ids = [d.doc_id for d in rag_docs]
+                needs_clarification = False
             except Exception:
                 rag_docs = []
                 needs_clarification = False
@@ -372,6 +373,7 @@ class ChatService:
             try:
                 rag_docs, needs_clarification = await hybrid_search(message)
                 retrieved_doc_ids = [d.doc_id for d in rag_docs]
+                needs_clarification = False
             except Exception:
                 pass
 
@@ -390,6 +392,7 @@ class ChatService:
         )
         history = [{"role": m.role.lower(), "content": m.content} for m in reversed(recent)]
         messages_payload = [{"role": "system", "content": system_content}] + history
+        messages_payload.append({"role": "user", "content": message})
 
         await ChatMessage.create(
             session_id=session.id,

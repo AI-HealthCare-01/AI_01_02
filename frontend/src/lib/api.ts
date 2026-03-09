@@ -182,8 +182,8 @@ export const chatApi = {
       const lines = buf.split("\n");
       buf = lines.pop() ?? "";
       for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const data = line.slice(6).trim();
+        if (!line.startsWith("data:")) continue;
+        const data = line.replace(/^data:\s*/, "");
         if (!data || data === "{}") continue;
         try {
           const parsed = JSON.parse(data);
