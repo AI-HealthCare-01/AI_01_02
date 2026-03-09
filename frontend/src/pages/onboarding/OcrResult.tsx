@@ -97,6 +97,22 @@ function MedRow({
         </div>
       </div>
 
+      {/* ✨ 새로 추가된 용량 및 용법 칸 ✨ */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">용량(mg)</label>
+          <input type="number" value={med.dose ?? ""} readOnly={!editable}
+            onChange={(e) => onChange(index, "dose", e.target.value ? Number(e.target.value) : null)}
+            className={inputCls(false, !editable)} placeholder="예: 36" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">용법(복용시간)</label>
+          <input type="text" value={med.timing ?? ""} readOnly={!editable}
+            onChange={(e) => onChange(index, "timing", e.target.value || null)}
+            className={inputCls(false, !editable)} placeholder="예: 오전, 식후 30분" />
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="block text-xs text-gray-500 mb-1">1회 투약량(정/캡슐)</label>
@@ -147,7 +163,6 @@ export default function OcrResult() {
   const [hasLowConfidence, setHasLowConfidence] = useState(false);
   const [loadingResult, setLoadingResult] = useState(false);
 
-  // 이미 분석된 결과가 있으면 바로 result 단계로
   useEffect(() => {
     const savedJobId = localStorage.getItem("ocr_job_id");
     if (!file && !savedJobId) {
@@ -296,10 +311,12 @@ export default function OcrResult() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{med.drug_name}</p>
                     <p className="text-xs text-gray-400 mt-0.5">
+                      {/* ✨ 요약 화면에도 용법이 표시되도록 수정! ✨ */}
                       {[
                         med.dose ? `${med.dose}mg` : null,
                         med.dosage_per_once ? `1회 ${med.dosage_per_once}정` : null,
                         med.frequency_per_day ? `1일 ${med.frequency_per_day}회` : null,
+                        med.timing ? med.timing : null,
                         med.total_days ? `${med.total_days}일분` : null,
                       ].filter(Boolean).join(" · ") || "용량 정보 없음"}
                     </p>

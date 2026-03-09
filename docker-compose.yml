@@ -36,7 +36,7 @@ services:
       - --collation-server=utf8mb4_unicode_ci
       - --port=${DB_PORT}
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -54,6 +54,7 @@ services:
     env_file: .env
     environment:
       REDIS_HOST: redis
+      DB_HOST: mysql
     command: |
       sh -c "uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
@@ -86,6 +87,7 @@ services:
     env_file: .env
     environment:
       REDIS_HOST: redis
+      DB_HOST: mysql
     restart: always
     mem_limit: 4G
     volumes:
@@ -112,7 +114,7 @@ services:
     networks:
       - ws
     healthcheck:
-      test: ["CMD-SHELL", "true"]
+      test: [ "CMD-SHELL", "true" ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -138,6 +140,7 @@ volumes:
   static_volume:
   media_volume:
   chroma_data:
+
 
 networks:
   ws:

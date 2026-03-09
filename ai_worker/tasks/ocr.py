@@ -26,10 +26,11 @@ _PARSE_SYSTEM_PROMPT = (
     "frequency_per_day=1일 투여 횟수, "
     "dosage_per_once=1회 투여 정수(정/캡슐 수), "
     "dispensed_date=조제일(YYYY-MM-DD), "
+    "timing=용법/복용시간(예: '오전', '식후 30분', '취침전'). "
     "total_days=총 투약 일수. "
     "반드시 JSON으로만 응답하세요: "
     '{"medications": [{"drug_name": str, "dose": float|null, "frequency_per_day": int|null, '
-    '"dosage_per_once": int|null, "dispensed_date": "YYYY-MM-DD"|null, "total_days": int|null}], '
+    '"dosage_per_once": int|null, "dispensed_date": "YYYY-MM-DD"|null, "total_days": int|null, "timing": str|null}], '
     '"overall_confidence": float, "needs_user_review": bool}'
 )
 
