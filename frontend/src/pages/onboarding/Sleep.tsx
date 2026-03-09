@@ -22,15 +22,22 @@ export default function Sleep() {
 
       const payload: HealthProfileUpsertRequest = {
         basic_info: basic,
-        lifestyle_input: lifestyle,
-        sleep_input: {
-          bed_time: bedTime || undefined,
-          wake_time: wakeTime || undefined,
-          sleep_latency_minutes: sleepLatency ? parseInt(sleepLatency) : undefined,
-          night_awakenings_per_week: nightAwakenings ? parseInt(nightAwakenings) : undefined,
-          daytime_sleepiness_score: daytimeSleepiness,
+        lifestyle: {
+          exercise_frequency_per_week: lifestyle.exercise_frequency_per_week ?? 0,
+          pc_hours_per_day: lifestyle.pc_hours_per_day ?? 0,
+          smartphone_hours_per_day: lifestyle.smartphone_hours_per_day ?? 0,
+          caffeine_cups_per_day: lifestyle.caffeine_cups_per_day ?? 0,
+          smoking: lifestyle.smoking ?? 0,
+          alcohol_frequency_per_week: lifestyle.alcohol_frequency_per_week ?? 0,
         },
-        nutrition_input: { appetite_score: 5, is_meal_regular: true },
+        sleep_input: {
+          bed_time: bedTime,
+          wake_time: wakeTime,
+          sleep_latency_minutes: sleepLatency ? parseInt(sleepLatency) : 0,
+          night_awakenings_per_week: nightAwakenings ? parseInt(nightAwakenings) : 0,
+          daytime_sleepiness: daytimeSleepiness,
+        },
+        nutrition_status: { appetite_level: 5, meal_regular: true },
       };
 
       await profileApi.upsertHealth(payload);

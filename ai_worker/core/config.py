@@ -13,11 +13,22 @@ def get_default_timezone() -> tzinfo:
         return timezone(timedelta(hours=9), name="Asia/Seoul")
 
 
+def get_default_media_dir() -> str:
+    candidates = (
+        Path("/app/media"),
+        Path(__file__).resolve().parents[2] / "app" / "media",
+    )
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return str(candidates[0])
+
+
 class Config(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow")
 
     TIMEZONE: tzinfo = Field(default_factory=get_default_timezone)
-    MEDIA_DIR: str = str(Path(__file__).resolve().parents[2] / "app" / "media")
+    MEDIA_DIR: str = get_default_media_dir()
     OCR_QUEUE_KEY: str = "ocr:jobs"
     OCR_RETRY_QUEUE_KEY: str = "ocr:jobs:retry"
     OCR_DEAD_LETTER_QUEUE_KEY: str = "ocr:jobs:dead-letter"

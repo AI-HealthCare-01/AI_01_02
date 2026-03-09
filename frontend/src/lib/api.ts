@@ -252,6 +252,18 @@ export interface OcrJobResult {
   updated_at: string;
 }
 
+export interface MedicationInfo {
+  item_name: string | null;
+  efficacy: string | null;
+  usage: string | null;
+  warnings: string | null;
+  precautions: string | null;
+  interactions: string | null;
+  side_effects: string | null;
+  storage: string | null;
+  source: string | null;
+}
+
 export const ocrApi = {
   uploadDocument: (file: File, documentType = "PRESCRIPTION") => {
     const fd = new FormData();
@@ -280,6 +292,11 @@ export const ocrApi = {
       method: "PATCH",
       body: JSON.stringify({ confirmed, corrected_medications: correctedMedications, comment }),
     }),
+};
+
+export const medicationApi = {
+  getInfo: (name: string) =>
+    request<MedicationInfo>(`/medications/info?name=${encodeURIComponent(name)}`),
 };
 
 // ── Guide ─────────────────────────────────────────────
@@ -332,51 +349,57 @@ export interface HealthProfileUpsertRequest {
     weight_kg: number;
     drug_allergies: string[];
   };
-  lifestyle_input: {
-    exercise_hours: {
-      low_intensity: number;
-      moderate_intensity: number;
-      high_intensity: number;
-    };
-    digital_usage: {
-      pc_hours_per_day: number;
-      smartphone_hours_per_day: number;
-    };
-    substance_usage: {
-      caffeine_cups_per_day: number;
-      smoking: number;
-      alcohol_frequency_per_week: number;
-    };
+  lifestyle: {
+    exercise_frequency_per_week: number;
+    pc_hours_per_day: number;
+    smartphone_hours_per_day: number;
+    caffeine_cups_per_day: number;
+    smoking: number;
+    alcohol_frequency_per_week: number;
   };
   sleep_input: {
-    bed_time?: string;
-    wake_time?: string;
-    sleep_latency_minutes?: number;
-    night_awakenings_per_week?: number;
-    daytime_sleepiness_score?: number;
+    bed_time: string;
+    wake_time: string;
+    sleep_latency_minutes: number;
+    night_awakenings_per_week: number;
+    daytime_sleepiness: number;
   };
-  nutrition_input: {
-    appetite_score?: number;
-    is_meal_regular?: boolean;
+  nutrition_status: {
+    appetite_level: number;
+    meal_regular: boolean;
   };
+  weekly_refresh_weekday?: number | null;
+  weekly_refresh_time?: string | null;
+  weekly_adherence_rate?: number | null;
 }
 
 export interface HealthProfile {
-  id: string;
+  user_id: string;
   basic_info: HealthProfileUpsertRequest["basic_info"];
-  lifestyle_input: HealthProfileUpsertRequest["lifestyle_input"];
+  lifestyle: HealthProfileUpsertRequest["lifestyle"];
   sleep_input: HealthProfileUpsertRequest["sleep_input"];
-  nutrition_input: HealthProfileUpsertRequest["nutrition_input"];
+  nutrition_status: HealthProfileUpsertRequest["nutrition_status"];
+  computed: {
+    bmi: number;
+    sleep_time_hours: number;
+    caffeine_mg: number;
+    digital_time_hours: number;
+  };
+  weekly_refresh_weekday: number | null;
+  weekly_refresh_time: string | null;
+  weekly_adherence_rate: number | null;
+  onboarding_completed_at: string;
+  updated_at: string;
 }
 
 export const profileApi = {
   upsertHealth: (data: HealthProfileUpsertRequest) =>
-    request<HealthProfile>("/profiles/health", {
+    request<HealthProfile>("/users/me/health-profile", {
       method: "PUT",
       body: JSON.stringify(data),
     }),
 
-  getHealth: () => request<HealthProfile>("/profiles/health"),
+  getHealth: () => request<HealthProfile>("/users/me/health-profile"),
 };
 
 // ── Reminders ─────────────────────────────────────────

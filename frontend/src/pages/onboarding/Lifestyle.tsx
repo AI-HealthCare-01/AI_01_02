@@ -22,24 +22,20 @@ export default function Lifestyle() {
   }
 
   function handleNext() {
-    const exerciseMap: Record<string, { low_intensity: number; moderate_intensity: number; high_intensity: number }> = {
-      low: { low_intensity: 1, moderate_intensity: 0, high_intensity: 0 },
-      moderate: { low_intensity: 0, moderate_intensity: 3, high_intensity: 0 },
-      high: { low_intensity: 0, moderate_intensity: 0, high_intensity: 5 },
+    const exerciseMap: Record<string, number> = {
+      low: 1,
+      moderate: 3,
+      high: 5,
     };
     sessionStorage.setItem(
       "onboarding_lifestyle",
       JSON.stringify({
-        exercise_hours: exerciseMap[exercise] ?? { low_intensity: 0, moderate_intensity: 0, high_intensity: 0 },
-        digital_usage: {
-          pc_hours_per_day: parseFloat(pcHours) || 0,
-          smartphone_hours_per_day: parseFloat(phoneHours) || 0,
-        },
-        substance_usage: {
-          caffeine_cups_per_day: substances.includes("카페인") ? 2 : 0,
-          smoking: substances.includes("흡연") ? 1 : 0,
-          alcohol_frequency_per_week: substances.includes("음주") ? 2 : 0,
-        },
+        exercise_frequency_per_week: exerciseMap[exercise] ?? 0,
+        pc_hours_per_day: parseFloat(pcHours) || 0,
+        smartphone_hours_per_day: parseFloat(phoneHours) || 0,
+        caffeine_cups_per_day: substances.includes("카페인") ? 2 : 0,
+        smoking: substances.includes("흡연") ? 1 : 0,
+        alcohol_frequency_per_week: substances.includes("음주") ? 2 : 0,
       }),
     );
     navigate("/onboarding/sleep");

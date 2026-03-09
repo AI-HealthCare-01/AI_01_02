@@ -118,7 +118,7 @@ export default function Records() {
   const done = scheduleItems.filter((i) => i.status !== "PENDING");
 
   const sl = profile?.sleep_input;
-  const ls = profile?.lifestyle_input;
+  const ls = profile?.lifestyle;
   const LIFE_PATTERNS = [
     {
       label: "수면",
@@ -129,11 +129,11 @@ export default function Records() {
     {
       label: "운동",
       value: (() => {
-        const ex = ls?.exercise_hours;
-        if (!ex) return "—";
-        if (ex.high_intensity > 0) return "높음";
-        if (ex.moderate_intensity > 0) return "보통";
-        if (ex.low_intensity > 0) return "낮음";
+        const ex = ls?.exercise_frequency_per_week;
+        if (ex == null) return "—";
+        if (ex >= 4) return "높음";
+        if (ex >= 2) return "보통";
+        if (ex >= 1) return "낮음";
         return "없음";
       })(),
       icon: Dumbbell,
@@ -141,22 +141,22 @@ export default function Records() {
     },
     {
       label: "카페인",
-      value: ls?.substance_usage?.caffeine_cups_per_day != null
-        ? `${ls.substance_usage.caffeine_cups_per_day}잔`
+      value: ls?.caffeine_cups_per_day != null
+        ? `${ls.caffeine_cups_per_day}잔`
         : "—",
       icon: Coffee,
       color: "bg-amber-50 text-amber-600",
     },
     {
       label: "흡연",
-      value: ls?.substance_usage?.smoking ? "예" : "아니오",
+      value: ls?.smoking ? "예" : "아니오",
       icon: Cigarette,
       color: "bg-gray-50 text-gray-500",
     },
     {
       label: "음주",
-      value: ls?.substance_usage?.alcohol_frequency_per_week != null
-        ? `주 ${ls.substance_usage.alcohol_frequency_per_week}회`
+      value: ls?.alcohol_frequency_per_week != null
+        ? `주 ${ls.alcohol_frequency_per_week}회`
         : "—",
       icon: Wine,
       color: "bg-red-50 text-red-400",
@@ -302,18 +302,18 @@ function EditModal({
   onSaved: () => void;
 }) {
   const sl = profile?.sleep_input;
-  const ls = profile?.lifestyle_input;
+  const ls = profile?.lifestyle;
 
   const [bedTime, setBedTime] = useState(sl?.bed_time ?? "23:00");
   const [wakeTime, setWakeTime] = useState(sl?.wake_time ?? "07:00");
   const [sleepLatency, setSleepLatency] = useState(String(sl?.sleep_latency_minutes ?? ""));
   const [nightAwakenings, setNightAwakenings] = useState(String(sl?.night_awakenings_per_week ?? ""));
-  const [daytimeSleepiness, setDaytimeSleepiness] = useState(sl?.daytime_sleepiness_score ?? 3);
-  const [caffeine, setCaffeine] = useState(String(ls?.substance_usage?.caffeine_cups_per_day ?? 1));
-  const [smoking, setSmoking] = useState(!!(ls?.substance_usage?.smoking));
-  const [alcohol, setAlcohol] = useState(String(ls?.substance_usage?.alcohol_frequency_per_week ?? 1));
-  const [appetiteScore, setAppetiteScore] = useState(profile?.nutrition_input?.appetite_score ?? 5);
-  const [regularMeals, setRegularMeals] = useState(profile?.nutrition_input?.is_meal_regular ?? true);
+  const [daytimeSleepiness, setDaytimeSleepiness] = useState(sl?.daytime_sleepiness ?? 3);
+  const [caffeine, setCaffeine] = useState(String(ls?.caffeine_cups_per_day ?? 1));
+  const [smoking, setSmoking] = useState(!!(ls?.smoking));
+  const [alcohol, setAlcohol] = useState(String(ls?.alcohol_frequency_per_week ?? 1));
+  const [appetiteScore, setAppetiteScore] = useState(profile?.nutrition_status?.appetite_level ?? 5);
+  const [regularMeals, setRegularMeals] = useState(profile?.nutrition_status?.meal_regular ?? true);
   const [loading, setLoading] = useState(false);
 
   async function handleSave() {
@@ -321,23 +321,22 @@ function EditModal({
     try {
       const payload: HealthProfileUpsertRequest = {
         basic_info: profile?.basic_info ?? { height_cm: 0, weight_kg: 0, drug_allergies: [] },
-        lifestyle_input: {
-          exercise_hours: ls?.exercise_hours ?? { low_intensity: 0, moderate_intensity: 0, high_intensity: 0 },
-          digital_usage: ls?.digital_usage ?? { pc_hours_per_day: 0, smartphone_hours_per_day: 0 },
-          substance_usage: {
-            caffeine_cups_per_day: parseFloat(caffeine) || 0,
-            smoking: smoking ? 1 : 0,
-            alcohol_frequency_per_week: parseFloat(alcohol) || 0,
-          },
+        lifestyle: {
+          exercise_frequency_per_week: ls?.exercise_frequency_per_week ?? 0,
+          pc_hours_per_day: ls?.pc_hours_per_day ?? 0,
+          smartphone_hours_per_day: ls?.smartphone_hours_per_day ?? 0,
+          caffeine_cups_per_day: parseFloat(caffeine) || 0,
+          smoking: smoking ? 1 : 0,
+          alcohol_frequency_per_week: parseFloat(alcohol) || 0,
         },
         sleep_input: {
           bed_time: bedTime,
           wake_time: wakeTime,
-          sleep_latency_minutes: sleepLatency ? parseInt(sleepLatency) : undefined,
-          night_awakenings_per_week: nightAwakenings ? parseInt(nightAwakenings) : undefined,
-          daytime_sleepiness_score: daytimeSleepiness,
+          sleep_latency_minutes: sleepLatency ? parseInt(sleepLatency) : 0,
+          night_awakenings_per_week: nightAwakenings ? parseInt(nightAwakenings) : 0,
+          daytime_sleepiness: daytimeSleepiness,
         },
-        nutrition_input: { appetite_score: appetiteScore, is_meal_regular: regularMeals },
+        nutrition_status: { appetite_level: appetiteScore, meal_regular: regularMeals },
       };
       await profileApi.upsertHealth(payload);
       onSaved();

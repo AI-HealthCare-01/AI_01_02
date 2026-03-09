@@ -6,6 +6,7 @@ from fastapi.responses import ORJSONResponse as Response
 from app.dependencies.security import get_request_user
 from app.dtos.ocr import (
     DocumentUploadResponse,
+    MedicationInfoResponse,
     MedicationSearchItem,
     MedicationSearchResponse,
     OcrConfirmResponse,
@@ -18,7 +19,7 @@ from app.dtos.ocr import (
 )
 from app.models.ocr import DocumentType
 from app.models.users import User
-from app.services.medications import MedicationSearchService
+from app.services.medications import MedicationInfoService, MedicationSearchService
 from app.services.ocr import OcrService
 
 ocr_router = APIRouter(prefix="/ocr", tags=["ocr"])
@@ -174,3 +175,15 @@ async def search_medications(
         ).model_dump(),
         status_code=status.HTTP_200_OK,
     )
+
+
+@medication_router.get("/info", response_model=MedicationInfoResponse, status_code=status.HTTP_200_OK)
+async def get_medication_info(
+    user: Annotated[User, Depends(get_request_user)],
+    service: Annotated[MedicationInfoService, Depends(MedicationInfoService)],
+    name: Annotated[str, Query(min_length=1)],
+) -> Response:
+    info = await service.get_info(name=name)
+    if not info:
+        return Response(MedicationInfoResponse().model_dump(), status_code=status.HTTP_200_OK)
+    return Response(MedicationInfoResponse(**info).model_dump(), status_code=status.HTTP_200_OK)

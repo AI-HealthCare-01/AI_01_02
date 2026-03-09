@@ -102,3 +102,15 @@ class MedicationSearchItem(BaseModel):
 
 class MedicationSearchResponse(BaseModel):
     items: list[MedicationSearchItem]
+
+
+class MedicationInfoResponse(BaseModel):
+    item_name: str | None = None
+    efficacy: str | None = None
+    usage: str | None = None
+    warnings: str | None = None
+    precautions: str | None = None
+    interactions: str | None = None
+    side_effects: str | None = None
+    storage: str | None = None
+    source: str | None = None
