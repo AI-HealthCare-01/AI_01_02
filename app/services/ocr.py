@@ -157,7 +157,6 @@ class OcrService:
         if confirmed and corrected_medications is not None:
             confirmed_result["extracted_medications"] = corrected_medications
 
-
         if comment:
             confirmed_result["user_comment"] = comment
 

@@ -34,6 +34,7 @@ class RagResult:
             "score": round(self.score, 4),
         }
 
+
 @lru_cache(maxsize=1)
 def _get_bm25() -> tuple[BM25Okapi, list[dict]]:
     tokenized = [doc["content"].split() for doc in ADHD_DOCUMENTS]
