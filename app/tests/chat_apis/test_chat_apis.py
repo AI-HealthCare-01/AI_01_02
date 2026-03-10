@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock, patch
+
 from httpx import ASGITransport, AsyncClient
 from starlette import status
 from tortoise.contrib.test import TestCase
@@ -35,7 +37,9 @@ class TestChatApis(TestCase):
         assert r.status_code == status.HTTP_201_CREATED
         assert r.json()["status"] == "ACTIVE"
 
-    async def test_send_and_list(self):
+    @patch("app.services.chat.chat_completion", new_callable=AsyncMock, return_value="mock reply")
+    @patch("app.services.chat._classify_intent", new_callable=AsyncMock, return_value="chitchat")
+    async def test_send_and_list(self, _mock_intent, _mock_chat):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             t = await self._login(c, "cm@e.com", "01095001002")
             h = {"Authorization": f"Bearer {t}"}
