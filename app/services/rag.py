@@ -23,7 +23,7 @@ class RagResult:
         self.source = source
         self.url = url
         self.content = content
-        self.score = score
+        self.score = float(score)
 
     def to_reference_dict(self) -> dict[str, Any]:
         return {

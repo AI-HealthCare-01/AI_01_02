@@ -60,9 +60,8 @@ function MedRow({
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-gray-500">약물 {index + 1}</span>
         {med.confidence !== null && med.confidence !== undefined && (
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-            isLowConfidence(med.confidence) ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"
-          }`}>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isLowConfidence(med.confidence) ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"
+            }`}>
             신뢰도 {Math.round(med.confidence * 100)}%
           </span>
         )}
@@ -99,21 +98,42 @@ function MedRow({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">용량 (mg)</label>
+          <label className="block text-xs text-gray-500 mb-1">용량(mg)</label>
           <input type="number" value={med.dose ?? ""} readOnly={!editable}
             onChange={(e) => onChange(index, "dose", e.target.value ? Number(e.target.value) : null)}
             className={inputCls(false, !editable)} placeholder="mg" />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">1회 복용량</label>
+          <label className="block text-xs text-gray-500 mb-1">복용시간</label>
+          {editable ? (
+            <select value={med.intake_time ?? ""} onChange={(e) => onChange(index, "intake_time", e.target.value || null)}
+              className={inputCls(false, false)}>
+              <option value="">선택</option>
+              <option value="morning">아침</option>
+              <option value="lunch">점심</option>
+              <option value="dinner">저녁</option>
+              <option value="bedtime">취침전</option>
+              <option value="PRN">필요시</option>
+            </select>
+          ) : (
+            <input type="text" readOnly value={
+              { morning: "아침", lunch: "점심", dinner: "저녁", bedtime: "취침전", PRN: "필요시" }[med.intake_time ?? ""] ?? med.intake_time ?? ""
+            } className={inputCls(false, true)} placeholder="-" />
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">1회 투약량(정/캡슐)</label>
           <input type="number" value={med.dosage_per_once ?? ""} readOnly={!editable}
             onChange={(e) => onChange(index, "dosage_per_once", e.target.value ? Number(e.target.value) : null)}
-            className={inputCls(false, !editable)} placeholder="정" />
+            className={inputCls(false, !editable)} placeholder="갯수" />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">1일 횟수</label>
+          <label className="block text-xs text-gray-500 mb-1">1일 투여횟수(회)</label>
           <input type="number" value={med.frequency_per_day ?? ""} readOnly={!editable}
             onChange={(e) => onChange(index, "frequency_per_day", e.target.value ? Number(e.target.value) : null)}
             className={inputCls(false, !editable)} placeholder="회" />
@@ -167,7 +187,7 @@ export default function OcrResult() {
       setLoadingResult(true);
       ocrApi.getJobResult(savedJobId)
         .then((res) => {
-          const meds = res.structured_data?.medications ?? [];
+          const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
@@ -188,10 +208,10 @@ export default function OcrResult() {
       for (let i = 0; i < 30; i++) {
         await new Promise((r) => setTimeout(r, 2000));
         const status = await ocrApi.getJobStatus(job_id);
-        if (status.status === "SUCCEEDED") {
+        if (status.status === "SUCCEEDED" || status.status === "COMPLETED") {
           localStorage.setItem("ocr_job_id", job_id);
           const res = await ocrApi.getJobResult(job_id);
-          const meds = res.structured_data?.medications ?? [];
+          const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
@@ -343,13 +363,15 @@ export default function OcrResult() {
         {(phase === "result" || phase === "confirming") && (
           <div className="card-warm p-5">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-semibold text-gray-700">스캔된 약 정보</p>
-              {hasLowConfidence && (
-                <div className="flex items-center gap-1 text-amber-600">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span className="text-xs">신뢰도 낮은 항목 있음</span>
-                </div>
-              )}
+              <div className="flex items-center gap-3">
+                <p className="text-sm font-semibold text-gray-700">스캔된 약 정보</p>
+                {hasLowConfidence && (
+                  <div className="flex items-center gap-1 text-amber-600">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span className="text-xs">신뢰도 낮은 항목 있음</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {medications.length === 0 ? (
@@ -362,7 +384,7 @@ export default function OcrResult() {
               </div>
             )}
 
-            <div className="flex gap-3 mt-5">
+            <div className="flex flex-col gap-3 mt-5">
               <button
                 onClick={() => setEditable((v) => !v)}
                 disabled={phase === "confirming"}
