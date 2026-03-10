@@ -7,8 +7,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.dependencies.security import get_request_user
 from app.dtos.health_profiles import HealthProfileResponse, HealthProfileUpsertRequest
 from app.dtos.users import UserInfoResponse, UserUpdateRequest
-from app.services.health_profiles import HealthProfileService
 from app.models.users import User
+from app.services.health_profiles import HealthProfileService
 from app.services.jwt import JwtService
 from app.services.users import UserManageService
 

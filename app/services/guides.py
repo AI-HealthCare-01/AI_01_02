@@ -10,9 +10,9 @@ from app.models.ocr import OcrJobStatus
 from app.models.users import User
 from app.repositories.guide_repository import GuideRepository
 from app.services.guide_automation import GuideAutomationService
+from app.services.guide_queue import GuideQueuePublisher
 from app.services.health_profiles import HealthProfileService
 from app.services.ocr import OcrService
-from app.services.guide_queue import GuideQueuePublisher
 
 
 class GuideService:

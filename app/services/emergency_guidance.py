@@ -6,7 +6,6 @@ from typing import Any
 from app.core import config
 from app.services.llm import chat_completion
 
-
 _ALLERGY_SYSTEM_PROMPT = """
 You are a clinical medication safety guidance assistant.
 

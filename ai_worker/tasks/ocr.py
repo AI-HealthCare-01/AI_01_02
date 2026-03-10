@@ -12,7 +12,8 @@ from typing import Any, cast
 import httpx
 from openai import AsyncOpenAI
 from redis.asyncio import Redis
-from redis.exceptions import RedisError, TimeoutError as RedisTimeoutError
+from redis.exceptions import RedisError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from tortoise.transactions import in_transaction
 
 from ai_worker.core import config

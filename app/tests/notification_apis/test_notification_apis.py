@@ -107,7 +107,7 @@ class TestNotificationApis(TestCase):
                 user=user,
                 document_type=DocumentType.PRESCRIPTION,
                 file_name="weekly_refresh_unread.png",
-                file_path="documents/test/weekly_refresh_unread.png",
+                temp_storage_key="documents/test/weekly_refresh_unread.png",
                 file_size=100,
                 mime_type="image/png",
             )
@@ -205,7 +205,7 @@ class TestNotificationApis(TestCase):
             assert unread_response.json()["unread_count"] == 0
 
     async def test_list_notifications_creates_weekly_profile_refresh_alert_after_7_days(self):
-        email = "notification_weekly_profile_alert@example.com"
+        email = "noti_weekly_alert@example.com"
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             access_token = await self._signup_and_login(client, email=email, phone_number="01081118111")
             user = await User.get(email=email)
@@ -214,7 +214,7 @@ class TestNotificationApis(TestCase):
                 user=user,
                 document_type=DocumentType.PRESCRIPTION,
                 file_name="weekly_refresh.png",
-                file_path="documents/test/weekly_refresh.png",
+                temp_storage_key="documents/test/weekly_refresh.png",
                 file_size=100,
                 mime_type="image/png",
             )

@@ -8,12 +8,13 @@ from typing import Any, cast
 
 from openai import AsyncOpenAI
 from redis.asyncio import Redis
-from redis.exceptions import RedisError, TimeoutError as RedisTimeoutError
+from redis.exceptions import RedisError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from tortoise.transactions import in_transaction
 
 from ai_worker.core import config
-from app.models.health_profiles import UserHealthProfile
 from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult, GuideRiskLevel
+from app.models.health_profiles import UserHealthProfile
 from app.models.notifications import Notification, NotificationType
 from app.models.ocr import OcrJobStatus
 from app.services.medications import MedicationInfoService

@@ -8,7 +8,9 @@ from tortoise.contrib.test import TestCase
 from app.core import config
 from app.main import app
 from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult, GuideRiskLevel
+from app.models.health_profiles import UserHealthProfile
 from app.models.ocr import OcrJob, OcrJobStatus
+from app.models.users import User
 
 
 class TestGuideApis(TestCase):
@@ -50,6 +52,31 @@ class TestGuideApis(TestCase):
         assert login_response.status_code == status.HTTP_200_OK
         return login_response.json()["access_token"]
 
+    async def _create_health_profile(self, user: User) -> None:
+        await UserHealthProfile.create(
+            user=user,
+            height_cm=175.0,
+            weight_kg=70.0,
+            drug_allergies=[],
+            exercise_frequency_per_week=3,
+            pc_hours_per_day=5,
+            smartphone_hours_per_day=3,
+            caffeine_cups_per_day=2,
+            smoking=0,
+            alcohol_frequency_per_week=1,
+            bed_time="23:00",
+            wake_time="07:00",
+            sleep_latency_minutes=15,
+            night_awakenings_per_week=1,
+            daytime_sleepiness=3,
+            appetite_level=6,
+            meal_regular=True,
+            bmi=22.86,
+            sleep_time_hours=8.0,
+            caffeine_mg=200,
+            digital_time_hours=8,
+        )
+
     async def _create_ocr_job(self, client: AsyncClient, *, access_token: str) -> str:
         headers = {"Authorization": f"Bearer {access_token}"}
         upload_response = await client.post(
@@ -81,6 +108,8 @@ class TestGuideApis(TestCase):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             access_token = await self._signup_and_login(client, email=email, phone_number="01083008300")
             headers = {"Authorization": f"Bearer {access_token}"}
+            user = await User.get(email=email)
+            await self._create_health_profile(user)
 
             ocr_job_id = await self._create_ocr_job(client, access_token=access_token)
             await self._mark_ocr_succeeded(ocr_job_id=ocr_job_id)
@@ -118,6 +147,10 @@ class TestGuideApis(TestCase):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             owner_token = await self._signup_and_login(client, email=owner_email, phone_number="01083008302")
             other_token = await self._signup_and_login(client, email=other_email, phone_number="01083008303")
+            owner_user = await User.get(email=owner_email)
+            await self._create_health_profile(owner_user)
+            other_user = await User.get(email=other_email)
+            await self._create_health_profile(other_user)
 
             owner_ocr_job_id = await self._create_ocr_job(client, access_token=owner_token)
             await self._mark_ocr_succeeded(ocr_job_id=owner_ocr_job_id)
@@ -137,6 +170,8 @@ class TestGuideApis(TestCase):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             access_token = await self._signup_and_login(client, email=email, phone_number="01083008306")
             headers = {"Authorization": f"Bearer {access_token}"}
+            user = await User.get(email=email)
+            await self._create_health_profile(user)
 
             ocr_job_id = await self._create_ocr_job(client, access_token=access_token)
             await self._mark_ocr_succeeded(ocr_job_id=ocr_job_id)
@@ -162,6 +197,8 @@ class TestGuideApis(TestCase):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             access_token = await self._signup_and_login(client, email=email, phone_number="01083008304")
             headers = {"Authorization": f"Bearer {access_token}"}
+            user = await User.get(email=email)
+            await self._create_health_profile(user)
 
             ocr_job_id = await self._create_ocr_job(client, access_token=access_token)
             await self._mark_ocr_succeeded(ocr_job_id=ocr_job_id)
@@ -179,6 +216,8 @@ class TestGuideApis(TestCase):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             access_token = await self._signup_and_login(client, email=email, phone_number="01083008305")
             headers = {"Authorization": f"Bearer {access_token}"}
+            user = await User.get(email=email)
+            await self._create_health_profile(user)
 
             ocr_job_id = await self._create_ocr_job(client, access_token=access_token)
             await self._mark_ocr_succeeded(ocr_job_id=ocr_job_id)

@@ -10,7 +10,7 @@ class Gender(StrEnum):
     FEMALE = "FEMALE"
 
     @classmethod
-    def _missing_(cls, value: object) -> "Gender" | None:
+    def _missing_(cls, value: object) -> Gender | None:
         if not isinstance(value, str):
             return None
         normalized = value.strip().upper()

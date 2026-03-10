@@ -8,7 +8,6 @@ from app.dtos.drugs import DrugItem, DrugListResponse
 from app.models.users import User
 from app.services.psych_drugs import PsychDrugService
 
-
 drug_router = APIRouter(prefix="/drugs", tags=["drugs"])
 
 

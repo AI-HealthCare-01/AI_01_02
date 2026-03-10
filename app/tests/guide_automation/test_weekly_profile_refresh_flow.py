@@ -28,7 +28,7 @@ class TestWeeklyProfileRefreshFlow(TestCase):
             user=user,
             document_type=DocumentType.PRESCRIPTION,
             file_name=file_name,
-            file_path=f"documents/test/{file_name}",
+            temp_storage_key=f"documents/test/{file_name}",
             file_size=100,
             mime_type="image/png",
         )
