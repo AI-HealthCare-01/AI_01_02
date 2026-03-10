@@ -23,7 +23,7 @@ class RagResult:
         self.source = source
         self.url = url
         self.content = content
-        self.score = score
+        self.score = float(score)
 
     def to_reference_dict(self) -> dict[str, Any]:
         return {
@@ -32,8 +32,7 @@ class RagResult:
             "source": self.source,
             "url": self.url,
             "score": round(self.score, 4),
-        }
-
+        } 
 
 @lru_cache(maxsize=1)
 def _get_bm25() -> tuple[BM25Okapi, list[dict]]:
