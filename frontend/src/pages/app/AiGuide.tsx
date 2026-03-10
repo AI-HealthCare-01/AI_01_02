@@ -37,6 +37,8 @@ function formatMedicationGuidanceText(raw: string, medInfoByName: Record<string,
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return raw;
 
+    if (parsed.length === 0) return "";
+
     const lines = parsed
       .filter((item): item is MedicationGuideItem => typeof item === "object" && item !== null)
       .map((med) => {
@@ -361,7 +363,7 @@ export default function AiGuide() {
             </div>
           </div>
 
-          {result.medication_guidance && (
+          {result.medication_guidance && formatMedicationGuidanceText(result.medication_guidance, medInfoByName) && (
             <Accordion title="복약 안내">
               {formatMedicationGuidanceText(result.medication_guidance, medInfoByName)}
             </Accordion>

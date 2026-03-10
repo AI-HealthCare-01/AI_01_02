@@ -680,8 +680,12 @@ async def process_guide_job(
         confirmed_ocr = {}
         if isinstance(job.ocr_job.confirmed_result, dict):
             confirmed_ocr = cast(dict[str, Any], job.ocr_job.confirmed_result.get("confirmed_ocr", {}))
+            if not confirmed_ocr:
+                confirmed_ocr = cast(dict[str, Any], job.ocr_job.confirmed_result)
         if not confirmed_ocr and isinstance(job.ocr_job.structured_result, dict):
             confirmed_ocr = cast(dict[str, Any], job.ocr_job.structured_result.get("confirmed_ocr", {}))
+            if not confirmed_ocr:
+                confirmed_ocr = cast(dict[str, Any], job.ocr_job.structured_result)
 
         medication_guide = await _build_medication_guide(confirmed_ocr)
         flags = _build_lifestyle_flags(profile)
