@@ -220,6 +220,7 @@ export interface OcrMedication {
   dose: number | null;
   frequency_per_day: number | null;
   dosage_per_once: number | null;
+  intake_time: string | null;
   dispensed_date: string | null;
   total_days: number | null;
   confidence: number | null;

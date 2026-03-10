@@ -100,6 +100,33 @@ function MedRow({
 
       <div className="grid grid-cols-2 gap-2">
         <div>
+          <label className="block text-xs text-gray-500 mb-1">용량(mg)</label>
+          <input type="number" value={med.dose ?? ""} readOnly={!editable}
+            onChange={(e) => onChange(index, "dose", e.target.value ? Number(e.target.value) : null)}
+            className={inputCls(false, !editable)} placeholder="mg" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">복용시간</label>
+          {editable ? (
+            <select value={med.intake_time ?? ""} onChange={(e) => onChange(index, "intake_time", e.target.value || null)}
+              className={inputCls(false, false)}>
+              <option value="">선택</option>
+              <option value="morning">아침</option>
+              <option value="lunch">점심</option>
+              <option value="dinner">저녁</option>
+              <option value="bedtime">취침전</option>
+              <option value="PRN">필요시</option>
+            </select>
+          ) : (
+            <input type="text" readOnly value={
+              { morning: "아침", lunch: "점심", dinner: "저녁", bedtime: "취침전", PRN: "필요시" }[med.intake_time ?? ""] ?? med.intake_time ?? ""
+            } className={inputCls(false, true)} placeholder="-" />
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
           <label className="block text-xs text-gray-500 mb-1">1회 투약량(정/캡슐)</label>
           <input type="number" value={med.dosage_per_once ?? ""} readOnly={!editable}
             onChange={(e) => onChange(index, "dosage_per_once", e.target.value ? Number(e.target.value) : null)}
