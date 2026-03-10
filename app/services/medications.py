@@ -28,61 +28,69 @@ class MedicationInfoService:
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
         return cleaned or None
 
-    async def get_info(self, *, name: str) -> dict[str, str | None] | None:
-        db_info = await self._get_db_info(name=name)
+    async def get_info(self, *, name: str, dose_mg: float | None = None) -> dict[str, str | None] | None:
+        db_info = await self._get_db_info(name=name, dose_mg=dose_mg)
         if db_info:
             return db_info
 
-        easy_info = await self._get_easy_drug_info(name=name)
+        easy_info = await self._get_easy_drug_info(name=name, dose_mg=dose_mg)
         if easy_info:
             return easy_info
 
-        return await self._get_llm_info(name=name)
+        return await self._get_llm_info(name=name, dose_mg=dose_mg)
 
-    async def _get_db_info(self, *, name: str) -> dict[str, str | None] | None:
-        record = await self.psych_drug_service.find_best_match(product_name=name)
+    async def _get_db_info(self, *, name: str, dose_mg: float | None = None) -> dict[str, str | None] | None:
+        record = await self.psych_drug_service.find_best_match(product_name=name, dose_mg=dose_mg)
         if not record:
             return None
 
-        precautions_parts = [
-            record.precautions,
-            record.contraindications,
-            record.cautious_patients,
-        ]
-        precautions_text = " / ".join(
-            [part.strip() for part in precautions_parts if part and str(part).strip()]
-        )
         return {
             "item_name": record.product_name or name,
-            "efficacy": record.efficacy,
-            "usage": record.usage,
+            "efficacy": None,
+            "usage": None,
             "warnings": None,
-            "precautions": precautions_text or None,
+            "precautions": record.precautions,
             "interactions": None,
             "side_effects": record.side_effects,
             "storage": None,
             "source": "DB",
         }
 
-    async def _get_easy_drug_info(self, *, name: str) -> dict[str, str | None] | None:
+    async def _get_easy_drug_info(self, *, name: str, dose_mg: float | None = None) -> dict[str, str | None] | None:
         service_key = config.EASY_DRUG_INFO_SERVICE_KEY
         if not service_key:
             return None
 
-        params = {
-            "ServiceKey": service_key,
-            "itemName": name,
-            "type": "json",
-            "numOfRows": 1,
-            "pageNo": 1,
-        }
+        names_to_try = [name]
+        if dose_mg is not None:
+            dose_str = self.psych_drug_service._format_dose(dose_mg)
+            if dose_str and dose_str not in name:
+                names_to_try.insert(0, f"{name} {dose_str}mg")
 
-        try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
-                resp = await client.get(self._BASE_URL, params=params)
-                resp.raise_for_status()
-                payload = resp.json()
-        except httpx.HTTPError:
+        payload = None
+        for query_name in names_to_try:
+            params = {
+                "ServiceKey": service_key,
+                "itemName": query_name,
+                "type": "json",
+                "numOfRows": 1,
+                "pageNo": 1,
+            }
+            try:
+                async with httpx.AsyncClient(timeout=20.0) as client:
+                    resp = await client.get(self._BASE_URL, params=params)
+                    resp.raise_for_status()
+                    payload = resp.json()
+            except httpx.HTTPError:
+                payload = None
+                continue
+            body = payload.get("response", {}).get("body", {}) if isinstance(payload, dict) else {}
+            items = body.get("items", {}).get("item") if isinstance(body, dict) else None
+            if items:
+                break
+            payload = None
+
+        if not payload:
             return None
 
         body = payload.get("response", {}).get("body", {}) if isinstance(payload, dict) else {}
@@ -106,7 +114,7 @@ class MedicationInfoService:
             "source": "EASY_DRUG",
         }
 
-    async def _get_llm_info(self, *, name: str) -> dict[str, str | None] | None:
+    async def _get_llm_info(self, *, name: str, dose_mg: float | None = None) -> dict[str, str | None] | None:
         if not config.OPENAI_API_KEY:
             return None
 
@@ -123,7 +131,7 @@ class MedicationInfoService:
             },
             {
                 "role": "user",
-                "content": f"약품명: {name}\\n부작용과 주의사항을 알려줘.",
+                "content": f"약품명: {name}{f' {dose_mg}mg' if dose_mg is not None else ''}\\n부작용과 주의사항을 알려줘.",
             },
         ]
 

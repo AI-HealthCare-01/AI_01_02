@@ -16,6 +16,7 @@ from app.models.health_profiles import UserHealthProfile
 from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult, GuideRiskLevel
 from app.models.notifications import Notification, NotificationType
 from app.models.ocr import OcrJobStatus
+from app.services.medications import MedicationInfoService
 
 # REQ-049: 프롬프트 버전 관리
 GUIDE_PROMPT_VERSION = "v1.2"
@@ -237,27 +238,45 @@ def _compute_remaining_days(*, dispensed_date: date | None, total_days: int) -> 
     return max(total_days - max(elapsed, 0), 0)
 
 
-def _build_medication_guide(confirmed_ocr: dict[str, Any]) -> list[dict[str, Any]]:
+async def _build_medication_guide(confirmed_ocr: dict[str, Any]) -> list[dict[str, Any]]:
     medications = confirmed_ocr.get("extracted_medications")
     if not isinstance(medications, list):
         return []
 
     guide_items: list[dict[str, Any]] = []
+    info_cache: dict[str, dict[str, str | None] | None] = {}
+    info_service = MedicationInfoService()
     for medication in medications:
         if not isinstance(medication, dict):
             continue
         total_days = int(medication.get("total_days", 0) or 0)
         dispensed_date = _parse_date_or_none(medication.get("dispensed_date"))
         days_left = _compute_remaining_days(dispensed_date=dispensed_date, total_days=max(total_days, 0))
+        drug_name = medication.get("drug_name")
+        precautions_summary: str | None = None
+        side_effects_summary: str | None = None
+        if isinstance(drug_name, str) and drug_name.strip():
+            cache_key = f"{drug_name.lower()}|{medication.get('dose')}"
+            if cache_key not in info_cache:
+                dose_val = medication.get("dose")
+                dose_mg = float(dose_val) if isinstance(dose_val, (int, float)) else None
+                info_cache[cache_key] = await info_service.get_info(name=drug_name, dose_mg=dose_mg)
+            info = info_cache.get(cache_key)
+            if info:
+                precautions_summary = info.get("precautions")
+                side_effects_summary = info.get("side_effects")
         guide_items.append(
             {
-                "drug_name": medication.get("drug_name"),
+                "drug_name": drug_name,
                 "dose": medication.get("dose"),
                 "dosage_per_once": medication.get("dosage_per_once"),
                 "frequency_per_day": medication.get("frequency_per_day"),
                 "intake_time": medication.get("intake_time", []),
                 "administration_timing": medication.get("administration_timing"),
                 "side_effect": medication.get("side_effect"),
+                "precautions": precautions_summary,
+                "side_effects": side_effects_summary,
+                "safety_source": info.get("source") if info else None,
                 "refill_reminder_days_before": f"약 떨어지기 {days_left}일전",
             }
         )
@@ -664,7 +683,7 @@ async def process_guide_job(
         if not confirmed_ocr and isinstance(job.ocr_job.structured_result, dict):
             confirmed_ocr = cast(dict[str, Any], job.ocr_job.structured_result.get("confirmed_ocr", {}))
 
-        medication_guide = _build_medication_guide(confirmed_ocr)
+        medication_guide = await _build_medication_guide(confirmed_ocr)
         flags = _build_lifestyle_flags(profile)
         risk_codes = _build_risk_code_payload(profile)
         lifestyle_guidance_map = await _generate_lifestyle_guide_with_llm(

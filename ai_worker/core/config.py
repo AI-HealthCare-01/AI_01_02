@@ -49,6 +49,7 @@ class Config(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_GUIDE_MODEL: str = "gpt-4o-mini"
     OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
+    EASY_DRUG_INFO_SERVICE_KEY: str = ""
 
     CLOVA_OCR_APIGW_URL: str = ""
     CLOVA_OCR_SECRET: str = ""

@@ -26,13 +26,8 @@ async def list_drugs(
                     id=str(item.id),
                     ingredient_name=item.ingredient_name,
                     product_name=item.product_name,
-                    dosage=item.dosage,
-                    usage=item.usage,
-                    efficacy=item.efficacy,
                     side_effects=item.side_effects,
                     precautions=item.precautions,
-                    contraindications=item.contraindications,
-                    cautious_patients=item.cautious_patients,
                 )
                 for item in items
             ]

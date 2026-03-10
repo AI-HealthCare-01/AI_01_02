@@ -9,7 +9,16 @@ interface MedicationGuideItem {
   frequency_per_day?: number | null;
   intake_time?: string[];
   side_effect?: string | null;
-  refill_reminder_days_before?: string | null;
+  precautions?: string | null;
+  side_effects?: string | null;
+  safety_source?: string | null;
+}
+
+function formatSafetySourceLabel(source: string | null | undefined): string {
+  if (source === "DB") return "drugDB(psych_drugs)";
+  if (source === "EASY_DRUG") return "e약은요";
+  if (source === "LLM") return "LLM";
+  return "미확인";
 }
 
 const LIFESTYLE_GUIDE_LABEL_MAP: Record<string, string> = {
@@ -39,19 +48,16 @@ function formatMedicationGuidanceText(raw: string, medInfoByName: Record<string,
         const intakeTimes = Array.isArray(med.intake_time) ? med.intake_time : [];
         const intakeLine = intakeTimes.length > 0 ? `복용 시간: ${intakeTimes.join(", ")}` : "";
         const sideEffectLine = med.side_effect ? `⚠️ 주의: ${med.side_effect} 현상이 있을 수 있습니다.` : "";
-        const refillLine = med.refill_reminder_days_before
-          ? `🔔 ${med.refill_reminder_days_before}에 미리 알림을 드릴게요!`
+        const precautionsText = med.precautions ?? medInfo?.precautions ?? medInfo?.warnings;
+        const precautionsLine = precautionsText
+          ? `주의사항: ${precautionsText}`
           : "";
-        const precautionsLine = medInfo?.precautions || medInfo?.warnings
-          ? `주의사항: ${medInfo?.precautions ?? medInfo?.warnings}`
+        const sideEffectsText = med.side_effects ?? medInfo?.side_effects;
+        const sideEffectsFromApi = sideEffectsText
+          ? `부작용: ${sideEffectsText}`
           : "";
-        const sourceLine = medInfo?.source ? `출처: ${medInfo.source}` : "";
-        const sideEffectsFromApi = medInfo?.side_effects
-          ? `부작용: ${medInfo.side_effects}`
-          : "";
-        const hasApiInfo = Boolean(
-          medInfo?.precautions || medInfo?.warnings || medInfo?.side_effects
-        );
+        const hasApiInfo = Boolean(precautionsText || sideEffectsText);
+        const sourceLine = `출처: ${formatSafetySourceLabel(med.safety_source ?? medInfo?.source)}`;
         const fallbackSafetyLine = !hasApiInfo
           ? "주의사항/부작용 정보가 없습니다. 복용 중 이상 반응이 있으면 의료진과 상담하세요."
           : "";
@@ -61,11 +67,10 @@ function formatMedicationGuidanceText(raw: string, medInfoByName: Record<string,
           `하루에 ${frequency}번, 한 번에 ${dosage}알씩 드시면 됩니다.`,
           intakeLine,
           sideEffectLine,
-          refillLine,
           precautionsLine,
           sideEffectsFromApi,
-          sourceLine,
           fallbackSafetyLine,
+          sourceLine,
         ]
           .filter(Boolean)
           .join("\n");
