@@ -1,12 +1,14 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from fastapi.responses import ORJSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.dependencies.security import get_request_user
+from app.dtos.health_profiles import HealthProfileResponse, HealthProfileUpsertRequest
 from app.dtos.users import UserInfoResponse, UserUpdateRequest
 from app.models.users import User
+from app.services.health_profiles import HealthProfileService
 from app.services.jwt import JwtService
 from app.services.users import UserManageService
 
@@ -64,3 +66,24 @@ async def delete_user_me(
     resp = Response(status_code=status.HTTP_204_NO_CONTENT)
     resp.delete_cookie(key="refresh_token")
     return resp
+
+
+@user_router.put("/me/health-profile", response_model=HealthProfileResponse, status_code=status.HTTP_200_OK)
+async def upsert_my_health_profile(
+    request: HealthProfileUpsertRequest,
+    user: Annotated[User, Depends(get_request_user)],
+    health_profile_service: Annotated[HealthProfileService, Depends(HealthProfileService)],
+) -> ORJSONResponse:
+    profile = await health_profile_service.upsert_profile(user=user, request=request)
+    return ORJSONResponse(health_profile_service.serialize(profile).model_dump(), status_code=status.HTTP_200_OK)
+
+
+@user_router.get("/me/health-profile", response_model=HealthProfileResponse, status_code=status.HTTP_200_OK)
+async def get_my_health_profile(
+    user: Annotated[User, Depends(get_request_user)],
+    health_profile_service: Annotated[HealthProfileService, Depends(HealthProfileService)],
+) -> ORJSONResponse:
+    profile = await health_profile_service.get_profile(user=user)
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="건강 프로필이 없습니다.")
+    return ORJSONResponse(health_profile_service.serialize(profile).model_dump(), status_code=status.HTTP_200_OK)

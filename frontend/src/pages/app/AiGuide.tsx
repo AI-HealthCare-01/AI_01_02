@@ -1,6 +1,160 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Sparkles } from "lucide-react";
-import { guideApi, GuideJobResult, GuideStatus } from "@/lib/api";
+import { guideApi, GuideJobResult, GuideStatus, medicationApi, MedicationInfo } from "@/lib/api";
+
+interface MedicationGuideItem {
+  drug_name?: string;
+  dose?: number | null;
+  dosage_per_once?: number | null;
+  frequency_per_day?: number | null;
+  intake_time?: string[];
+  side_effect?: string | null;
+  precautions?: string | null;
+  side_effects?: string | null;
+  safety_source?: string | null;
+}
+
+function formatSafetySourceLabel(source: string | null | undefined): string {
+  if (source === "DB") return "drugDB(psych_drugs)";
+  if (source === "EASY_DRUG") return "e약은요";
+  if (source === "LLM") return "LLM";
+  return "미확인";
+}
+
+const LIFESTYLE_GUIDE_LABEL_MAP: Record<string, string> = {
+  nutrition_guide: "식사",
+  exercise_guide: "운동",
+  concentration_strategy: "스크린 타임 제한",
+  sleep_guide: "수면",
+  caffeine_guide: "카페인 제한",
+  smoking_guide: "흡연 제한",
+  drinking_guide: "음주 제한",
+  general_health_guide: "건강 습관 지속",
+};
+
+function formatMedicationGuidanceText(raw: string, medInfoByName: Record<string, MedicationInfo | undefined>): string {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return raw;
+
+    if (parsed.length === 0) return "";
+
+    const lines = parsed
+      .filter((item): item is MedicationGuideItem => typeof item === "object" && item !== null)
+      .map((med) => {
+        const drugName = med.drug_name ?? "약물";
+        const medInfo = drugName ? medInfoByName[drugName] : undefined;
+        const doseText = med.dose != null ? `${med.dose}mg` : "용량 정보 없음";
+        const frequency = med.frequency_per_day != null ? med.frequency_per_day : "-";
+        const dosage = med.dosage_per_once != null ? med.dosage_per_once : "-";
+        const intakeTimes = Array.isArray(med.intake_time) ? med.intake_time : [];
+        const intakeLine = intakeTimes.length > 0 ? `복용 시간: ${intakeTimes.join(", ")}` : "";
+        const sideEffectLine = med.side_effect ? `⚠️ 주의: ${med.side_effect} 현상이 있을 수 있습니다.` : "";
+        const precautionsText = med.precautions ?? medInfo?.precautions ?? medInfo?.warnings;
+        const precautionsLine = precautionsText
+          ? `주의사항: ${precautionsText}`
+          : "";
+        const sideEffectsText = med.side_effects ?? medInfo?.side_effects;
+        const sideEffectsFromApi = sideEffectsText
+          ? `부작용: ${sideEffectsText}`
+          : "";
+        const hasApiInfo = Boolean(precautionsText || sideEffectsText);
+        const sourceLine = `출처: ${formatSafetySourceLabel(med.safety_source ?? medInfo?.source)}`;
+        const fallbackSafetyLine = !hasApiInfo
+          ? "주의사항/부작용 정보가 없습니다. 복용 중 이상 반응이 있으면 의료진과 상담하세요."
+          : "";
+
+        return [
+          `${drugName} (${doseText}) 안내입니다.`,
+          `하루에 ${frequency}번, 한 번에 ${dosage}알씩 드시면 됩니다.`,
+          intakeLine,
+          sideEffectLine,
+          precautionsLine,
+          sideEffectsFromApi,
+          fallbackSafetyLine,
+          sourceLine,
+        ]
+          .filter(Boolean)
+          .join("\n");
+      });
+
+    return lines.length > 0 ? lines.join("\n\n") : raw;
+  } catch {
+    return raw;
+  }
+}
+
+function formatLifestyleGuidanceText(raw: string): string {
+  const buildBlock = (key: string, content: string): string => {
+    const label = LIFESTYLE_GUIDE_LABEL_MAP[key] ?? key;
+    return `${label}\n${content.trim()}`;
+  };
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const blocks = Object.entries(parsed as Record<string, unknown>)
+        .filter(([, value]) => typeof value === "string" && String(value).trim().length > 0)
+        .map(([key, value]) => buildBlock(key, String(value)));
+      if (blocks.length > 0) return blocks.join("\n\n");
+    }
+  } catch {
+    // fallback to line-based parser
+  }
+
+  const lines = raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const blocks = lines
+    .map((line) => {
+      const sepIndex = line.indexOf(":");
+      if (sepIndex <= 0) return null;
+      const key = line.slice(0, sepIndex).trim();
+      const content = line.slice(sepIndex + 1).trim();
+      if (!LIFESTYLE_GUIDE_LABEL_MAP[key] || !content) return null;
+      return buildBlock(key, content);
+    })
+    .filter((block): block is string => Boolean(block));
+
+  return blocks.length > 0 ? blocks.join("\n\n") : raw;
+}
+
+function renderLifestyleGuidanceContent(raw: string): React.ReactNode {
+  const formatted = formatLifestyleGuidanceText(raw);
+  const blocks = formatted
+    .split("\n\n")
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  return (
+    <div className="space-y-4">
+      {blocks.map((block, index) => {
+        const [title, ...rest] = block.split("\n");
+        const content = rest.join("\n").trim();
+        const isGeneralHealthGuide = title === LIFESTYLE_GUIDE_LABEL_MAP.general_health_guide;
+        if (!content) {
+          return (
+            <p key={`${title}-${index}`} className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+              {block}
+            </p>
+          );
+        }
+        return (
+          <div key={`${title}-${index}`} className="space-y-1">
+            <p className={isGeneralHealthGuide ? "text-lg font-extrabold text-green-800" : "text-base font-bold text-green-700"}>
+              {title}
+            </p>
+            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{content}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── 아코디언 ──────────────────────────────────────────────────────────────────
 
 function Accordion({ title, children }: { title: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -23,8 +177,8 @@ function Accordion({ title, children }: { title: string; children: React.ReactNo
         )}
       </button>
       {open && (
-        <div className="px-5 pb-5 pt-1 border-t border-gray-100/60">
-          <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{children}</p>
+        <div className="px-5 pb-5 pt-1 border-t border-gray-100/60 bg-white">
+          <div className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{children}</div>
         </div>
       )}
     </div>
@@ -35,6 +189,7 @@ export default function AiGuide() {
   const [status, setStatus] = useState<GuideStatus | "IDLE">("IDLE");
   const [result, setResult] = useState<GuideJobResult | null>(null);
   const [error, setError] = useState("");
+  const [medInfoByName, setMedInfoByName] = useState<Record<string, MedicationInfo | undefined>>({});
   const cancelledRef = useRef(false);
 
   async function loadGuide() {
@@ -96,6 +251,38 @@ export default function AiGuide() {
     loadGuide();
     return () => { cancelledRef.current = true; };
   }, []); // eslint-disable-line
+
+  useEffect(() => {
+    if (!result?.medication_guidance) return;
+    let meds: MedicationGuideItem[] = [];
+    try {
+      const parsed = JSON.parse(result.medication_guidance) as unknown;
+      if (Array.isArray(parsed)) meds = parsed as MedicationGuideItem[];
+    } catch {
+      return;
+    }
+    const names = Array.from(new Set(meds.map((m) => m.drug_name).filter((n): n is string => !!n)));
+    const missing = names.filter((name) => !medInfoByName[name]);
+    if (missing.length === 0) return;
+    Promise.all(
+      missing.map(async (name) => {
+        try {
+          const info = await medicationApi.getInfo(name);
+          return [name, info] as const;
+        } catch {
+          return [name, undefined] as const;
+        }
+      }),
+    ).then((entries) => {
+      setMedInfoByName((prev) => {
+        const next = { ...prev };
+        for (const [name, info] of entries) {
+          next[name] = info;
+        }
+        return next;
+      });
+    });
+  }, [result?.medication_guidance]); // eslint-disable-line
 
   const updatedAt = result?.updated_at
     ? new Date(result.updated_at).toLocaleDateString("ko-KR", {
@@ -176,16 +363,16 @@ export default function AiGuide() {
             </div>
           </div>
 
-          {result.medication_guidance && (
-            <Accordion title="복약 안내">{result.medication_guidance}</Accordion>
+          {result.medication_guidance && formatMedicationGuidanceText(result.medication_guidance, medInfoByName) && (
+            <Accordion title="복약 안내">
+              {formatMedicationGuidanceText(result.medication_guidance, medInfoByName)}
+            </Accordion>
           )}
           {result.lifestyle_guidance && (
-            <Accordion title="생활 습관 가이드">{result.lifestyle_guidance}</Accordion>
+            <Accordion title="생활 습관 가이드">
+              {renderLifestyleGuidanceContent(result.lifestyle_guidance)}
+            </Accordion>
           )}
-          {result.safety_notice && (
-            <Accordion title="주의사항">{result.safety_notice}</Accordion>
-          )}
-
           {result.source_references?.length > 0 && (
             <div className="card-warm p-4">
               <p className="text-xs font-bold text-gray-400 uppercase mb-2">참고 자료</p>
@@ -198,12 +385,17 @@ export default function AiGuide() {
               </ul>
             </div>
           )}
-
-          <p className="text-xs text-gray-400 text-center pt-2">
-            본 가이드는 참고용 정보이며, 의료진의 진료 및 처방을 대체하지 않습니다.
-          </p>
         </div>
       )}
+
+      <div className="mt-6 border border-gray-200 rounded-xl p-5">
+        <p className="text-sm font-semibold text-gray-700 mb-2">의료 안전 고지</p>
+        <p className="text-xs text-gray-500 leading-relaxed">
+          본 서비스의 알림 및 복약 정보는 참고용이며, 의료진의 처방 및 지시를 대체하지 않습니다.
+          복약 관련 이상반응이나 건강 이상이 느껴질 경우 즉시 의료 전문가와 상담하시기 바랍니다.
+          처방된 약의 용량, 복용 시간, 주의사항은 반드시 담당 의사 또는 약사의 지도에 따르십시오.
+        </p>
+      </div>
     </div>
   );
 }

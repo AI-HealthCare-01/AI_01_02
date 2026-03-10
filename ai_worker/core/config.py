@@ -13,11 +13,22 @@ def get_default_timezone() -> tzinfo:
         return timezone(timedelta(hours=9), name="Asia/Seoul")
 
 
+def get_default_media_dir() -> str:
+    candidates = (
+        Path("/app/media"),
+        Path(__file__).resolve().parents[2] / "app" / "media",
+    )
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return str(candidates[0])
+
+
 class Config(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow")
 
     TIMEZONE: tzinfo = Field(default_factory=get_default_timezone)
-    MEDIA_DIR: str = str(Path(__file__).resolve().parents[2] / "app" / "media")
+    MEDIA_DIR: str = get_default_media_dir()
     OCR_QUEUE_KEY: str = "ocr:jobs"
     OCR_RETRY_QUEUE_KEY: str = "ocr:jobs:retry"
     OCR_DEAD_LETTER_QUEUE_KEY: str = "ocr:jobs:dead-letter"
@@ -38,6 +49,7 @@ class Config(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_GUIDE_MODEL: str = "gpt-4o-mini"
     OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
+    EASY_DRUG_INFO_SERVICE_KEY: str = ""
 
     CLOVA_OCR_APIGW_URL: str = ""
     CLOVA_OCR_SECRET: str = ""
@@ -46,6 +58,9 @@ class Config(BaseSettings):
     REDIS_DB: int = 0
     REDIS_PASSWORD: str | None = None
     REDIS_SOCKET_TIMEOUT_SECONDS: float = 1.0
-
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    GUIDE_LLM_TIMEOUT_SECONDS: float = 20.0

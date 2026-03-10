@@ -1,8 +1,16 @@
 from datetime import date
+from typing import Any
 
-from app.models.ocr import OcrJobStatus
-from app.models.profiles import HealthProfile
+from app.models.health_profiles import UserHealthProfile
+from app.models.ocr import OcrJob, OcrJobStatus
 from app.models.users import User
+from app.services.emergency_guidance import (
+    generate_allergy_medication_guidance,
+    generate_nutrition_guidance,
+    generate_sleep_guidance,
+    is_nutrition_guide_condition_1,
+    is_sleep_guide_condition_1,
+)
 
 
 def _analyze_lifestyle(lifestyle: dict) -> dict:
@@ -48,50 +56,169 @@ def _analyze_nutrition(nutrition: dict) -> dict:
     return {"flags": flags}
 
 
+def _serialize_basic_info(profile: UserHealthProfile) -> dict[str, Any]:
+    return {
+        "height_cm": profile.height_cm,
+        "weight_kg": profile.weight_kg,
+        "drug_allergies": profile.drug_allergies,
+    }
+
+
+def _serialize_lifestyle_input(profile: UserHealthProfile) -> dict[str, Any]:
+    return {
+        "exercise_hours": {
+            "low_intensity": max(profile.exercise_frequency_per_week, 0),
+            "moderate_intensity": 0,
+            "high_intensity": 0,
+        },
+        "digital_usage": {
+            "pc_hours_per_day": profile.pc_hours_per_day,
+            "smartphone_hours_per_day": profile.smartphone_hours_per_day,
+        },
+        "substance_usage": {
+            "caffeine_cups_per_day": profile.caffeine_cups_per_day,
+            "smoking": profile.smoking,
+            "alcohol_frequency_per_week": profile.alcohol_frequency_per_week,
+        },
+    }
+
+
+def _serialize_sleep_input(profile: UserHealthProfile) -> dict[str, Any]:
+    return {
+        "bed_time": profile.bed_time,
+        "wake_time": profile.wake_time,
+        "sleep_latency_minutes": profile.sleep_latency_minutes,
+        "night_awakenings_per_week": profile.night_awakenings_per_week,
+        "daytime_sleepiness_score": profile.daytime_sleepiness,
+    }
+
+
+def _serialize_nutrition_input(profile: UserHealthProfile) -> dict[str, Any]:
+    return {
+        "appetite_score": profile.appetite_level,
+        "is_meal_regular": profile.meal_regular,
+    }
+
+
+def _extract_medications_from_ocr_job(job: OcrJob) -> list[dict[str, Any]]:
+    confirmed = job.confirmed_result if isinstance(job.confirmed_result, dict) else {}
+    structured = job.structured_result if isinstance(job.structured_result, dict) else {}
+
+    medications = confirmed.get("extracted_medications")
+    if isinstance(medications, list):
+        return [m for m in medications if isinstance(m, dict)]
+
+    medications = structured.get("extracted_medications")
+    if isinstance(medications, list):
+        return [m for m in medications if isinstance(m, dict)]
+
+    medications = structured.get("medications")
+    if isinstance(medications, list):
+        return [m for m in medications if isinstance(m, dict)]
+
+    confirmed_ocr = confirmed.get("confirmed_ocr") if isinstance(confirmed, dict) else None
+    if not isinstance(confirmed_ocr, dict):
+        confirmed_ocr = structured.get("confirmed_ocr") if isinstance(structured, dict) else None
+    if not isinstance(confirmed_ocr, dict):
+        return []
+
+    extracted = confirmed_ocr.get("extracted_medications")
+    if not isinstance(extracted, list):
+        return []
+    return [m for m in extracted if isinstance(m, dict)]
+
+
 class AnalysisService:
     async def get_summary(self, *, user: User, date_from: date | None = None, date_to: date | None = None) -> dict:
-        profile = await HealthProfile.get_or_none(user_id=user.id)
+        profile = await UserHealthProfile.get_or_none(user_id=user.id)
 
         risk_flags = []
         allergy_alerts = []
+        emergency_alerts = []
+        seen_emergency_keys: set[str] = set()
 
         if profile:
-            lifestyle_analysis = _analyze_lifestyle(profile.lifestyle_input)
-            sleep_analysis = _analyze_sleep(profile.sleep_input)
-            nutrition_analysis = _analyze_nutrition(profile.nutrition_input)
+            basic_info = _serialize_basic_info(profile)
+            lifestyle_input = _serialize_lifestyle_input(profile)
+            sleep_input = _serialize_sleep_input(profile)
+            nutrition_input = _serialize_nutrition_input(profile)
+
+            lifestyle_analysis = _analyze_lifestyle(lifestyle_input)
+            sleep_analysis = _analyze_sleep(sleep_input)
+            nutrition_analysis = _analyze_nutrition(nutrition_input)
             risk_flags = lifestyle_analysis["flags"] + sleep_analysis["flags"] + nutrition_analysis["flags"]
 
-            drug_allergies = profile.basic_info.get("drug_allergies", [])
+            drug_allergies = basic_info.get("drug_allergies", [])
             if drug_allergies:
-                from app.models.ocr import OcrJob  # noqa: PLC0415
-
                 ocr_jobs = await OcrJob.filter(user_id=user.id, status=OcrJobStatus.SUCCEEDED)
                 for job in ocr_jobs:
                     if not job.structured_result:
                         continue
-                    medications = job.structured_result.get("extracted_medications", [])
+                    medications = _extract_medications_from_ocr_job(job)
                     for med in medications:
-                        drug_name = med.get("drug_name", "")
+                        drug_name = str(med.get("drug_name", "") or "")
                         for allergy in drug_allergies:
-                            if allergy.lower() in drug_name.lower():
+                            allergy_text = str(allergy or "")
+                            if allergy_text and allergy_text.lower() in drug_name.lower():
+                                guidance_message = await generate_allergy_medication_guidance(
+                                    medication_name=drug_name,
+                                    allergy_substance=allergy_text,
+                                )
+                                alert_key = f"ALLERGY::{allergy_text}::{drug_name}"
+                                if alert_key in seen_emergency_keys:
+                                    continue
+                                seen_emergency_keys.add(alert_key)
                                 allergy_alerts.append(
                                     {
                                         "medication_name": drug_name,
-                                        "allergy_substance": allergy,
+                                        "allergy_substance": allergy_text,
                                         "severity": "HIGH",
-                                        "message": f"{drug_name}이(가) 알러지 물질({allergy})을 포함할 수 있습니다. 즉시 의료진과 상담하세요.",
+                                        "message": guidance_message,
                                     }
                                 )
+                                emergency_alerts.append(
+                                    {
+                                        "alert_key": alert_key,
+                                        "type": "ALLERGY",
+                                        "severity": "HIGH",
+                                        "title": "알레르기 약물 충돌 가능성",
+                                        "message": guidance_message,
+                                    }
+                                )
+
+            if is_nutrition_guide_condition_1(basic_info=basic_info, nutrition_input=nutrition_input):
+                emergency_alerts.append(
+                    {
+                        "alert_key": "NUTRITION::CONDITION_1",
+                        "type": "NUTRITION",
+                        "severity": "HIGH",
+                        "title": "영양 상태 주의 알림",
+                        "message": await generate_nutrition_guidance(),
+                    }
+                )
+
+            if is_sleep_guide_condition_1(sleep_input=sleep_input):
+                emergency_alerts.append(
+                    {
+                        "alert_key": "SLEEP::CONDITION_1",
+                        "type": "SLEEP",
+                        "severity": "HIGH",
+                        "title": "수면 안전 알림",
+                        "message": await generate_sleep_guidance(),
+                    }
+                )
         else:
+            basic_info = {}
             lifestyle_analysis = {}
             sleep_analysis = {}
             nutrition_analysis = {}
 
         return {
-            "basic_info": profile.basic_info if profile else {},
+            "basic_info": basic_info,
             "lifestyle_analysis": lifestyle_analysis,
             "sleep_analysis": sleep_analysis,
             "nutrition_analysis": nutrition_analysis,
             "risk_flags": risk_flags,
             "allergy_alerts": allergy_alerts,
+            "emergency_alerts": emergency_alerts,
         }

@@ -5,6 +5,7 @@ from fastapi.responses import ORJSONResponse as Response
 
 from app.dependencies.security import get_request_user
 from app.dtos.guides import (
+    GuideJobCreateFromSnapshotRequest,
     GuideJobCreateRequest,
     GuideJobCreateResponse,
     GuideJobResultResponse,
@@ -25,6 +26,27 @@ async def create_guide_job(
     guide_service: Annotated[GuideService, Depends(GuideService)],
 ) -> Response:
     job = await guide_service.create_guide_job(user=user, ocr_job_id=int(request.ocr_job_id))
+    return Response(
+        GuideJobCreateResponse(
+            job_id=str(job.id),
+            status=job.status,
+            retry_count=job.retry_count,
+            max_retries=job.max_retries,
+            queued_at=job.queued_at,
+        ).model_dump(),
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+
+
+@guide_router.post(
+    "/jobs/confirm-and-create", response_model=GuideJobCreateResponse, status_code=status.HTTP_202_ACCEPTED
+)
+async def confirm_snapshot_and_create_guide_job(
+    request: GuideJobCreateFromSnapshotRequest,
+    user: Annotated[User, Depends(get_request_user)],
+    guide_service: Annotated[GuideService, Depends(GuideService)],
+) -> Response:
+    job = await guide_service.create_guide_job_from_snapshot(user=user, request=request)
     return Response(
         GuideJobCreateResponse(
             job_id=str(job.id),
@@ -77,6 +99,9 @@ async def get_guide_job_result(
             safety_notice=result.safety_notice,
             source_references=result.structured_data.get("source_references", []),
             adherence_rate_percent=result.structured_data.get("adherence_rate_percent"),
+            personalized_guides=result.structured_data.get("personalized_guides"),
+            source_attributions=result.structured_data.get("source_attributions"),
+            weekly_adherence_rate=result.structured_data.get("weekly_adherence_rate"),
             structured_data=result.structured_data,
             created_at=result.created_at,
             updated_at=result.updated_at,

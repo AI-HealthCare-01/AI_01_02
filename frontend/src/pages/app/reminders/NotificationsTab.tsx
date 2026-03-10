@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell, BookOpen, AlertTriangle, FileText, PlusCircle, Check } from "lucide-react";
+import { Bell, PlusCircle, Check, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 import { notificationApi, ApiNotification, NotificationType } from "@/lib/api";
 import { useNotification } from "@/lib/NotificationContext";
@@ -9,6 +9,7 @@ const TYPE_ICON: Record<NotificationType, React.ReactNode> = {
   HEALTH_ALERT: <PlusCircle className="w-5 h-5 text-amber-400" />,
   REPORT_READY: <PlusCircle className="w-5 h-5 text-blue-400" />,
   GUIDE_READY: <PlusCircle className="w-5 h-5 text-green-500" />,
+  MEDICATION_DDAY: <CalendarClock className="w-5 h-5 text-amber-500" />,
 };
 
 function timeAgo(iso: string) {
@@ -26,17 +27,25 @@ function timeAgo(iso: string) {
 const ALARM_KEY = "logly_alarm_settings";
 
 interface AlarmSettings {
-  morning: boolean;
-  evening: boolean;
+  medication: boolean;
   dday: boolean;
 }
 
 function loadAlarmSettings(): AlarmSettings {
   try {
     const raw = localStorage.getItem(ALARM_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<
+        AlarmSettings & { morning?: boolean; evening?: boolean }
+      >;
+      return {
+        medication:
+          parsed.medication ?? parsed.morning ?? parsed.evening ?? true,
+        dday: parsed.dday ?? true,
+      };
+    }
   } catch {}
-  return { morning: true, evening: true, dday: true };
+  return { medication: true, dday: true };
 }
 
 function saveAlarmSettings(s: AlarmSettings) {
@@ -206,12 +215,8 @@ export default function NotificationsTab() {
             </p>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">아침 복약 알림</span>
-                <Toggle on={alarm.morning} onChange={(v) => updateAlarm("morning", v)} />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">저녁 복약 알림</span>
-                <Toggle on={alarm.evening} onChange={(v) => updateAlarm("evening", v)} />
+                <span className="text-sm text-gray-600">복약 알림</span>
+                <Toggle on={alarm.medication} onChange={(v) => updateAlarm("medication", v)} />
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">소진 d-day</span>

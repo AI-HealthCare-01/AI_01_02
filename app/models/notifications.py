@@ -15,6 +15,7 @@ class NotificationType(StrEnum):
     HEALTH_ALERT = "HEALTH_ALERT"
     REPORT_READY = "REPORT_READY"
     GUIDE_READY = "GUIDE_READY"
+    MEDICATION_DDAY = "MEDICATION_DDAY"
 
 
 class Notification(models.Model):

@@ -13,6 +13,7 @@ import httpx
 from openai import AsyncOpenAI
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from tortoise.transactions import in_transaction
 
 from ai_worker.core import config
@@ -129,6 +130,9 @@ class OcrQueueConsumer:
                 Awaitable[list[Any] | None],
                 self.client.blpop([config.OCR_QUEUE_KEY], timeout=config.OCR_QUEUE_BLOCK_TIMEOUT_SECONDS),
             )
+        except RedisTimeoutError:
+            # BLPOP idle timeout: 큐가 비어있는 정상 상태이므로 경고를 남기지 않는다.
+            return None
         except RedisError:
             self.logger.warning("redis queue consume failed")
             await asyncio.sleep(1)

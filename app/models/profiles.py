@@ -14,7 +14,7 @@ class HealthProfile(models.Model):
     user_id: int
     user: OneToOneRelation[User] = fields.OneToOneField(
         "models.User",
-        related_name="health_profile",
+        related_name="legacy_health_profile",
         on_delete=fields.CASCADE,
     )
     basic_info: dict[str, Any] = fields.JSONField(default=dict)

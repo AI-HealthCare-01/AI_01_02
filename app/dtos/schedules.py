@@ -17,6 +17,9 @@ class ScheduleItemResponse(BaseModel):
 class DailyScheduleResponse(BaseModel):
     date: date
     items: list[ScheduleItemResponse]
+    medication_done_count: int
+    medication_total_count: int
+    medication_adherence_rate_percent: float
 
 
 class ScheduleItemStatusUpdateRequest(BaseModel):

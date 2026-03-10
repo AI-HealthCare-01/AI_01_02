@@ -22,6 +22,18 @@ def get_default_timezone() -> tzinfo:
         return timezone(timedelta(hours=9), name="Asia/Seoul")
 
 
+def get_default_media_dir() -> str:
+    candidates = (
+        Path("/app/media"),
+        Path(__file__).resolve().parents[2] / "app" / "media",
+        Path(__file__).resolve().parent.parent / "media",
+    )
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return str(candidates[0])
+
+
 class Config(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow")
 
@@ -29,7 +41,7 @@ class Config(BaseSettings):
     SECRET_KEY: str
     TIMEZONE: tzinfo = Field(default_factory=get_default_timezone)
     TEMPLATE_DIR: str = os.path.join(Path(__file__).resolve().parent.parent, "templates")
-    MEDIA_DIR: str = os.path.join(Path(__file__).resolve().parent.parent, "media")
+    MEDIA_DIR: str = get_default_media_dir()
     OCR_MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024
     OCR_ALLOWED_EXTENSIONS: tuple[str, ...] = ("pdf", "jpg", "jpeg", "png")
     OCR_QUEUE_KEY: str = "ocr:jobs"
@@ -41,6 +53,8 @@ class Config(BaseSettings):
     OCR_JOB_MAX_RETRIES: int = 3
     GUIDE_QUEUE_KEY: str = "guide:jobs"
     GUIDE_JOB_MAX_RETRIES: int = 3
+    GUIDE_WEEKLY_REFRESH_CHECK_INTERVAL_SECONDS: int = 3600
+    GUIDE_WEEKLY_REFRESH_CHECK_BATCH_SIZE: int = 100
 
     CLOVA_OCR_SECRET: str = ""
     CLOVA_OCR_APIGW_URL: str = ""
@@ -49,6 +63,8 @@ class Config(BaseSettings):
     OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
     OPENAI_GUIDE_MODEL: str = "gpt-4o-mini"
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+
+    EASY_DRUG_INFO_SERVICE_KEY: str = ""
 
     CHROMA_HOST: str = "localhost"
     CHROMA_PORT: int = 8001

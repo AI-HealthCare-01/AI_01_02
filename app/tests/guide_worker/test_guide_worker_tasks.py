@@ -3,7 +3,8 @@ from unittest.mock import AsyncMock, Mock, patch
 from tortoise.contrib.test import TestCase
 
 from ai_worker.tasks.guide import GUIDE_SAFETY_NOTICE, compute_retry_delay_seconds, process_guide_job
-from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult, GuideRiskLevel
+from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult
+from app.models.health_profiles import UserHealthProfile
 from app.models.notifications import Notification, NotificationType
 from app.models.ocr import Document, DocumentType, OcrJob, OcrJobStatus
 from app.models.users import Gender, User
@@ -33,6 +34,29 @@ class TestGuideWorkerTasks(TestCase):
 
     async def test_process_guide_job_success(self):
         user = await self._create_user(email="guide_worker_success@example.com", phone_number="01084008400")
+        await UserHealthProfile.create(
+            user=user,
+            height_cm=175.0,
+            weight_kg=70.0,
+            drug_allergies=[],
+            exercise_frequency_per_week=3,
+            pc_hours_per_day=5,
+            smartphone_hours_per_day=3,
+            caffeine_cups_per_day=2,
+            smoking=0,
+            alcohol_frequency_per_week=1,
+            bed_time="23:00",
+            wake_time="07:00",
+            sleep_latency_minutes=15,
+            night_awakenings_per_week=1,
+            daytime_sleepiness=3,
+            appetite_level=6,
+            meal_regular=True,
+            bmi=22.86,
+            sleep_time_hours=8.0,
+            caffeine_mg=200,
+            digital_time_hours=8,
+        )
         logger = Mock()
         scheduled_retries: list[tuple[int, int]] = []
         dead_letters: list[dict] = []
@@ -49,8 +73,8 @@ class TestGuideWorkerTasks(TestCase):
         guide_job = await GuideJob.create(user=user, ocr_job=ocr_job)
 
         with patch(
-            "ai_worker.tasks.guide._call_guide_llm",
-            new=AsyncMock(return_value=("복약 안내 텍스트", "생활습관 안내 텍스트", GuideRiskLevel.LOW, [], None)),
+            "ai_worker.tasks.guide._generate_lifestyle_guide_with_llm",
+            new=AsyncMock(return_value={"general_health_guide": "생활습관 안내 텍스트"}),
         ):
             processed = await process_guide_job(
                 job_id=guide_job.id,
