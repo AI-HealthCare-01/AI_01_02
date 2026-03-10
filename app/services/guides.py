@@ -30,7 +30,9 @@ class GuideService:
                 ErrorCode.STATE_CONFLICT,
                 developer_message="건강 프로필이 없습니다. 온보딩 정보를 먼저 저장해주세요.",
             )
-        required, _ = await self.guide_automation_service.is_profile_refresh_required_for_guide_generation(user_id=user.id)
+        required, _ = await self.guide_automation_service.is_profile_refresh_required_for_guide_generation(
+            user_id=user.id
+        )
         if required:
             raise AppException(
                 ErrorCode.STATE_CONFLICT,
@@ -85,7 +87,9 @@ class GuideService:
         return job
 
     async def refresh_guide_job(self, *, user: User, job_id: int) -> GuideJob:
-        required, _ = await self.guide_automation_service.is_profile_refresh_required_for_guide_generation(user_id=user.id)
+        required, _ = await self.guide_automation_service.is_profile_refresh_required_for_guide_generation(
+            user_id=user.id
+        )
         if required:
             raise AppException(
                 ErrorCode.STATE_CONFLICT,

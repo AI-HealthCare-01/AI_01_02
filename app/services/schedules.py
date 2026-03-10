@@ -31,7 +31,9 @@ class ScheduleService:
 
     async def schedule_sync(self, *, user: User, target_date: date, tz) -> None:
         setting = await self.notification_setting_service.get_or_create(user=user)
-        desired_specs = await self._build_desired_schedule_specs(user=user, target_date=target_date, tz=tz, setting=setting)
+        desired_specs = await self._build_desired_schedule_specs(
+            user=user, target_date=target_date, tz=tz, setting=setting
+        )
 
         day_start = datetime.combine(target_date, time.min).replace(tzinfo=tz)
         day_end = datetime.combine(target_date, time.max).replace(tzinfo=tz)
@@ -41,7 +43,9 @@ class ScheduleService:
             scheduled_at__lte=day_end,
         )
 
-        existing_map = {(item.category, item.title, item.scheduled_at, item.reminder_id): item for item in existing_items}
+        existing_map = {
+            (item.category, item.title, item.scheduled_at, item.reminder_id): item for item in existing_items
+        }
         desired_keys = set(desired_specs.keys())
         existing_keys = set(existing_map.keys())
 

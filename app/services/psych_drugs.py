@@ -138,9 +138,11 @@ class PsychDrugService:
 
         dose_str = self._format_dose(dose_mg)
         for query_name in query_names:
-            dose_contains = await PsychDrug.filter(
-                product_name__icontains=f"{query_name}{dose_str}mg"
-            ).order_by("product_name").first()
+            dose_contains = (
+                await PsychDrug.filter(product_name__icontains=f"{query_name}{dose_str}mg")
+                .order_by("product_name")
+                .first()
+            )
             if dose_contains:
                 return dose_contains
         return None

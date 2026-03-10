@@ -352,9 +352,7 @@ def _derive_sleep_risk_code(profile: UserHealthProfile) -> str:
         return "SLEEP_HIGH_RISK"
     if profile.sleep_latency_minutes >= 30:
         return "INSOMNIA_ONSET"
-    if (4 < profile.sleep_time_hours <= 6) or (
-        profile.night_awakenings_per_week > 5 and profile.sleep_time_hours >= 7
-    ):
+    if (4 < profile.sleep_time_hours <= 6) or (profile.night_awakenings_per_week > 5 and profile.sleep_time_hours >= 7):
         return "SHORT_SLEEP"
     return "NONE"
 
@@ -714,7 +712,9 @@ async def process_guide_job(
                     "safety_notice": GUIDE_SAFETY_NOTICE,
                     "structured_data": {
                         "source_ocr_job_id": job.ocr_job_id,
-                        "generator": f"openai-{config.OPENAI_GUIDE_MODEL}" if config.OPENAI_API_KEY else "guide-fallback",
+                        "generator": f"openai-{config.OPENAI_GUIDE_MODEL}"
+                        if config.OPENAI_API_KEY
+                        else "guide-fallback",
                         "prompt_version": GUIDE_PROMPT_VERSION,
                         "model_version": config.OPENAI_GUIDE_MODEL,
                         "source_references": [],

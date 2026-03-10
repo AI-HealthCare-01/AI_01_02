@@ -38,9 +38,7 @@ class GuideAutomationService:
 
     async def _get_latest_succeeded_ocr_job(self, *, user_id: int) -> OcrJob | None:
         return (
-            await OcrJob.filter(user_id=user_id, status=OcrJobStatus.SUCCEEDED)
-            .order_by("-completed_at", "-id")
-            .first()
+            await OcrJob.filter(user_id=user_id, status=OcrJobStatus.SUCCEEDED).order_by("-completed_at", "-id").first()
         )
 
     async def _has_pending_guide_job_for_ocr(self, *, user_id: int, ocr_job_id: int) -> bool:
@@ -77,7 +75,9 @@ class GuideAutomationService:
         required, source_guide_job_id = await self.is_profile_refresh_required_for_guide_generation(user_id=user_id)
         if not required or source_guide_job_id is None:
             return False
-        await self._create_weekly_refresh_required_notification(user_id=user_id, source_guide_job_id=source_guide_job_id)
+        await self._create_weekly_refresh_required_notification(
+            user_id=user_id, source_guide_job_id=source_guide_job_id
+        )
         return True
 
     async def trigger_refresh_with_latest_ocr(self, *, user_id: int, reason: str) -> GuideJob | None:
@@ -129,9 +129,11 @@ class GuideAutomationService:
 
     async def process_weekly_refresh_due_users(self, *, batch_size: int) -> int:
         cutoff = datetime.now(config.TIMEZONE) - timedelta(days=7)
-        stale_jobs = await GuideJob.filter(status=GuideJobStatus.SUCCEEDED, completed_at__lte=cutoff).order_by(
-            "user_id", "-completed_at", "-id"
-        ).limit(batch_size * 3)
+        stale_jobs = (
+            await GuideJob.filter(status=GuideJobStatus.SUCCEEDED, completed_at__lte=cutoff)
+            .order_by("user_id", "-completed_at", "-id")
+            .limit(batch_size * 3)
+        )
         processed = 0
         seen_user_ids: set[int] = set()
         for job in stale_jobs:

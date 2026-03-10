@@ -139,6 +139,7 @@ async def confirm_ocr_result(
         status_code=status.HTTP_200_OK,
     )
 
+
 @ocr_router.put("/jobs/{job_id}/result/confirm", response_model=OcrJobResultResponse, status_code=status.HTTP_200_OK)
 async def confirm_ocr_job_result(
     job_id: Annotated[str, Path(pattern=r"^\d+$")],
@@ -160,6 +161,7 @@ async def confirm_ocr_job_result(
         ).model_dump(),
         status_code=status.HTTP_200_OK,
     )
+
 
 @medication_router.get("/search", response_model=MedicationSearchResponse, status_code=status.HTTP_200_OK)
 async def search_medications(

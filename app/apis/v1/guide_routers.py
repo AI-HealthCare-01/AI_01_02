@@ -38,7 +38,9 @@ async def create_guide_job(
     )
 
 
-@guide_router.post("/jobs/confirm-and-create", response_model=GuideJobCreateResponse, status_code=status.HTTP_202_ACCEPTED)
+@guide_router.post(
+    "/jobs/confirm-and-create", response_model=GuideJobCreateResponse, status_code=status.HTTP_202_ACCEPTED
+)
 async def confirm_snapshot_and_create_guide_job(
     request: GuideJobCreateFromSnapshotRequest,
     user: Annotated[User, Depends(get_request_user)],
