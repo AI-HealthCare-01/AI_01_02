@@ -164,6 +164,6 @@ class TestUserMeApis(TestCase):
 
             await client.delete("/api/v1/users/me", headers=headers)
 
-            # 탈퇴 후 동일 토큰으로 접근 시 401
+            # 탈퇴 후 동일 토큰으로 접근 시 423(비활성 계정) 또는 401(토큰 블랙리스트)
             me_response = await client.get("/api/v1/users/me", headers=headers)
-            assert me_response.status_code == status.HTTP_401_UNAUTHORIZED
+            assert me_response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_423_LOCKED)

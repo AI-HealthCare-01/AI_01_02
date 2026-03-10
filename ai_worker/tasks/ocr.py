@@ -20,6 +20,13 @@ from app.models.ocr import OcrFailureCode, OcrJob, OcrJobStatus
 
 _PARSE_SYSTEM_PROMPT = (
     "처방전/약봉투 OCR 텍스트에서 약물 정보를 추출하세요. "
+    "각 필드 설명: "
+    "drug_name=약품명 전체(제형 포함, mg 숫자만 제외. 예: '콘서타오로스서방정27mg' → '콘서타오로스서방정'), "
+    "dose=약물 함량의 mg 숫자(예: '콘서타오로스서방정27mg' → 27.0), "
+    "frequency_per_day=1일 투여 횟수, "
+    "dosage_per_once=1회 투여 정수(정/캡슐 수), "
+    "dispensed_date=조제일(YYYY-MM-DD), "
+    "total_days=총 투약 일수. "
     "반드시 JSON으로만 응답하세요: "
     '{"medications": [{"drug_name": str, "dose": float|null, "frequency_per_day": int|null, '
     '"dosage_per_once": int|null, "dispensed_date": "YYYY-MM-DD"|null, "total_days": int|null}], '

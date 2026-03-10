@@ -8,6 +8,7 @@ from tortoise.transactions import in_transaction
 
 from app.core import config
 from app.core.exceptions import AppException, ErrorCode
+from app.core.logger import default_logger as logger
 from app.dtos.auth import LoginRequest, SignUpRequest
 from app.models.users import User
 from app.repositories.user_repository import UserRepository
@@ -42,7 +43,7 @@ async def blacklist_jti(jti: str, ttl_seconds: int = TOKEN_BLACKLIST_TTL_SECONDS
     try:
         await cast(Awaitable, client.setex(f"{TOKEN_BLACKLIST_PREFIX}{jti}", ttl_seconds, "1"))
     except RedisError:
-        pass
+        logger.warning("failed to blacklist jti=%s — token revocation may not take effect", jti, exc_info=True)
 
 
 async def is_jti_blacklisted(jti: str) -> bool:
@@ -51,6 +52,7 @@ async def is_jti_blacklisted(jti: str) -> bool:
         result = await cast(Awaitable, client.exists(f"{TOKEN_BLACKLIST_PREFIX}{jti}"))
         return bool(result)
     except RedisError:
+        logger.warning("failed to check jti blacklist — treating as not blacklisted", exc_info=True)
         return False
 
 

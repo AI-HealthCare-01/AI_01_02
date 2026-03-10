@@ -1,4 +1,5 @@
 import asyncio
+import os
 from collections.abc import Generator
 from typing import Any
 from unittest.mock import Mock, patch
@@ -9,7 +10,10 @@ from _pytest.fixtures import FixtureRequest
 from tortoise import generate_config
 from tortoise.contrib.test import finalizer, initializer
 
-from app.db.databases import TORTOISE_APP_MODELS
+# CI 환경에서 필수 환경변수가 없을 경우 기본값 설정
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-ci")
+
+from app.db.databases import TORTOISE_APP_MODELS  # noqa: E402
 
 TEST_BASE_URL = "http://test"
 TEST_DB_LABEL = "models"

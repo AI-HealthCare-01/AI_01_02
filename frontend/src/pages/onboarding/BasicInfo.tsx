@@ -37,7 +37,7 @@ export default function BasicInfo() {
       : null;
 
   const inputCls =
-    "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent";
+    "w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm bg-white/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-400/50 focus:border-green-400 transition-all duration-200";
 
   return (
     <OnboardingShell step={1} title="기본 정보" subtitle="신체 정보를 입력해주세요">
@@ -92,7 +92,7 @@ export default function BasicInfo() {
             <button
               type="button"
               onClick={addAllergy}
-              className="px-4 py-2.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors shrink-0"
+              className="px-4 py-2.5 gradient-primary text-white text-sm font-semibold rounded-xl hover:shadow-md transition-all duration-200 shrink-0"
             >
               추가
             </button>
@@ -122,7 +122,7 @@ export default function BasicInfo() {
       <div className="mt-8 flex justify-end">
         <button
           onClick={handleNext}
-          className="px-6 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+          className="px-6 py-2.5 gradient-primary text-white text-sm font-bold rounded-xl hover:shadow-lg transition-all duration-200"
         >
           다음 단계
         </button>

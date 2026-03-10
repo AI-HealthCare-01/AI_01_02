@@ -144,7 +144,9 @@ _ERROR_META: dict[ErrorCode, tuple[int, str, str | None, bool]] = {
 class AppException(Exception):  # noqa: N818
     """도메인 에러 코드 기반 표준 예외."""
 
-    def __init__(self, code: ErrorCode, *, developer_message: str | None = None, action_hint: str | None = None) -> None:
+    def __init__(
+        self, code: ErrorCode, *, developer_message: str | None = None, action_hint: str | None = None
+    ) -> None:
         meta = _ERROR_META[code]
         self.code = code
         self.http_status: int = meta[0]
