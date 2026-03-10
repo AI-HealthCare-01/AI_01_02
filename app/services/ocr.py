@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -6,9 +7,11 @@ from tortoise.transactions import in_transaction
 
 from app.core import config, default_logger
 from app.core.exceptions import AppException, ErrorCode
+from app.dtos.ocr import OcrResultConfirmRequest
 from app.models.ocr import Document, DocumentType, OcrFailureCode, OcrJob, OcrJobStatus
 from app.models.users import User
 from app.repositories.ocr_repository import OcrRepository
+from app.services.guide_automation import GuideAutomationService
 from app.services.ocr_queue import OcrQueuePublisher
 
 
@@ -16,6 +19,7 @@ class OcrService:
     def __init__(self) -> None:
         self.repo = OcrRepository()
         self.queue_publisher = OcrQueuePublisher()
+        self.guide_automation_service = GuideAutomationService()
 
     async def upload_document(self, *, user: User, document_type: DocumentType, file: UploadFile) -> Document:
         if not file.filename:
@@ -132,15 +136,19 @@ class OcrService:
         if job.status != OcrJobStatus.SUCCEEDED:
             raise AppException(ErrorCode.STATE_CONFLICT, developer_message="OCR 작업이 아직 완료되지 않았습니다.")
 
+        structured_data = job.confirmed_result if isinstance(job.confirmed_result, dict) else {}
+        if not structured_data:
+            structured_data = job.structured_result if isinstance(job.structured_result, dict) else {}
+
         return {
             "job_id": str(job.id),
             "extracted_text": job.raw_text or "",
-            "structured_data": job.structured_result or {},
+            "structured_data": structured_data,
             "created_at": job.created_at,
             "updated_at": job.updated_at,
         }
 
-    async def confirm_ocr_result(
+    async def confirm_ocr_review(
         self,
         *,
         user: User,
@@ -153,12 +161,17 @@ class OcrService:
         if job.status != OcrJobStatus.SUCCEEDED:
             raise AppException(ErrorCode.STATE_CONFLICT, developer_message="OCR 작업이 아직 완료되지 않았습니다.")
 
-        confirmed_result = dict(job.structured_result or {})
-        if confirmed and corrected_medications is not None:
-            confirmed_result["extracted_medications"] = corrected_medications
+        base_result = job.confirmed_result if isinstance(job.confirmed_result, dict) else {}
+        if not base_result:
+            base_result = job.structured_result if isinstance(job.structured_result, dict) else {}
 
+        confirmed_result = dict(base_result)
+        if corrected_medications is not None:
+            confirmed_result["extracted_medications"] = corrected_medications
+        confirmed_result["user_confirmed"] = confirmed
         if comment:
             confirmed_result["user_comment"] = comment
+        confirmed_result["needs_user_review"] = not confirmed
 
         updated_job = await self.repo.update_job_confirm(
             job_id=job.id,
@@ -168,4 +181,45 @@ class OcrService:
         )
         if not updated_job:
             raise AppException(ErrorCode.RESOURCE_NOT_FOUND, developer_message="OCR 작업을 찾을 수 없습니다.")
+
+        await self.guide_automation_service.trigger_refresh_for_ocr_job(
+            user_id=user.id,
+            ocr_job_id=updated_job.id,
+            reason="ocr_review_corrected",
+        )
+        return updated_job
+
+    async def confirm_ocr_result(self, *, user: User, job_id: int, request: OcrResultConfirmRequest) -> OcrJob:
+        job = await self.get_ocr_job(user=user, job_id=job_id)
+        if job.status != OcrJobStatus.SUCCEEDED:
+            raise AppException(ErrorCode.STATE_CONFLICT, developer_message="OCR 작업이 아직 완료되지 않았습니다.")
+
+        existing_confirmed = job.confirmed_result if isinstance(job.confirmed_result, dict) else {}
+        confirmed_payload = {
+            "raw_text": request.raw_text,
+            "extracted_medications": [item.model_dump() for item in request.extracted_medications],
+            "confirmed_at": datetime.now(config.TIMEZONE).isoformat(),
+            "confirmed_by_user_id": user.id,
+        }
+        merged_confirmed = {
+            **existing_confirmed,
+            "confirmed_ocr": confirmed_payload,
+            "extracted_medications": confirmed_payload["extracted_medications"],
+            "needs_user_review": False,
+        }
+
+        updated_job = await self.repo.update_job_confirm(
+            job_id=job.id,
+            user_id=user.id,
+            confirmed_result=merged_confirmed,
+            needs_user_review=False,
+        )
+        if not updated_job:
+            raise AppException(ErrorCode.RESOURCE_NOT_FOUND, developer_message="OCR 작업을 찾을 수 없습니다.")
+
+        await self.guide_automation_service.trigger_refresh_for_ocr_job(
+            user_id=user.id,
+            ocr_job_id=updated_job.id,
+            reason="ocr_result_confirmed",
+        )
         return updated_job
