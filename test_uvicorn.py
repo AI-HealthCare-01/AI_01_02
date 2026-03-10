@@ -1,5 +1,6 @@
 import subprocess
 import time
+
 import requests
 
 p = subprocess.Popen(["uv", "run", "uvicorn", "app.main:app", "--port", "8085"])

@@ -32,7 +32,7 @@ class RagResult:
             "source": self.source,
             "url": self.url,
             "score": round(self.score, 4),
-        } 
+        }
 
 @lru_cache(maxsize=1)
 def _get_bm25() -> tuple[BM25Okapi, list[dict]]:

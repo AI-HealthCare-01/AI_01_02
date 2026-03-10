@@ -156,7 +156,7 @@ class OcrService:
         confirmed_result = dict(job.structured_result or {})
         if confirmed and corrected_medications is not None:
             confirmed_result["extracted_medications"] = corrected_medications
-        
+
 
         if comment:
             confirmed_result["user_comment"] = comment

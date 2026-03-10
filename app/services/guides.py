@@ -39,8 +39,9 @@ class GuideService:
                 completed_at=datetime.now(config.TIMEZONE)
             )
             # Create a dummy guide result
-            from app.models.guides import GuideRiskLevel
             import json
+
+            from app.models.guides import GuideRiskLevel
             await GuideResult.create(
                 job_id=job.id,
                 medication_guidance="이 약들은 도파민 재흡수를 억제하고 우울증과 무기력을 조절하는데 도움을 줍니다. 용법에 맞게 잘 복용하세요! (로컬 테스트용 임시 가이드)",
