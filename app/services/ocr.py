@@ -13,6 +13,7 @@ from app.models.users import User
 from app.repositories.ocr_repository import OcrRepository
 from app.services.guide_automation import GuideAutomationService
 from app.services.ocr_queue import OcrQueuePublisher
+from app.services.reminders import ReminderService
 
 
 class OcrService:
@@ -20,6 +21,7 @@ class OcrService:
         self.repo = OcrRepository()
         self.queue_publisher = OcrQueuePublisher()
         self.guide_automation_service = GuideAutomationService()
+        self.reminder_service = ReminderService()
 
     async def upload_document(self, *, user: User, document_type: DocumentType, file: UploadFile) -> Document:
         if not file.filename:
@@ -182,6 +184,11 @@ class OcrService:
         if not updated_job:
             raise AppException(ErrorCode.RESOURCE_NOT_FOUND, developer_message="OCR 작업을 찾을 수 없습니다.")
 
+        if confirmed:
+            meds = confirmed_result.get("extracted_medications")
+            if isinstance(meds, list):
+                await self.reminder_service.sync_from_ocr_medications(user=user, medications=meds)
+
         await self.guide_automation_service.trigger_refresh_for_ocr_job(
             user_id=user.id,
             ocr_job_id=updated_job.id,
@@ -216,6 +223,10 @@ class OcrService:
         )
         if not updated_job:
             raise AppException(ErrorCode.RESOURCE_NOT_FOUND, developer_message="OCR 작업을 찾을 수 없습니다.")
+
+        meds = confirmed_payload.get("extracted_medications")
+        if isinstance(meds, list):
+            await self.reminder_service.sync_from_ocr_medications(user=user, medications=meds)
 
         await self.guide_automation_service.trigger_refresh_for_ocr_job(
             user_id=user.id,

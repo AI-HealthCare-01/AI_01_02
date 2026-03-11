@@ -1,38 +1,29 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { RefreshCw, Pill, BookOpen, MessageCircle, Bell, NotebookPen, Upload, Sparkles } from "lucide-react";
+import { RefreshCw, Pill, BookOpen, MessageCircle, NotebookPen, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   scheduleApi,
   userApi,
   reminderApi,
-  guideApi,
+  ocrApi,
+  OcrMedication,
   ScheduleItem,
   UserInfo,
   DdayReminder,
-  GuideJobResult,
 } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
+import NotificationsTab from "./reminders/NotificationsTab";
+import MedicationScheduleCard from "@/components/medication/MedicationScheduleCard";
 
 function formatDate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: "예정",
-  DONE: "완료",
-  SKIPPED: "건너뜀",
-};
-
 const QUICK_NAV = [
   { label: "내 약 정보", icon: Pill, to: "/medications", color: "text-green-600 bg-green-50" },
   { label: "AI 가이드", icon: BookOpen, to: "/ai-guide", color: "text-blue-600 bg-blue-50" },
   { label: "챗봇", icon: MessageCircle, to: "/chat", color: "text-purple-600 bg-purple-50" },
-  { label: "알림", icon: Bell, to: "/reminders", color: "text-amber-600 bg-amber-50" },
   { label: "일상 기록", icon: NotebookPen, to: "/records", color: "text-red-500 bg-red-50" },
 ];
 
@@ -41,9 +32,25 @@ export default function Dashboard() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [dday, setDday] = useState<DdayReminder[]>([]);
-  const [guide, setGuide] = useState<GuideJobResult | null>(null);
+  const [ocrMeds, setOcrMeds] = useState<OcrMedication[]>([]);
   const [loading, setLoading] = useState(true);
   const today = new Date();
+  const todayKey = formatDate(today);
+
+  async function loadOcrMedications() {
+    const jobId = localStorage.getItem("ocr_job_id");
+    if (!jobId) {
+      setOcrMeds([]);
+      return;
+    }
+    try {
+      const res = await ocrApi.getJobResult(jobId);
+      const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
+      setOcrMeds(Array.isArray(meds) ? meds : []);
+    } catch {
+      setOcrMeds([]);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -61,25 +68,12 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-
-    // Load guide separately (may not exist)
-    const jobId = localStorage.getItem("guide_job_id");
-    if (jobId) {
-      try {
-        const status = await guideApi.getJobStatus(jobId);
-        if (status.status === "SUCCEEDED") {
-          const result = await guideApi.getJobResult(jobId);
-          setGuide(result);
-        }
-      } catch {
-        // no guide yet
-      }
-    }
+    await loadOcrMedications();
   }
 
   useEffect(() => { load(); }, []); // eslint-disable-line
 
-  async function updateStatus(itemId: string, status: "DONE" | "SKIPPED") {
+  async function updateMedicationStatus(itemId: string, status: "PENDING" | "DONE") {
     try {
       const updated = await scheduleApi.updateStatus(itemId, status);
       setItems((prev) => prev.map((it) => (it.item_id === itemId ? updated : it)));
@@ -87,10 +81,6 @@ export default function Dashboard() {
       toast.error(toUserMessage(err));
     }
   }
-
-  const pending = items.filter((i) => i.status === "PENDING");
-  const done = items.filter((i) => i.status !== "PENDING");
-  const progress = items.length > 0 ? Math.round((done.length / items.length) * 100) : 0;
 
   const dateLabel = today.toLocaleDateString("ko-KR", {
     year: "numeric",
@@ -155,112 +145,31 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Today's schedule */}
+      <MedicationScheduleCard
+        title="복약 일정"
+        loading={loading}
+        ocrMeds={ocrMeds}
+        scheduleItems={items}
+        storageDateKey={todayKey}
+        onUpdateScheduleStatus={updateMedicationStatus}
+      />
+
+      {/* Notifications */}
       <div className="card-warm p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-bold text-gray-800">오늘의 일정</h2>
-          <div className="flex items-center gap-2.5">
-            <span className="text-sm font-bold text-green-600">{progress}%</span>
-            <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full gradient-primary rounded-full transition-all duration-700 ease-out"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {loading ? (
-          <p className="text-center text-sm text-gray-400 py-6">불러오는 중...</p>
-        ) : items.length === 0 ? (
-          <p className="text-center text-sm text-gray-400 py-6">오늘 등록된 일정이 없습니다.</p>
-        ) : (
-          <div className="space-y-1.5">
-            {pending.map((item) => (
-              <ScheduleRow key={item.item_id} item={item} onUpdate={updateStatus} />
-            ))}
-            {done.map((item) => (
-              <ScheduleRow key={item.item_id} item={item} onUpdate={updateStatus} />
-            ))}
-          </div>
-        )}
+        <h2 className="text-base font-bold text-gray-800 mb-4">알림</h2>
+        <NotificationsTab />
       </div>
 
-      {/* AI Guide card */}
-      <div className="card-warm p-5 relative overflow-hidden">
-        {/* Subtle decorative accent */}
-        <div className="absolute -top-8 -right-8 w-24 h-24 bg-green-100/40 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="flex items-center justify-between relative">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="w-4 h-4 text-green-500" />
-              <h2 className="text-base font-bold text-gray-800">AI 가이드</h2>
-            </div>
-            {guide ? (
-              <p className="text-sm text-gray-500 truncate">
-                {guide.safety_notice || guide.medication_guidance?.slice(0, 60) + "..."}
-              </p>
-            ) : (
-              <p className="text-sm text-gray-400">
-                약봉투를 스캔하면 맞춤형 AI 가이드가 생성됩니다.
-              </p>
-            )}
-          </div>
-          <button
-            onClick={() => navigate("/ai-guide")}
-            className="ml-4 px-4 py-2 bg-green-50 text-sm font-semibold text-green-700 rounded-xl hover:bg-green-100 hover:shadow-sm transition-all duration-200 shrink-0"
-          >
-            상세보기
-          </button>
-        </div>
+      {/* ── 의료 안전 고지 ── */}
+      <div className="border border-gray-200 rounded-xl p-5">
+        <p className="text-sm font-semibold text-gray-700 mb-2">의료 안전 고지</p>
+        <p className="text-xs text-gray-500 leading-relaxed">
+          본 서비스의 알림 및 복약 정보는 참고용이며, 의료진의 처방 및 지시를 대체하지 않습니다.
+          복약 관련 이상반응이나 건강 이상이 느껴질 경우 즉시 의료 전문가와 상담하시기 바랍니다.
+          처방된 약의 용량, 복용 시간, 주의사항은 반드시 담당 의사 또는 약사의 지도에 따르십시오.
+        </p>
       </div>
-    </div>
-  );
-}
 
-function ScheduleRow({
-  item,
-  onUpdate,
-}: {
-  item: ScheduleItem;
-  onUpdate: (id: string, status: "DONE" | "SKIPPED") => void;
-}) {
-  const isPending = item.status === "PENDING";
-  return (
-    <div
-      className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200 ${
-        isPending ? "hover:bg-gray-50" : "opacity-45"
-      }`}
-    >
-      <span className="text-xs text-gray-400 w-10 shrink-0 font-medium">{formatTime(item.scheduled_at)}</span>
-      <span className="text-sm text-gray-700 flex-1 font-medium">{item.title}</span>
-      {isPending ? (
-        <div className="flex gap-1.5">
-          <button
-            onClick={() => onUpdate(item.item_id, "DONE")}
-            className="px-3 py-1 text-xs font-semibold bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-all duration-150"
-          >
-            완료
-          </button>
-          <button
-            onClick={() => onUpdate(item.item_id, "SKIPPED")}
-            className="px-3 py-1 text-xs font-semibold bg-gray-100 text-gray-400 rounded-lg hover:bg-gray-200 transition-all duration-150"
-          >
-            건너뜀
-          </button>
-        </div>
-      ) : (
-        <span
-          className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${
-            item.status === "DONE"
-              ? "bg-green-50 text-green-700"
-              : "bg-gray-100 text-gray-400"
-          }`}
-        >
-          {STATUS_LABEL[item.status]}
-        </span>
-      )}
     </div>
   );
 }

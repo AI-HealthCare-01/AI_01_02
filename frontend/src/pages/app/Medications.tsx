@@ -2,31 +2,24 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Pill, ChevronDown, ChevronUp, AlertTriangle, Upload, BookOpen } from "lucide-react";
 import { toast } from "sonner";
-import { reminderApi, guideApi, scheduleApi, Reminder, DdayReminder, GuideJobResult } from "@/lib/api";
+import { reminderApi, guideApi, Reminder, DdayReminder, GuideJobResult } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
 
-// ── 7일 복약 준수율 계산 ────────────────────────────────────────────────────
+// ── 주간 복약률 ─────────────────────────────────────────────────────────────
+
+const DOW_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
+const WEEKLY_RATE_STORAGE_PREFIX = "weekly_med_rate";
+
+function getMondayOfWeek(d: Date) {
+  const day = d.getDay(); // 0=Sun
+  const diff = day === 0 ? -6 : 1 - day;
+  const mon = new Date(d);
+  mon.setDate(d.getDate() + diff);
+  return mon;
+}
 
 function toDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-async function calcAdherence(): Promise<number | null> {
-  const today = new Date();
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    return d;
-  });
-  const results = await Promise.all(
-    days.map((d) =>
-      scheduleApi.getDaily(toDateStr(d)).catch(() => ({ date: toDateStr(d), items: [] })),
-    ),
-  );
-  const medItems = results.flatMap((r) => r.items.filter((it) => it.category === "MEDICATION"));
-  if (medItems.length === 0) return null;
-  const completed = medItems.filter((it) => it.status === "DONE");
-  return Math.round((completed.length / medItems.length) * 100);
 }
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────────────
@@ -36,9 +29,28 @@ export default function Medications() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [ddayMap, setDdayMap] = useState<Record<string, DdayReminder>>({});
   const [guide, setGuide] = useState<GuideJobResult | null>(null);
-  const [adherence, setAdherence] = useState<number | null>(null);
+  const [weeklyRates, setWeeklyRates] = useState<Array<number | null>>(Array(7).fill(null));
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  function loadWeeklyRates() {
+    try {
+      const key = `${WEEKLY_RATE_STORAGE_PREFIX}:${toDateStr(getMondayOfWeek(new Date()))}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) {
+        setWeeklyRates(Array(7).fill(null));
+        return;
+      }
+      const parsed = JSON.parse(raw) as Array<number | null>;
+      if (!Array.isArray(parsed) || parsed.length !== 7) {
+        setWeeklyRates(Array(7).fill(null));
+        return;
+      }
+      setWeeklyRates(parsed);
+    } catch {
+      setWeeklyRates(Array(7).fill(null));
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -60,7 +72,7 @@ export default function Medications() {
         setLoading(false);
       }
 
-      // 가이드 & 복약률 (비동기)
+      // 가이드 & 주간 복약률 (비동기)
       const jobId = localStorage.getItem("guide_job_id");
       if (jobId) {
         try {
@@ -71,8 +83,7 @@ export default function Medications() {
           }
         } catch {}
       }
-      const rate = await calcAdherence().catch(() => null);
-      setAdherence(rate);
+      loadWeeklyRates();
     }
     load();
   }, []); // eslint-disable-line
@@ -80,6 +91,10 @@ export default function Medications() {
   const active = reminders.filter((r) => r.enabled);
   const inactive = reminders.filter((r) => !r.enabled);
   const ddayWarnings = Object.values(ddayMap).filter((d) => d.remaining_days <= 7);
+  const weeklyRatesWithValues = weeklyRates.filter((v): v is number => v !== null);
+  const weeklyAverageRate = weeklyRatesWithValues.length > 0
+    ? Math.round(weeklyRatesWithValues.reduce((sum, v) => sum + v, 0) / weeklyRatesWithValues.length)
+    : null;
 
   return (
     <div className="min-h-full p-4 md:p-8 max-w-5xl mx-auto">
@@ -178,12 +193,32 @@ export default function Medications() {
             )}
           </div>
 
-          {/* 복약률 */}
-          <div className="card-warm rounded-xl px-5 py-4 flex items-center justify-between">
-            <span className="text-sm font-semibold text-gray-700">복약률</span>
-            <span className="text-xl font-bold text-green-600">
-              {adherence !== null ? `${adherence}%` : "—"}
-            </span>
+          {/* 이번 주 복약 */}
+          <div className="card-warm rounded-xl p-5">
+            <h3 className="text-sm font-bold text-gray-700 mb-4">이번 주 복약</h3>
+            <div className="space-y-2">
+              {DOW_LABELS.map((label, i) => (
+                <div key={label} className="flex items-center gap-3">
+                  <span className="text-xs text-gray-500 w-4">{label}</span>
+                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-green-500"
+                      style={{ width: `${weeklyRates[i] ?? 0}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-semibold text-gray-600 w-10 text-right">
+                    {weeklyRates[i] !== null ? `${weeklyRates[i]}%` : "-"}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+              <span className="text-sm font-semibold text-gray-600">주간 평균 복약율</span>
+              <span className="text-lg font-bold text-green-600">
+                {weeklyAverageRate !== null ? `${weeklyAverageRate}%` : "—"}
+              </span>
+            </div>
           </div>
 
           {/* 처방전 스캔 버튼 */}
