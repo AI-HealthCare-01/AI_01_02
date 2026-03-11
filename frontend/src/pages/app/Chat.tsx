@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Send, Plus, Loader2, MessageCircle, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
-import { chatApi } from "@/lib/api";
+import { chatApi, type ChatReference } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
 
 // ── Session list (localStorage) ──────────────────────────────────────────────
@@ -43,6 +43,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   streaming?: boolean;
+  references?: ChatReference[];
 }
 
 export default function Chat() {
@@ -95,10 +96,13 @@ export default function Chat() {
     chatApi.getMessages(s.id, { limit: 50 })
       .then((r) => {
         if (r.items.length === 0) return;
-        setMessages(r.items.map((m) => ({
-          role: m.role === "USER" ? "user" : "assistant",
-          content: m.content,
-        })));
+        setMessages(
+          r.items.map((m) => ({
+            role: m.role === "USER" ? "user" : "assistant",
+            content: m.content,
+            references: m.references ?? [],
+          })),
+        );
       })
       .catch(() => {
         const next = loadSessions().filter((x) => x.id !== s.id);
@@ -140,17 +144,24 @@ export default function Chat() {
     setMessages((prev) => [
       ...prev,
       { role: "user", content: msg },
-      { role: "assistant", content: "", streaming: true },
+      { role: "assistant", content: "", streaming: true, references: [] },
     ]);
     setStreaming(true);
 
     try {
       let accumulated = "";
       for await (const chunk of chatApi.streamMessage(activeSessionId, msg)) {
-        accumulated += chunk;
-        setMessages((prev) =>
-          prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: accumulated } : m)),
-        );
+        if (chunk.type === "token") {
+          accumulated += chunk.content;
+          setMessages((prev) =>
+            prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: accumulated } : m)),
+          );
+        }
+        if (chunk.type === "reference") {
+          setMessages((prev) =>
+            prev.map((m, i) => (i === prev.length - 1 ? { ...m, references: chunk.references } : m)),
+          );
+        }
       }
       setMessages((prev) =>
         prev.map((m, i) => (i === prev.length - 1 ? { ...m, streaming: false } : m)),
@@ -270,6 +281,29 @@ export default function Chat() {
                 {msg.content}
                 {msg.streaming && (
                   <span className="inline-block w-1.5 h-4 bg-green-300 animate-pulse ml-1 rounded-sm align-middle" />
+                )}
+                {msg.references && msg.references.length > 0 && (
+                  <div className="mt-3 border-t border-gray-200/60 pt-3">
+                    <p className="text-[11px] font-semibold text-gray-500">참고 문헌</p>
+                    <div className="mt-2 space-y-1">
+                      {msg.references.map((ref) => (
+                        <div key={ref.document_id} className="text-xs text-gray-500">
+                          <span className="font-medium text-gray-700">{ref.title}</span>
+                          <span className="ml-1">- {ref.source}</span>
+                          {ref.url && (
+                            <a
+                              href={ref.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="ml-2 text-green-700 underline"
+                            >
+                              링크
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

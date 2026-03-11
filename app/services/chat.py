@@ -326,14 +326,16 @@ class ChatService:
 
         return _clarification_gen()
 
-    async def stream_message(self, *, user: User, session_id: int, message: str) -> AsyncGenerator[str]:
+    async def stream_message(
+        self, *, user: User, session_id: int, message: str
+    ) -> tuple[list[dict], AsyncGenerator[str]]:
         """REQ-038: 토큰 단위 SSE 스트리밍"""
         session = await self._get_active_session(user=user, session_id=session_id)
         intent = "emergency" if any(kw in message for kw in _GUARDRAIL_KEYWORDS) else await _classify_intent(message)
 
         early = await self._check_early_exit(session=session, message=message, intent=intent)
         if early is not None:
-            return early
+            return [], early
 
         profile, rag_docs, needs_clarification, retrieved_doc_ids = await self._prepare_rag_context(
             user=user, intent=intent, message=message
@@ -343,7 +345,7 @@ class ChatService:
             session=session, message=message, intent=intent, needs_clarification=needs_clarification
         )
         if clarification_gen is not None:
-            return clarification_gen
+            return [], clarification_gen
 
         profile_ctx = _build_profile_context(profile)
         rag_ctx = _build_rag_context(rag_docs)
@@ -356,6 +358,7 @@ class ChatService:
         history = [{"role": m.role.lower(), "content": m.content} for m in reversed(recent)]
         messages_payload = [{"role": "system", "content": system_content}] + history
         messages_payload.append({"role": "user", "content": message})
+        references_json = [d.to_reference_dict() for d in rag_docs]
 
         await ChatMessage.create(
             session_id=session.id,
@@ -372,7 +375,7 @@ class ChatService:
             status=ChatMessageStatus.STREAMING,
             content="",
             intent_label=intent,
-            references_json=[d.to_reference_dict() for d in rag_docs],
+            references_json=references_json,
             retrieved_doc_ids=retrieved_doc_ids,
             prompt_version=CHAT_PROMPT_VERSION,
             model_version=config.OPENAI_CHAT_MODEL,
@@ -393,4 +396,4 @@ class ChatService:
             finally:
                 await assistant_msg.save(update_fields=["content", "status", "updated_at"])
 
-        return _stream_gen()
+        return references_json, _stream_gen()

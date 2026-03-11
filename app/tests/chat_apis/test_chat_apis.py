@@ -5,6 +5,7 @@ from starlette import status
 from tortoise.contrib.test import TestCase
 
 from app.main import app
+from app.services.rag import RagResult
 
 
 class TestChatApis(TestCase):
@@ -50,6 +51,41 @@ class TestChatApis(TestCase):
             lr = await c.get(f"/api/v1/chat/sessions/{sid}/messages", headers=h)
             assert lr.json()["meta"]["total"] == 2
 
+    @patch("app.services.chat.chat_completion", new_callable=AsyncMock, return_value="mock reply")
+    @patch(
+        "app.services.chat.hybrid_search",
+        new_callable=AsyncMock,
+        return_value=(
+            [
+                RagResult(
+                    "adhd-med-001",
+                    "메틸페니데이트(콘서타/리탈린) 복약 안내",
+                    "대한소아청소년정신의학회",
+                    "https://www.kacap.or.kr",
+                    "dummy content",
+                    0.91,
+                )
+            ],
+            False,
+        ),
+    )
+    @patch("app.services.chat._classify_intent", new_callable=AsyncMock, return_value="medical")
+    async def test_send_message_includes_references(self, _mock_intent, _mock_search, _mock_chat):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            t = await self._login(c, "cm_ref@e.com", "01095001007")
+            h = {"Authorization": f"Bearer {t}"}
+            sid = (await c.post("/api/v1/chat/sessions", json={}, headers=h)).json()["id"]
+            r = await c.post(
+                f"/api/v1/chat/sessions/{sid}/messages",
+                json={"message": "콘서타는 언제 먹나요?"},
+                headers=h,
+            )
+
+        assert r.status_code == status.HTTP_200_OK
+        body = r.json()
+        assert body["references"][0]["document_id"] == "adhd-med-001"
+        assert body["references"][0]["source"] == "대한소아청소년정신의학회"
+
     async def test_guardrail(self):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             t = await self._login(c, "cg@e.com", "01095001003")
@@ -85,3 +121,44 @@ class TestChatApis(TestCase):
                 headers={"Authorization": f"Bearer {tb}"},
             )
             assert r.status_code == status.HTTP_404_NOT_FOUND
+
+    async def _fake_stream_chat_completion(self, *, model, messages, temperature=0.7):
+        yield "mock "
+        yield "reply"
+
+    @patch("app.services.chat.hybrid_search")
+    @patch("app.services.chat._classify_intent", new_callable=AsyncMock, return_value="medical")
+    async def test_stream_message_emits_reference_event(self, _mock_intent, mock_search):
+        mock_search.return_value = (
+            [
+                RagResult(
+                    "adhd-med-001",
+                    "메틸페니데이트(콘서타/리탈린) 복약 안내",
+                    "대한소아청소년정신의학회",
+                    "https://www.kacap.or.kr",
+                    "dummy content",
+                    0.91,
+                )
+            ],
+            False,
+        )
+
+        with patch("app.services.chat.stream_chat_completion", new=self._fake_stream_chat_completion):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                t = await self._login(c, "cm_stream@e.com", "01095001008")
+                h = {"Authorization": f"Bearer {t}"}
+                sid = (await c.post("/api/v1/chat/sessions", json={}, headers=h)).json()["id"]
+
+                async with c.stream(
+                    "POST",
+                    f"/api/v1/chat/sessions/{sid}/stream",
+                    json={"message": "콘서타는 언제 먹나요?"},
+                    headers=h,
+                ) as r:
+                    body = ""
+                    async for chunk in r.aiter_text():
+                        body += chunk
+
+        assert r.status_code == status.HTTP_200_OK
+        assert "event: reference" in body
+        assert "대한소아청소년정신의학회" in body
