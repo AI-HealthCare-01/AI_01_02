@@ -17,4 +17,3 @@ async def downgrade(db: BaseDBAsyncClient) -> str:
         MODIFY COLUMN `type` VARCHAR(12) NOT NULL DEFAULT 'SYSTEM'
         COMMENT 'SYSTEM: SYSTEM\\nHEALTH_ALERT: HEALTH_ALERT\\nREPORT_READY: REPORT_READY';
     """
-
