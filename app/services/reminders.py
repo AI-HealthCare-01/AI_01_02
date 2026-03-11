@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from typing import Any
 
 from app.core import config
 from app.core.exceptions import AppException, ErrorCode
@@ -8,6 +9,19 @@ from app.models.users import User
 
 
 class ReminderService:
+    _INTAKE_TIME_MAP = {
+        "morning": "08:00",
+        "lunch": "13:00",
+        "dinner": "19:00",
+        "bedtime": "22:00",
+        "prn": "12:00",
+        "아침": "08:00",
+        "점심": "13:00",
+        "저녁": "19:00",
+        "취침전": "22:00",
+        "취침 전": "22:00",
+    }
+
     async def create_reminder(self, *, user: User, data: MedicationReminderUpsertRequest) -> MedicationReminder:
         return await MedicationReminder.create(
             user_id=user.id,
@@ -87,3 +101,114 @@ class ReminderService:
                     )
                 )
         return sorted(result, key=lambda x: x.remaining_days)
+
+    async def sync_from_ocr_medications(self, *, user: User, medications: list[dict[str, Any]]) -> None:
+        for med in medications:
+            if not isinstance(med, dict):
+                continue
+
+            medication_name = str(med.get("drug_name") or "").strip()
+            if not medication_name:
+                continue
+
+            schedule_times = self._extract_schedule_times(med)
+            if not schedule_times:
+                schedule_times = ["09:00"]
+
+            dispensed_date = self._parse_date(med.get("dispensed_date"))
+            total_days = self._parse_int(med.get("total_days"))
+            if total_days is not None and total_days <= 0:
+                total_days = None
+
+            dose_text = self._extract_dose_text(med)
+            daily_intake_count = self._parse_int(med.get("frequency_per_day"))
+
+            existing = await MedicationReminder.filter(user_id=user.id, medication_name=medication_name).first()
+            if existing:
+                existing.schedule_times = schedule_times
+                existing.dose_text = dose_text
+                existing.dispensed_date = dispensed_date
+                existing.total_days = total_days
+                existing.daily_intake_count = daily_intake_count
+                existing.enabled = True
+                await existing.save(
+                    update_fields=[
+                        "schedule_times",
+                        "dose_text",
+                        "dispensed_date",
+                        "total_days",
+                        "daily_intake_count",
+                        "enabled",
+                        "updated_at",
+                    ]
+                )
+                continue
+
+            await MedicationReminder.create(
+                user_id=user.id,
+                medication_name=medication_name,
+                dose_text=dose_text,
+                schedule_times=schedule_times,
+                dispensed_date=dispensed_date,
+                total_days=total_days,
+                daily_intake_count=daily_intake_count,
+                enabled=True,
+            )
+
+    @classmethod
+    def _extract_schedule_times(cls, med: dict[str, Any]) -> list[str]:
+        raw = med.get("intake_time")
+        values: list[str] = []
+        if isinstance(raw, list):
+            values = [str(x).strip().lower() for x in raw if str(x).strip()]
+        elif isinstance(raw, str) and raw.strip():
+            values = [raw.strip().lower()]
+
+        mapped = [cls._INTAKE_TIME_MAP[v] for v in values if v in cls._INTAKE_TIME_MAP]
+        if mapped:
+            return sorted(set(mapped))
+
+        freq = cls._parse_int(med.get("frequency_per_day"))
+        if freq is None:
+            return []
+        if freq <= 1:
+            return ["09:00"]
+        if freq == 2:
+            return ["09:00", "21:00"]
+        return ["08:00", "13:00", "19:00"]
+
+    @staticmethod
+    def _parse_date(value: Any) -> date | None:
+        if isinstance(value, date):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.strptime(value, "%Y-%m-%d").date()
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _parse_int(value: Any) -> int | None:
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str) and value.strip():
+            try:
+                return int(float(value.strip()))
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _extract_dose_text(med: dict[str, Any]) -> str | None:
+        dose = med.get("dose")
+        if dose is None:
+            return None
+        if isinstance(dose, (int, float)):
+            return str(dose)
+        text = str(dose).strip()
+        return text or None

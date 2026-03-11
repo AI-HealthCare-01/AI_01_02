@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Edit2 } from "lucide-react";
 import { toast } from "sonner";
-import { scheduleApi, profileApi, ocrApi, HealthProfile, ScheduleItem, OcrMedication, HealthProfileUpsertRequest } from "@/lib/api";
+import {
+  scheduleApi,
+  profileApi,
+  ocrApi,
+  guideApi,
+  HealthProfile,
+  ScheduleItem,
+  OcrMedication,
+  HealthProfileUpsertRequest,
+} from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
 import MedicationScheduleCard from "@/components/medication/MedicationScheduleCard";
 
@@ -32,8 +41,8 @@ function getDailyConfirmStorageKey(date: string) {
   return `daily_med_confirmed:${date}`;
 }
 
-function getDailyDiaryStorageKey(date: string) {
-  return `${DAILY_DIARY_STORAGE_PREFIX}:${date}`;
+function getDailyDiaryStorageKey(date: string, userId: string | number | null | undefined) {
+  return `${DAILY_DIARY_STORAGE_PREFIX}:${String(userId ?? "unknown")}:${date}`;
 }
 
 // ─── main component ───────────────────────────────────────────────────────────
@@ -140,7 +149,7 @@ export default function Records() {
     }
   }
 
-  async function updateMedicationStatus(itemId: string, status: "DONE" | "SKIPPED") {
+  async function updateMedicationStatus(itemId: string, status: "PENDING" | "DONE") {
     try {
       const updated = await scheduleApi.updateStatus(itemId, status);
       setScheduleItems((prev) => prev.map((it) => (it.item_id === itemId ? updated : it)));
@@ -171,17 +180,17 @@ export default function Records() {
   useEffect(() => { load(selectedDate); }, []); // eslint-disable-line
 
   useEffect(() => {
-    const key = getDailyDiaryStorageKey(toDateStr(selectedDate));
+    const key = getDailyDiaryStorageKey(toDateStr(selectedDate), profile?.user_id);
     try {
       const saved = localStorage.getItem(key);
       setDailyDiary(saved ?? "");
     } catch {
       setDailyDiary("");
     }
-  }, [selectedDate]);
+  }, [selectedDate, profile?.user_id]);
 
   function saveDailyDiary() {
-    const key = getDailyDiaryStorageKey(toDateStr(selectedDate));
+    const key = getDailyDiaryStorageKey(toDateStr(selectedDate), profile?.user_id);
     try {
       localStorage.setItem(key, dailyDiary.trim());
       toast.success("오늘의 일기를 저장했습니다.");
@@ -206,6 +215,18 @@ export default function Records() {
   const weeklyAverageRate = weeklyRatesWithValues.length > 0
     ? Math.round(weeklyRatesWithValues.reduce((sum, v) => sum + v, 0) / weeklyRatesWithValues.length)
     : null;
+  const smokingLabel = (() => {
+    const v = profile?.lifestyle?.smoking ?? 0;
+    if (v === 0) return "비흡연";
+    return "흡연";
+  })();
+  const alcoholLabel = (() => {
+    const v = profile?.lifestyle?.alcohol_frequency_per_week ?? 0;
+    if (v <= 0) return "거의 없음";
+    if (v <= 2) return "주 1~2회";
+    return "주 3회 이상";
+  })();
+  const regularMealsLabel = profile?.nutrition_status?.meal_regular ? "규칙적" : "불규칙";
 
   return (
     <div className="min-h-full p-4 md:p-8 max-w-5xl mx-auto">
@@ -299,7 +320,22 @@ export default function Records() {
           {/* 입력된 일상정보 */}
           <div className="card-warm p-5">
             <h3 className="text-sm font-bold text-gray-700 mb-3">입력된 일상정보</h3>
-            <div className="h-56 rounded-xl border border-gray-200 bg-white/70" />
+            <div className="h-56 rounded-xl border border-gray-200 bg-white/70 p-3 overflow-y-auto">
+              {!profile ? (
+                <p className="text-sm text-gray-400">온보딩 정보가 아직 없습니다.</p>
+              ) : (
+                <div className="space-y-2 text-sm text-gray-700">
+                  <InfoRow label="키/몸무게" value={`${profile.basic_info.height_cm}cm / ${profile.basic_info.weight_kg}kg`} />
+                  <InfoRow label="운동 빈도" value={`주 ${profile.lifestyle.exercise_frequency_per_week}회`} />
+                  <InfoRow label="PC/스마트폰" value={`${profile.lifestyle.pc_hours_per_day}h / ${profile.lifestyle.smartphone_hours_per_day}h`} />
+                  <InfoRow label="커피" value={`${profile.lifestyle.caffeine_cups_per_day}잔`} />
+                  <InfoRow label="흡연" value={smokingLabel} />
+                  <InfoRow label="음주" value={alcoholLabel} />
+                  <InfoRow label="취침/기상" value={`${profile.sleep_input.bed_time} / ${profile.sleep_input.wake_time}`} />
+                  <InfoRow label="식사 패턴" value={regularMealsLabel} />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* 일상 정보 수정 버튼 */}
@@ -340,15 +376,43 @@ function EditModal({
 }) {
   const sl = profile?.sleep_input;
   const ls = profile?.lifestyle;
+  const EXERCISE_OPTIONS = [
+    { value: "low", label: "낮음", desc: "주 1회 미만" },
+    { value: "moderate", label: "보통", desc: "주 2~3회" },
+    { value: "high", label: "높음", desc: "주 4회 이상" },
+  ];
+  const SMOKING_OPTIONS = [
+    { value: "none", label: "비흡연" },
+    { value: "light", label: "하루 5개비 이하 또는 주 1~3회" },
+    { value: "heavy", label: "하루 6개비 이상" },
+  ];
+  const ALCOHOL_OPTIONS = [
+    { value: "low", label: "월 1회 이하" },
+    { value: "moderate", label: "주 1~2회" },
+    { value: "high", label: "주 3회 이상" },
+  ];
 
   const [bedTime, setBedTime] = useState(sl?.bed_time ?? "23:00");
   const [wakeTime, setWakeTime] = useState(sl?.wake_time ?? "07:00");
   const [sleepLatency, setSleepLatency] = useState(String(sl?.sleep_latency_minutes ?? ""));
   const [nightAwakenings, setNightAwakenings] = useState(String(sl?.night_awakenings_per_week ?? ""));
   const [daytimeSleepiness, setDaytimeSleepiness] = useState(sl?.daytime_sleepiness ?? 3);
-  const [caffeine, setCaffeine] = useState(String(ls?.caffeine_cups_per_day ?? 1));
-  const [smoking, setSmoking] = useState(!!(ls?.smoking));
-  const [alcohol, setAlcohol] = useState(String(ls?.alcohol_frequency_per_week ?? 1));
+  const [exercise, setExercise] = useState(() => {
+    const freq = ls?.exercise_frequency_per_week ?? 0;
+    if (freq >= 4) return "high";
+    if (freq >= 2) return "moderate";
+    return "low";
+  });
+  const [pcHours, setPcHours] = useState(String(ls?.pc_hours_per_day ?? 0));
+  const [phoneHours, setPhoneHours] = useState(String(ls?.smartphone_hours_per_day ?? 0));
+  const [coffee, setCoffee] = useState(String(ls?.caffeine_cups_per_day ?? 1));
+  const [smoking, setSmoking] = useState(() => (ls?.smoking ?? 0) > 0 ? "light" : "none");
+  const [alcohol, setAlcohol] = useState(() => {
+    const freq = ls?.alcohol_frequency_per_week ?? 0;
+    if (freq >= 3) return "high";
+    if (freq >= 1) return "moderate";
+    return "low";
+  });
   const [appetiteScore, setAppetiteScore] = useState(profile?.nutrition_status?.appetite_level ?? 5);
   const [regularMeals, setRegularMeals] = useState(profile?.nutrition_status?.meal_regular ?? true);
   const [loading, setLoading] = useState(false);
@@ -356,15 +420,18 @@ function EditModal({
   async function handleSave() {
     setLoading(true);
     try {
+      const exerciseMap: Record<string, number> = { low: 1, moderate: 3, high: 5 };
+      const smokingMap: Record<string, number> = { none: 0, light: 1, heavy: 1 };
+      const alcoholMap: Record<string, number> = { low: 1, moderate: 2, high: 4 };
       const payload: HealthProfileUpsertRequest = {
         basic_info: profile?.basic_info ?? { height_cm: 0, weight_kg: 0, drug_allergies: [] },
         lifestyle: {
-          exercise_frequency_per_week: ls?.exercise_frequency_per_week ?? 0,
-          pc_hours_per_day: ls?.pc_hours_per_day ?? 0,
-          smartphone_hours_per_day: ls?.smartphone_hours_per_day ?? 0,
-          caffeine_cups_per_day: parseFloat(caffeine) || 0,
-          smoking: smoking ? 1 : 0,
-          alcohol_frequency_per_week: parseFloat(alcohol) || 0,
+          exercise_frequency_per_week: exerciseMap[exercise] ?? 0,
+          pc_hours_per_day: parseFloat(pcHours) || 0,
+          smartphone_hours_per_day: parseFloat(phoneHours) || 0,
+          caffeine_cups_per_day: parseInt(coffee, 10) || 1,
+          smoking: smokingMap[smoking] ?? 0,
+          alcohol_frequency_per_week: alcoholMap[alcohol] ?? 1,
         },
         sleep_input: {
           bed_time: bedTime,
@@ -376,6 +443,24 @@ function EditModal({
         nutrition_status: { appetite_level: appetiteScore, meal_regular: regularMeals },
       };
       await profileApi.upsertHealth(payload);
+      const currentGuideJobId = localStorage.getItem("guide_job_id");
+      const currentOcrJobId = localStorage.getItem("ocr_job_id");
+
+      try {
+        if (currentGuideJobId) {
+          const refreshed = await guideApi.refreshJob(currentGuideJobId, "profile_updated_from_records");
+          localStorage.setItem("guide_job_id", refreshed.refreshed_job_id);
+          toast.success("AI 가이드를 최신 정보로 업데이트 중입니다.");
+        } else if (currentOcrJobId) {
+          const created = await guideApi.createJob(currentOcrJobId);
+          localStorage.setItem("guide_job_id", created.job_id);
+          toast.success("AI 가이드를 생성 중입니다.");
+        }
+      } catch {
+        // 프로필 저장은 성공했으므로 가이드 갱신 실패는 안내만 한다.
+        toast.error("일상 정보는 저장되었지만 AI 가이드 갱신에 실패했습니다.");
+      }
+
       onSaved();
       onClose();
     } catch (err: unknown) {
@@ -422,23 +507,72 @@ function EditModal({
           </div>
 
           <p className="text-xs font-semibold text-gray-400 uppercase pt-2">생활습관</p>
+          <div>
+            <label className="block text-xs text-gray-600 mb-2">운동량</label>
+            <div className="flex gap-2">
+              {EXERCISE_OPTIONS.map(({ value, label, desc }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setExercise(value)}
+                  className={`flex-1 py-2 rounded-xl border text-center transition-all duration-200 ${
+                    exercise === value
+                      ? "gradient-primary text-white border-transparent shadow-sm"
+                      : "border-gray-200 text-gray-500 hover:border-green-300 bg-white/70"
+                  }`}
+                >
+                  <p className="text-xs font-semibold">{label}</p>
+                  <p className={`text-[10px] mt-0.5 ${exercise === value ? "text-green-100" : "text-gray-400"}`}>
+                    {desc}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-gray-600 mb-1">카페인 (일, 잔)</label>
-              <input type="number" value={caffeine} onChange={(e) => setCaffeine(e.target.value)} placeholder="1" className={inputCls} />
+              <label className="block text-xs text-gray-600 mb-1">PC/노트북 (시간)</label>
+              <input type="number" min="0" max="24" value={pcHours} onChange={(e) => setPcHours(e.target.value)} className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs text-gray-600 mb-1">음주 (주, 회)</label>
-              <input type="number" value={alcohol} onChange={(e) => setAlcohol(e.target.value)} placeholder="1" className={inputCls} />
+              <label className="block text-xs text-gray-600 mb-1">스마트폰 (시간)</label>
+              <input type="number" min="0" max="24" value={phoneHours} onChange={(e) => setPhoneHours(e.target.value)} className={inputCls} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">커피</label>
+              <select value={coffee} onChange={(e) => setCoffee(e.target.value)} className={inputCls}>
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((cup) => (
+                  <option key={cup} value={cup}>
+                    {cup}잔
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <div>
             <label className="block text-xs text-gray-600 mb-2">흡연</label>
-            <div className="flex gap-3">
-              {[true, false].map((v) => (
-                <button key={String(v)} type="button" onClick={() => setSmoking(v)}
-                  className={`flex-1 py-2 rounded-xl text-sm border transition-all duration-200 ${smoking === v ? "gradient-primary text-white border-green-600 font-bold" : "border-gray-200 text-gray-500"}`}>
-                  {v ? "예" : "아니오"}
+            <div className="grid grid-cols-3 gap-2">
+              {SMOKING_OPTIONS.map(({ value, label }) => (
+                <button key={value} type="button" onClick={() => setSmoking(value)}
+                  className={`px-2 py-2 rounded-xl text-xs border transition-all duration-200 ${
+                    smoking === value ? "gradient-primary text-white border-transparent font-bold" : "border-gray-200 text-gray-500"
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-2">음주</label>
+            <div className="grid grid-cols-3 gap-2">
+              {ALCOHOL_OPTIONS.map(({ value, label }) => (
+                <button key={value} type="button" onClick={() => setAlcohol(value)}
+                  className={`px-2 py-2 rounded-xl text-xs border transition-all duration-200 ${
+                    alcohol === value ? "gradient-primary text-white border-transparent font-bold" : "border-gray-200 text-gray-500"
+                  }`}>
+                  {label}
                 </button>
               ))}
             </div>
@@ -471,6 +605,15 @@ function EditModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-1.5">
+      <span className="text-xs text-gray-500">{label}</span>
+      <span className="text-sm font-medium text-gray-700 text-right">{value}</span>
     </div>
   );
 }

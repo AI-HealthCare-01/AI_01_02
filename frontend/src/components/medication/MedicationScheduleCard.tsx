@@ -21,7 +21,7 @@ type Props = {
   ocrMeds: OcrMedication[];
   scheduleItems: ScheduleItem[];
   storageDateKey: string;
-  onUpdateScheduleStatus: (itemId: string, status: "DONE" | "SKIPPED") => void;
+  onUpdateScheduleStatus: (itemId: string, status: "PENDING" | "DONE") => void;
   onProgressChange?: (progress: number, totalCount: number) => void;
 };
 
@@ -126,30 +126,21 @@ export default function MedicationScheduleCard({
                 <span className="text-sm text-gray-700">{dosagePerOnce}</span>
                 <div className="flex items-center justify-end gap-1.5">
                   {scheduleItem ? (
-                    <>
-                      <button
-                        onClick={() => onUpdateScheduleStatus(scheduleItem.item_id, "DONE")}
-                        disabled={scheduleItem.status !== "PENDING"}
-                        className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all duration-150 ${
-                          scheduleItem.status === "DONE"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-60"
-                        }`}
-                      >
-                        완료
-                      </button>
-                      <button
-                        onClick={() => onUpdateScheduleStatus(scheduleItem.item_id, "SKIPPED")}
-                        disabled={scheduleItem.status !== "PENDING"}
-                        className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all duration-150 ${
-                          scheduleItem.status === "SKIPPED"
-                            ? "bg-gray-200 text-gray-500"
-                            : "bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-60"
-                        }`}
-                      >
-                        건너뜀
-                      </button>
-                    </>
+                    <button
+                      onClick={() =>
+                        onUpdateScheduleStatus(
+                          scheduleItem.item_id,
+                          scheduleItem.status === "DONE" ? "PENDING" : "DONE",
+                        )
+                      }
+                      className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all duration-150 ${
+                        scheduleItem.status === "DONE"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                      }`}
+                    >
+                      {scheduleItem.status === "DONE" ? "완료" : "예정"}
+                    </button>
                   ) : (
                     <button
                       type="button"

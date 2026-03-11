@@ -8,18 +8,26 @@ const EXERCISE_OPTIONS = [
   { value: "high", label: "높음", desc: "주 4회 이상" },
 ];
 
-const SUBSTANCE_OPTIONS = ["카페인", "흡연", "음주"];
+const SMOKING_OPTIONS = [
+  { value: "none", label: "비흡연" },
+  { value: "light", label: "하루 5개비 이하 또는 주 1~3회" },
+  { value: "heavy", label: "하루 6개비 이상" },
+];
+
+const ALCOHOL_OPTIONS = [
+  { value: "low", label: "월 1회 이하" },
+  { value: "moderate", label: "주 1~2회" },
+  { value: "high", label: "주 3회 이상" },
+];
 
 export default function Lifestyle() {
   const navigate = useNavigate();
   const [exercise, setExercise] = useState("");
   const [pcHours, setPcHours] = useState("");
   const [phoneHours, setPhoneHours] = useState("");
-  const [substances, setSubstances] = useState<string[]>([]);
-
-  function toggle(list: string[], setList: (v: string[]) => void, item: string) {
-    setList(list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
-  }
+  const [caffeineCups, setCaffeineCups] = useState("1");
+  const [smoking, setSmoking] = useState("none");
+  const [alcohol, setAlcohol] = useState("low");
 
   function handleNext() {
     const exerciseMap: Record<string, number> = {
@@ -27,15 +35,25 @@ export default function Lifestyle() {
       moderate: 3,
       high: 5,
     };
+    const smokingMap: Record<string, number> = {
+      none: 0,
+      light: 1,
+      heavy: 1,
+    };
+    const alcoholMap: Record<string, number> = {
+      low: 1,
+      moderate: 2,
+      high: 4,
+    };
     sessionStorage.setItem(
       "onboarding_lifestyle",
       JSON.stringify({
         exercise_frequency_per_week: exerciseMap[exercise] ?? 0,
         pc_hours_per_day: parseFloat(pcHours) || 0,
         smartphone_hours_per_day: parseFloat(phoneHours) || 0,
-        caffeine_cups_per_day: substances.includes("카페인") ? 2 : 0,
-        smoking: substances.includes("흡연") ? 1 : 0,
-        alcohol_frequency_per_week: substances.includes("음주") ? 2 : 0,
+        caffeine_cups_per_day: parseInt(caffeineCups, 10) || 1,
+        smoking: smokingMap[smoking] ?? 0,
+        alcohol_frequency_per_week: alcoholMap[alcohol] ?? 1,
       }),
     );
     navigate("/onboarding/sleep");
@@ -105,21 +123,61 @@ export default function Lifestyle() {
         {/* Substances */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">물질 사용 여부</label>
-          <div className="flex gap-2">
-            {SUBSTANCE_OPTIONS.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => toggle(substances, setSubstances, s)}
-                className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all duration-200 ${
-                  substances.includes(s)
-                    ? "gradient-primary text-white border-transparent shadow-sm"
-                    : "border-gray-200 text-gray-500 hover:border-green-300 bg-white/70"
-                }`}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">커피</label>
+              <select
+                value={caffeineCups}
+                onChange={(e) => setCaffeineCups(e.target.value)}
+                className={inputCls}
               >
-                {s}
-              </button>
-            ))}
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((cup) => (
+                  <option key={cup} value={cup}>
+                    {cup}잔
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">흡연</label>
+              <div className="grid grid-cols-3 gap-2">
+                {SMOKING_OPTIONS.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setSmoking(value)}
+                    className={`px-3 py-2 rounded-xl text-xs md:text-sm font-semibold border text-center transition-all duration-200 ${
+                      smoking === value
+                        ? "gradient-primary text-white border-transparent shadow-sm"
+                        : "border-gray-200 text-gray-500 hover:border-green-300 bg-white/70"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">음주</label>
+              <div className="grid grid-cols-3 gap-2">
+                {ALCOHOL_OPTIONS.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setAlcohol(value)}
+                    className={`px-3 py-2 rounded-xl text-xs md:text-sm font-semibold border text-center transition-all duration-200 ${
+                      alcohol === value
+                        ? "gradient-primary text-white border-transparent shadow-sm"
+                        : "border-gray-200 text-gray-500 hover:border-green-300 bg-white/70"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
