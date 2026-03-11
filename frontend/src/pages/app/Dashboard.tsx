@@ -1,18 +1,17 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { RefreshCw, Pill, BookOpen, MessageCircle, Bell, NotebookPen, Upload, Sparkles } from "lucide-react";
+import { RefreshCw, Pill, BookOpen, MessageCircle, NotebookPen, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   scheduleApi,
   userApi,
   reminderApi,
-  guideApi,
   ScheduleItem,
   UserInfo,
   DdayReminder,
-  GuideJobResult,
 } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
+import NotificationsTab from "./reminders/NotificationsTab";
 
 function formatDate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -32,7 +31,6 @@ const QUICK_NAV = [
   { label: "내 약 정보", icon: Pill, to: "/medications", color: "text-green-600 bg-green-50" },
   { label: "AI 가이드", icon: BookOpen, to: "/ai-guide", color: "text-blue-600 bg-blue-50" },
   { label: "챗봇", icon: MessageCircle, to: "/chat", color: "text-purple-600 bg-purple-50" },
-  { label: "알림", icon: Bell, to: "/reminders", color: "text-amber-600 bg-amber-50" },
   { label: "일상 기록", icon: NotebookPen, to: "/records", color: "text-red-500 bg-red-50" },
 ];
 
@@ -41,7 +39,6 @@ export default function Dashboard() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [dday, setDday] = useState<DdayReminder[]>([]);
-  const [guide, setGuide] = useState<GuideJobResult | null>(null);
   const [loading, setLoading] = useState(true);
   const today = new Date();
 
@@ -60,20 +57,6 @@ export default function Dashboard() {
       // non-critical
     } finally {
       setLoading(false);
-    }
-
-    // Load guide separately (may not exist)
-    const jobId = localStorage.getItem("guide_job_id");
-    if (jobId) {
-      try {
-        const status = await guideApi.getJobStatus(jobId);
-        if (status.status === "SUCCEEDED") {
-          const result = await guideApi.getJobResult(jobId);
-          setGuide(result);
-        }
-      } catch {
-        // no guide yet
-      }
     }
   }
 
@@ -186,35 +169,22 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* AI Guide card */}
-      <div className="card-warm p-5 relative overflow-hidden">
-        {/* Subtle decorative accent */}
-        <div className="absolute -top-8 -right-8 w-24 h-24 bg-green-100/40 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="flex items-center justify-between relative">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="w-4 h-4 text-green-500" />
-              <h2 className="text-base font-bold text-gray-800">AI 가이드</h2>
-            </div>
-            {guide ? (
-              <p className="text-sm text-gray-500 truncate">
-                {guide.safety_notice || guide.medication_guidance?.slice(0, 60) + "..."}
-              </p>
-            ) : (
-              <p className="text-sm text-gray-400">
-                약봉투를 스캔하면 맞춤형 AI 가이드가 생성됩니다.
-              </p>
-            )}
-          </div>
-          <button
-            onClick={() => navigate("/ai-guide")}
-            className="ml-4 px-4 py-2 bg-green-50 text-sm font-semibold text-green-700 rounded-xl hover:bg-green-100 hover:shadow-sm transition-all duration-200 shrink-0"
-          >
-            상세보기
-          </button>
-        </div>
+      {/* Notifications */}
+      <div className="card-warm p-5">
+        <h2 className="text-base font-bold text-gray-800 mb-4">알림</h2>
+        <NotificationsTab />
       </div>
+
+      {/* ── 의료 안전 고지 ── */}
+      <div className="border border-gray-200 rounded-xl p-5">
+        <p className="text-sm font-semibold text-gray-700 mb-2">의료 안전 고지</p>
+        <p className="text-xs text-gray-500 leading-relaxed">
+          본 서비스의 알림 및 복약 정보는 참고용이며, 의료진의 처방 및 지시를 대체하지 않습니다.
+          복약 관련 이상반응이나 건강 이상이 느껴질 경우 즉시 의료 전문가와 상담하시기 바랍니다.
+          처방된 약의 용량, 복용 시간, 주의사항은 반드시 담당 의사 또는 약사의 지도에 따르십시오.
+        </p>
+      </div>
+
     </div>
   );
 }

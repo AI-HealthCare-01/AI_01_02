@@ -3,21 +3,18 @@ import {
   LayoutDashboard,
   BookOpen,
   MessageCircle,
-  Bell,
   Pill,
   NotebookPen,
   LogOut,
   UserX,
 } from "lucide-react";
 import { clearToken, userApi } from "@/lib/api";
-import { useNotification } from "@/lib/NotificationContext";
 import { useState } from "react";
 
 const NAV_ITEMS = [
   { to: "/", label: "홈", icon: LayoutDashboard, end: true },
   { to: "/ai-guide", label: "AI 가이드", icon: BookOpen },
   { to: "/chat", label: "실시간 챗봇", icon: MessageCircle },
-  { to: "/reminders", label: "알람 관리", icon: Bell },
   { to: "/medications", label: "내 약 정보", icon: Pill },
   { to: "/records", label: "일상 기록", icon: NotebookPen },
 ];
@@ -25,7 +22,6 @@ const NAV_ITEMS = [
 export default function AppLayout() {
   const navigate = useNavigate();
   const [showWithdraw, setShowWithdraw] = useState(false);
-  const { unreadCount } = useNotification();
 
   function handleLogout() {
     clearToken();
@@ -75,11 +71,6 @@ export default function AppLayout() {
             >
               <Icon className="w-[18px] h-[18px] shrink-0" />
               <span className="flex-1">{label}</span>
-              {to === "/reminders" && unreadCount > 0 && (
-                <span className="bg-red-400 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
-              )}
             </NavLink>
           ))}
         </nav>
@@ -156,11 +147,6 @@ export default function AppLayout() {
               <>
                 <div className="relative">
                   <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive ? "scale-110" : ""}`} />
-                  {to === "/reminders" && unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1.5 bg-red-400 text-white text-[9px] font-bold px-1 py-px rounded-full min-w-[14px] text-center leading-none">
-                      {unreadCount > 9 ? "9+" : unreadCount}
-                    </span>
-                  )}
                 </div>
                 <span className="text-[10px] font-semibold leading-none">{label}</span>
                 {isActive && (

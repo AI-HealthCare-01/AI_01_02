@@ -12,7 +12,6 @@ import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/app/Dashboard";
 import AiGuide from "./pages/app/AiGuide";
 import Chat from "./pages/app/Chat";
-import Reminders from "./pages/app/Reminders";
 import Medications from "./pages/app/Medications";
 import Records from "./pages/app/Records";
 import { getToken } from "./lib/api";
@@ -80,7 +79,6 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="ai-guide" element={<AiGuide />} />
           <Route path="chat" element={<Chat />} />
-          <Route path="reminders" element={<Reminders />} />
           <Route path="medications" element={<Medications />} />
           <Route path="records" element={<Records />} />
         </Route>

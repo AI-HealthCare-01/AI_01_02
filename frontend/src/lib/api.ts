@@ -244,6 +244,7 @@ export interface OcrJobStatusResponse {
 export interface OcrStructuredData {
   needs_user_review?: boolean;
   extracted_medications?: OcrMedication[];
+  medications?: OcrMedication[];
   [key: string]: unknown; // Keep index signature if other arbitrary data can be present
 }
 
