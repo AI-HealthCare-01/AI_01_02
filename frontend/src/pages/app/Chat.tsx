@@ -96,8 +96,11 @@ export default function Chat() {
     chatApi.getMessages(s.id, { limit: 50 })
       .then((r) => {
         if (r.items.length === 0) return;
+        const orderedItems = [...r.items].sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        );
         setMessages(
-          r.items.map((m) => ({
+          orderedItems.map((m) => ({
             role: m.role === "USER" ? "user" : "assistant",
             content: m.content,
             references: m.references ?? [],
