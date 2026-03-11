@@ -49,11 +49,25 @@ function MedRow({
     }
   }
 
-  const nameLow = isLowConfidence(med.confidence);
-  const inputCls = (low: boolean, disabled: boolean) =>
-    `border rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-green-500 ${
-      disabled ? "bg-gray-50 text-gray-500 cursor-default" : low ? "border-amber-400 bg-amber-50" : "border-gray-200 bg-white"
-    }`;
+  const isFieldLow = (field: keyof OcrMedication) => {
+    const val = med[field];
+    return val === null || val === undefined || val === "";
+  };
+
+  const inputCls = (field: keyof OcrMedication, disabled: boolean) => {
+    const low = isFieldLow(field);
+    return `border rounded-xl px-3 py-2 text-sm w-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 ${disabled ? "bg-gray-50 text-gray-500 cursor-default" : low ? "border-red-500 bg-red-50 text-red-900" : "border-gray-200 bg-white"
+      }`;
+  };
+
+  const renderLabel = (label: string, field: keyof OcrMedication) => {
+    const low = isFieldLow(field);
+    return (
+      <label className="block text-xs text-gray-500 mb-1">
+        {label} {low && <span className="text-red-500 font-semibold ml-1">⚠ 직접 입력해주세요</span>}
+      </label>
+    );
+  };
 
   return (
     <div className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50">
@@ -69,9 +83,7 @@ function MedRow({
 
       {/* 약품명 */}
       <div>
-        <label className="block text-xs text-gray-500 mb-1">
-          약품명 {nameLow && <span className="text-amber-600">⚠ 확인 필요</span>}
-        </label>
+        {renderLabel("약품명", "drug_name")}
         <div className="relative">
           {editable && <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none" />}
           <input
@@ -80,7 +92,7 @@ function MedRow({
             onChange={(e) => editable && handleDrugNameChange(e.target.value)}
             onBlur={() => setTimeout(() => setShowSug(false), 150)}
             readOnly={!editable}
-            className={`${inputCls(nameLow, !editable)} ${editable ? "pl-8" : ""}`}
+            className={`${inputCls("drug_name", !editable)} ${editable ? "pl-8" : ""}`}
             placeholder="약품명"
           />
           {showSug && editable && (
@@ -100,16 +112,16 @@ function MedRow({
 
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">용량(mg)</label>
+          {renderLabel("용량(mg)", "dose")}
           <input type="number" value={med.dose ?? ""} readOnly={!editable}
             onChange={(e) => onChange(index, "dose", e.target.value ? Number(e.target.value) : null)}
-            className={inputCls(false, !editable)} placeholder="mg" />
+            className={inputCls("dose", !editable)} placeholder="mg" />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">복용시간</label>
+          {renderLabel("복용시간", "intake_time")}
           {editable ? (
             <select value={med.intake_time ?? ""} onChange={(e) => onChange(index, "intake_time", e.target.value || null)}
-              className={inputCls(false, false)}>
+              className={inputCls("intake_time", false)}>
               <option value="">선택</option>
               <option value="morning">아침</option>
               <option value="lunch">점심</option>
@@ -120,38 +132,38 @@ function MedRow({
           ) : (
             <input type="text" readOnly value={
               { morning: "아침", lunch: "점심", dinner: "저녁", bedtime: "취침전", PRN: "필요시" }[med.intake_time ?? ""] ?? med.intake_time ?? ""
-            } className={inputCls(false, true)} placeholder="-" />
+            } className={inputCls("intake_time", true)} placeholder="-" />
           )}
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">1회 투약량(정/캡슐)</label>
+          {renderLabel("1회 투약량(정/캡슐)", "dosage_per_once")}
           <input type="number" value={med.dosage_per_once ?? ""} readOnly={!editable}
             onChange={(e) => onChange(index, "dosage_per_once", e.target.value ? Number(e.target.value) : null)}
-            className={inputCls(false, !editable)} placeholder="갯수" />
+            className={inputCls("dosage_per_once", !editable)} placeholder="갯수" />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">1일 투여횟수(회)</label>
+          {renderLabel("1일 투여횟수(회)", "frequency_per_day")}
           <input type="number" value={med.frequency_per_day ?? ""} readOnly={!editable}
             onChange={(e) => onChange(index, "frequency_per_day", e.target.value ? Number(e.target.value) : null)}
-            className={inputCls(false, !editable)} placeholder="회" />
+            className={inputCls("frequency_per_day", !editable)} placeholder="회" />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">처방일수</label>
+          {renderLabel("처방일수", "total_days")}
           <input type="number" value={med.total_days ?? ""} readOnly={!editable}
             onChange={(e) => onChange(index, "total_days", e.target.value ? Number(e.target.value) : null)}
-            className={inputCls(false, !editable)} placeholder="일" />
+            className={inputCls("total_days", !editable)} placeholder="일" />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">조제일</label>
+          {renderLabel("조제일", "dispensed_date")}
           <input type="date" value={med.dispensed_date ?? ""} readOnly={!editable}
             onChange={(e) => onChange(index, "dispensed_date", e.target.value || null)}
-            className={inputCls(false, !editable)} />
+            className={inputCls("dispensed_date", !editable)} />
         </div>
       </div>
     </div>
@@ -229,7 +241,7 @@ export default function OcrResult() {
   }
 
   function updateField(index: number, field: keyof OcrMedication, value: string | number | null) {
-    setMedications((prev) => prev.map((m, i) => (i === index ? { ...m, [field]: value } : m)));
+    setMedications((prev) => prev.map((m, i) => (i === index ? { ...m, [field]: value, confidence: 1.0 } : m)));
   }
 
   const [guideJobId, setGuideJobId] = useState<string | null>(null);
@@ -297,13 +309,12 @@ export default function OcrResult() {
             <button
               onClick={phase === "preview" ? handleAnalyze : undefined}
               disabled={phase === "analyzing" || phase === "result" || phase === "confirming"}
-              className={`flex-1 py-2.5 text-sm rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-200 ${
-                phase === "result" || phase === "confirming"
-                  ? "gradient-primary text-white cursor-default"
-                  : phase === "analyzing"
+              className={`flex-1 py-2.5 text-sm rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-200 ${phase === "result" || phase === "confirming"
+                ? "gradient-primary text-white cursor-default"
+                : phase === "analyzing"
                   ? "gradient-primary text-white opacity-80 cursor-not-allowed"
                   : "gradient-primary text-white hover:shadow-lg"
-              }`}
+                }`}
             >
               {phase === "analyzing" && <Loader2 className="w-4 h-4 animate-spin" />}
               {analyzeBtnLabel}
