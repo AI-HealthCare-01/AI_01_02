@@ -6,26 +6,19 @@ import {
   scheduleApi,
   userApi,
   reminderApi,
+  ocrApi,
+  OcrMedication,
   ScheduleItem,
   UserInfo,
   DdayReminder,
 } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
 import NotificationsTab from "./reminders/NotificationsTab";
+import MedicationScheduleCard from "@/components/medication/MedicationScheduleCard";
 
 function formatDate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: "예정",
-  DONE: "완료",
-  SKIPPED: "건너뜀",
-};
 
 const QUICK_NAV = [
   { label: "내 약 정보", icon: Pill, to: "/medications", color: "text-green-600 bg-green-50" },
@@ -39,8 +32,25 @@ export default function Dashboard() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [dday, setDday] = useState<DdayReminder[]>([]);
+  const [ocrMeds, setOcrMeds] = useState<OcrMedication[]>([]);
   const [loading, setLoading] = useState(true);
   const today = new Date();
+  const todayKey = formatDate(today);
+
+  async function loadOcrMedications() {
+    const jobId = localStorage.getItem("ocr_job_id");
+    if (!jobId) {
+      setOcrMeds([]);
+      return;
+    }
+    try {
+      const res = await ocrApi.getJobResult(jobId);
+      const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
+      setOcrMeds(Array.isArray(meds) ? meds : []);
+    } catch {
+      setOcrMeds([]);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -58,11 +68,12 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
+    await loadOcrMedications();
   }
 
   useEffect(() => { load(); }, []); // eslint-disable-line
 
-  async function updateStatus(itemId: string, status: "DONE" | "SKIPPED") {
+  async function updateMedicationStatus(itemId: string, status: "DONE" | "SKIPPED") {
     try {
       const updated = await scheduleApi.updateStatus(itemId, status);
       setItems((prev) => prev.map((it) => (it.item_id === itemId ? updated : it)));
@@ -70,10 +81,6 @@ export default function Dashboard() {
       toast.error(toUserMessage(err));
     }
   }
-
-  const pending = items.filter((i) => i.status === "PENDING");
-  const done = items.filter((i) => i.status !== "PENDING");
-  const progress = items.length > 0 ? Math.round((done.length / items.length) * 100) : 0;
 
   const dateLabel = today.toLocaleDateString("ko-KR", {
     year: "numeric",
@@ -138,36 +145,14 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Today's schedule */}
-      <div className="card-warm p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-bold text-gray-800">오늘의 일정</h2>
-          <div className="flex items-center gap-2.5">
-            <span className="text-sm font-bold text-green-600">{progress}%</span>
-            <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full gradient-primary rounded-full transition-all duration-700 ease-out"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {loading ? (
-          <p className="text-center text-sm text-gray-400 py-6">불러오는 중...</p>
-        ) : items.length === 0 ? (
-          <p className="text-center text-sm text-gray-400 py-6">오늘 등록된 일정이 없습니다.</p>
-        ) : (
-          <div className="space-y-1.5">
-            {pending.map((item) => (
-              <ScheduleRow key={item.item_id} item={item} onUpdate={updateStatus} />
-            ))}
-            {done.map((item) => (
-              <ScheduleRow key={item.item_id} item={item} onUpdate={updateStatus} />
-            ))}
-          </div>
-        )}
-      </div>
+      <MedicationScheduleCard
+        title="복약 일정"
+        loading={loading}
+        ocrMeds={ocrMeds}
+        scheduleItems={items}
+        storageDateKey={todayKey}
+        onUpdateScheduleStatus={updateMedicationStatus}
+      />
 
       {/* Notifications */}
       <div className="card-warm p-5">
@@ -185,52 +170,6 @@ export default function Dashboard() {
         </p>
       </div>
 
-    </div>
-  );
-}
-
-function ScheduleRow({
-  item,
-  onUpdate,
-}: {
-  item: ScheduleItem;
-  onUpdate: (id: string, status: "DONE" | "SKIPPED") => void;
-}) {
-  const isPending = item.status === "PENDING";
-  return (
-    <div
-      className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200 ${
-        isPending ? "hover:bg-gray-50" : "opacity-45"
-      }`}
-    >
-      <span className="text-xs text-gray-400 w-10 shrink-0 font-medium">{formatTime(item.scheduled_at)}</span>
-      <span className="text-sm text-gray-700 flex-1 font-medium">{item.title}</span>
-      {isPending ? (
-        <div className="flex gap-1.5">
-          <button
-            onClick={() => onUpdate(item.item_id, "DONE")}
-            className="px-3 py-1 text-xs font-semibold bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-all duration-150"
-          >
-            완료
-          </button>
-          <button
-            onClick={() => onUpdate(item.item_id, "SKIPPED")}
-            className="px-3 py-1 text-xs font-semibold bg-gray-100 text-gray-400 rounded-lg hover:bg-gray-200 transition-all duration-150"
-          >
-            건너뜀
-          </button>
-        </div>
-      ) : (
-        <span
-          className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${
-            item.status === "DONE"
-              ? "bg-green-50 text-green-700"
-              : "bg-gray-100 text-gray-400"
-          }`}
-        >
-          {STATUS_LABEL[item.status]}
-        </span>
-      )}
     </div>
   );
 }
