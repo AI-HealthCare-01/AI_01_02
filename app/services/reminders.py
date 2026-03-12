@@ -78,6 +78,26 @@ class ReminderService:
         reminder = await self._get_user_reminder(user=user, reminder_id=reminder_id)
         await reminder.delete()
 
+    @staticmethod
+    async def disable_depleted_reminders() -> int:
+        """소진된(dispensed_date + total_days < today) 리마인더를 자동 비활성화. 비활성화한 건수 반환."""
+        today = datetime.now(config.TIMEZONE).date()
+        reminders = await MedicationReminder.filter(
+            enabled=True,
+            dispensed_date__isnull=False,
+            total_days__isnull=False,
+        )
+        count = 0
+        for r in reminders:
+            if r.dispensed_date is None or r.total_days is None:
+                continue
+            depletion = r.dispensed_date + timedelta(days=r.total_days)
+            if depletion < today:
+                r.enabled = False
+                await r.save(update_fields=["enabled", "updated_at"])
+                count += 1
+        return count
+
     async def get_dday_reminders(self, *, user: User, days: int) -> list[DdayReminderItem]:
         today = datetime.now(config.TIMEZONE).date()
         reminders = await MedicationReminder.filter(

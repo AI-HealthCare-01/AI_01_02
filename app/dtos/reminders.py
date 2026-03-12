@@ -23,6 +23,8 @@ class ReminderResponse(BaseModel):
     schedule_times: list[Any]
     start_date: date | None
     end_date: date | None
+    dispensed_date: date | None
+    total_days: int | None
     enabled: bool
     created_at: datetime
     updated_at: datetime
