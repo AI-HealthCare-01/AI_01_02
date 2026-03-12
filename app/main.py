@@ -228,9 +228,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     def _safe(v: object) -> object:
         if isinstance(v, dict):
             return {k: _safe(val) for k, val in v.items()}
-        if isinstance(v, (list, tuple)):
+        if isinstance(v, list | tuple):
             return [_safe(i) for i in v]
-        if isinstance(v, (str, int, float, bool, type(None))):
+        if isinstance(v, str | int | float | bool | type(None)):
             return v
         return str(v)
 

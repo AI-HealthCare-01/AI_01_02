@@ -208,7 +208,7 @@ class ReminderService:
         dose = med.get("dose")
         if dose is None:
             return None
-        if isinstance(dose, (int, float)):
+        if isinstance(dose, int | float):
             return str(dose)
         text = str(dose).strip()
         return text or None

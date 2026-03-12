@@ -115,11 +115,11 @@ async def stream_message(
     user: Annotated[User, Depends(get_request_user)],
     service: Annotated[ChatService, Depends(ChatService)],
 ) -> StreamingResponse:
-    token_gen = await service.stream_message(user=user, session_id=int(session_id), message=request.message)
+    event_gen = await service.stream_message(user=user, session_id=int(session_id), message=request.message)
 
     async def _sse_generator():
-        async for token in token_gen:
-            yield f"event: token\ndata: {json.dumps({'content': token}, ensure_ascii=False)}\n\n"
+        async for event_name, data in event_gen:
+            yield f"event: {event_name}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
         yield "event: done\ndata: {}\n\n"
 
     return StreamingResponse(_sse_generator(), media_type="text/event-stream")
