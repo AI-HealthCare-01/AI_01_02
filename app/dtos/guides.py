@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -15,7 +16,7 @@ class GuideSourceReference(BaseModel):
 
 
 class GuideRefreshRequest(BaseModel):
-    reason: str | None = None
+    reason: str | None = Field(None, max_length=500)
 
 
 class GuideRefreshResponse(BaseModel):
@@ -62,9 +63,9 @@ class GuideJobResultResponse(BaseModel):
     safety_notice: str
     source_references: list[GuideSourceReference] = []
     adherence_rate_percent: float | None = None
-    personalized_guides: dict | None = None
+    personalized_guides: dict[str, Any] | None = None
     source_attributions: list[str] | None = None
     weekly_adherence_rate: float | None = None
-    structured_data: dict
+    structured_data: dict[str, Any]
     created_at: datetime
     updated_at: datetime

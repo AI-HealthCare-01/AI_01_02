@@ -7,7 +7,7 @@ from app.models.chat import ChatMessageStatus, ChatRole, ChatSessionStatus
 
 
 class ChatSessionCreateRequest(BaseModel):
-    title: str | None = None
+    title: str | None = Field(None, max_length=100)
 
 
 class ChatSessionResponse(BaseModel):

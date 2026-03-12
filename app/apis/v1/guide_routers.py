@@ -10,7 +10,6 @@ from app.dtos.guides import (
     GuideJobCreateResponse,
     GuideJobResultResponse,
     GuideJobStatusResponse,
-    GuideRefreshRequest,
     GuideRefreshResponse,
 )
 from app.models.users import User
@@ -119,7 +118,6 @@ async def refresh_guide_job(
     job_id: Annotated[str, Path(pattern=r"^\d+$")],
     user: Annotated[User, Depends(get_request_user)],
     guide_service: Annotated[GuideService, Depends(GuideService)],
-    request: GuideRefreshRequest | None = None,
 ) -> Response:
     new_job = await guide_service.refresh_guide_job(user=user, job_id=int(job_id))
     return Response(

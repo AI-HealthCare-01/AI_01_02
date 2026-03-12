@@ -4,8 +4,8 @@ from pydantic import BaseModel, Field
 
 
 class MedicationReminderUpsertRequest(BaseModel):
-    medication_name: str
-    dose: str | None = None
+    medication_name: str = Field(min_length=1, max_length=100)
+    dose: str | None = Field(None, max_length=50)
     schedule_times: list[str] = Field(min_length=1)
     start_date: date | None = None
     end_date: date | None = None

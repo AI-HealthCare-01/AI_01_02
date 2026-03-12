@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, status
-from fastapi.responses import JSONResponse as Response
+from fastapi.responses import ORJSONResponse as Response
 
 from app.core import config
 from app.core.config import Env
@@ -39,7 +39,7 @@ async def login(
         key="refresh_token",
         value=str(refresh_token),
         httponly=True,
-        secure=True if config.ENV == Env.PROD else False,
+        secure=config.ENV == Env.PROD,
         samesite="lax",
         domain=config.COOKIE_DOMAIN or None,
         expires=refresh_token_exp,
