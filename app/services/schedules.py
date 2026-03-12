@@ -55,17 +55,19 @@ class ScheduleService:
 
         create_keys = desired_keys - existing_keys
         if create_keys:
-            await ScheduleItem.bulk_create([
-                ScheduleItem(
-                    user_id=user.id,
-                    reminder_id=reminder_id,
-                    scheduled_at=scheduled_at,
-                    category=category,
-                    title=title,
-                    status=ScheduleItemStatus.PENDING,
-                )
-                for category, title, scheduled_at, reminder_id in create_keys
-            ])
+            await ScheduleItem.bulk_create(
+                [
+                    ScheduleItem(
+                        user_id=user.id,
+                        reminder_id=reminder_id,
+                        scheduled_at=scheduled_at,
+                        category=category,
+                        title=title,
+                        status=ScheduleItemStatus.PENDING,
+                    )
+                    for category, title, scheduled_at, reminder_id in create_keys
+                ]
+            )
 
     async def _build_desired_schedule_specs(self, *, user: User, target_date: date, tz, setting) -> dict[tuple, None]:
         desired: dict[tuple, None] = {}

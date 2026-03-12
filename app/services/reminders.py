@@ -87,11 +87,7 @@ class ReminderService:
             dispensed_date__isnull=False,
             total_days__isnull=False,
         )
-        depleted_ids = [
-            r.id
-            for r in reminders
-            if r.dispensed_date + timedelta(days=r.total_days) < today
-        ]
+        depleted_ids = [r.id for r in reminders if r.dispensed_date + timedelta(days=r.total_days) < today]
         if not depleted_ids:
             return 0
         count = await MedicationReminder.filter(id__in=depleted_ids).update(enabled=False)

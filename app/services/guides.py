@@ -50,9 +50,7 @@ class GuideService:
             )
 
         if not await self.guide_automation_service.enqueue_or_fail(job, reason="create_guide_job"):
-            raise AppException(
-                ErrorCode.QUEUE_UNAVAILABLE, developer_message="가이드 작업 큐 등록에 실패했습니다."
-            )
+            raise AppException(ErrorCode.QUEUE_UNAVAILABLE, developer_message="가이드 작업 큐 등록에 실패했습니다.")
 
         return job
 

@@ -744,7 +744,9 @@ class ChatService:
     async def send_message(self, *, user: User, session_id: int, message: str) -> ChatMessage:
         session = await self._get_active_session(user=user, session_id=session_id)
         normalized_msg = message.lower().strip()
-        intent = "emergency" if any(kw in normalized_msg for kw in _GUARDRAIL_KEYWORDS) else await _classify_intent(message)
+        intent = (
+            "emergency" if any(kw in normalized_msg for kw in _GUARDRAIL_KEYWORDS) else await _classify_intent(message)
+        )
 
         # REQ-035: 안전 가드레일 — emergency 차단
         early_msg = await self._check_early_exit(session=session, message=message, intent=intent)
@@ -852,6 +854,7 @@ class ChatService:
     def _single_token_stream(content: str) -> AsyncGenerator[tuple[str, dict[str, Any]]]:
         async def _gen() -> AsyncGenerator[tuple[str, dict[str, Any]]]:
             yield "token", {"content": content}
+
         return _gen()
 
     async def _save_user_message(self, *, session: ChatSession, message: str, intent: str) -> None:
@@ -964,7 +967,9 @@ class ChatService:
         """REQ-038: 토큰 단위 SSE 스트리밍"""
         session = await self._get_active_session(user=user, session_id=session_id)
         normalized_msg = message.lower().strip()
-        intent = "emergency" if any(kw in normalized_msg for kw in _GUARDRAIL_KEYWORDS) else await _classify_intent(message)
+        intent = (
+            "emergency" if any(kw in normalized_msg for kw in _GUARDRAIL_KEYWORDS) else await _classify_intent(message)
+        )
 
         early_msg = await self._check_early_exit(session=session, message=message, intent=intent)
         if early_msg is not None:
