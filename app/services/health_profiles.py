@@ -79,8 +79,9 @@ class HealthProfileService:
             "weekly_refresh_weekday": request.weekly_refresh_weekday,
             "weekly_refresh_time": request.weekly_refresh_time,
             "weekly_adherence_rate": request.weekly_adherence_rate,
-            "onboarding_completed_at": datetime.now(config.TIMEZONE),
         }
+        if previous_profile is None:
+            payload["onboarding_completed_at"] = datetime.now(config.TIMEZONE)
         profile = await self.repo.upsert_by_user_id(user_id=user.id, payload=payload)
 
         if refresh_required_before_update or previous_profile is None:

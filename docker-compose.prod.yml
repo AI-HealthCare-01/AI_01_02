@@ -61,6 +61,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      chromadb:
+        condition: service_started
 
   # 4. AI Worker (Model 학습 및 추론)
   ai-worker:
@@ -104,6 +106,7 @@ services:
     restart: always
     environment:
       - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
     volumes:
       - chroma_data:/chroma/chroma
     networks:

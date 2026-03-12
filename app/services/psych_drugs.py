@@ -89,7 +89,19 @@ class PsychDrugService:
         if exact:
             return exact
 
-        candidates = await PsychDrug.filter(product_name__icontains=product_name)
+        # dose가 포함된 이름(예: "졸로푸트정100mg")에서 dose 제거 후 재검색
+        cleaned_name = self._strip_dose_from_name(product_name)
+        search_names = [product_name]
+        if cleaned_name and cleaned_name.lower() != product_name.lower():
+            search_names.append(cleaned_name)
+
+        candidates: list[PsychDrug] = []
+        seen_ids: set[int] = set()
+        for name in search_names:
+            for c in await PsychDrug.filter(product_name__icontains=name):
+                if c.id not in seen_ids:
+                    seen_ids.add(c.id)
+                    candidates.append(c)
         if not candidates:
             return []
 
@@ -111,7 +123,8 @@ class PsychDrugService:
 
         return sorted(candidates, key=score)
 
-    def _format_dose(self, dose_mg: float) -> str:
+    @staticmethod
+    def format_dose(dose_mg: float) -> str:
         if dose_mg.is_integer():
             return str(int(dose_mg))
         return str(dose_mg).rstrip("0").rstrip(".")
@@ -136,7 +149,7 @@ class PsychDrugService:
         if dose_mg is None:
             return None
 
-        dose_str = self._format_dose(dose_mg)
+        dose_str = self.format_dose(dose_mg)
         for query_name in query_names:
             dose_contains = (
                 await PsychDrug.filter(product_name__icontains=f"{query_name}{dose_str}mg")

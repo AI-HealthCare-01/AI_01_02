@@ -12,6 +12,12 @@ export function clearToken() {
 
 let _refreshPromise: Promise<string | null> | null = null;
 
+function extractErrorMessage(err: Record<string, unknown>, status: number): string {
+  const detail = err?.detail;
+  const detailMsg = Array.isArray(detail) ? detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join(", ") : (detail as { message?: string })?.message;
+  return (err?.code as string) ?? detailMsg ?? (err?.message as string) ?? `HTTP ${status}`;
+}
+
 async function refreshAccessToken(): Promise<string | null> {
   try {
     const res = await fetch(`${BASE}/auth/token/refresh`, { credentials: "include" });
@@ -32,7 +38,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
     fetch(`${BASE}${path}`, {
       ...init,
       headers: {
-        "Content-Type": "application/json",
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(init.headers ?? {}),
       },
@@ -56,7 +62,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.code ?? err?.detail?.message ?? err?.message ?? `HTTP ${res.status}`);
+    throw new Error(extractErrorMessage(err, res.status));
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -88,7 +94,7 @@ async function requestForm<T>(path: string, body: FormData): Promise<T> {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.code ?? err?.detail?.message ?? err?.message ?? `HTTP ${res.status}`);
+    throw new Error(extractErrorMessage(err, res.status));
   }
   return res.json();
 }
@@ -195,7 +201,8 @@ export const chatApi = {
       body: JSON.stringify({ message }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const reader = res.body!.getReader();
+    if (!res.body) throw new Error("스트리밍 응답을 받을 수 없습니다.");
+    const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
     let currentEvent = "message";
@@ -228,7 +235,7 @@ export const chatApi = {
               references: (parsed.references ?? []) as ChatReference[],
             };
           }
-        } catch {}
+        } catch { /* malformed SSE JSON — skip */ }
       }
     }
   },

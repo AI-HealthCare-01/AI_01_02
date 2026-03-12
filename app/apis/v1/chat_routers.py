@@ -93,7 +93,7 @@ async def list_messages(
 @chat_router.post(
     "/sessions/{session_id}/messages",
     response_model=ChatMessageResponse,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_201_CREATED,
 )
 async def send_message(
     session_id: Annotated[str, Path(pattern=r"^\d+$")],
@@ -102,7 +102,7 @@ async def send_message(
     service: Annotated[ChatService, Depends(ChatService)],
 ) -> Response:
     msg = await service.send_message(user=user, session_id=int(session_id), message=request.message)
-    return Response(_serialize_message(msg).model_dump(), status_code=status.HTTP_200_OK)
+    return Response(_serialize_message(msg).model_dump(), status_code=status.HTTP_201_CREATED)
 
 
 @chat_router.post(

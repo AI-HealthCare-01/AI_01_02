@@ -63,4 +63,4 @@ class Config(BaseSettings):
 
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     OPENAI_MODEL: str = "gpt-4o-mini"
-    GUIDE_LLM_TIMEOUT_SECONDS: float = 20.0
+    LLM_TIMEOUT_SECONDS: float = 20.0

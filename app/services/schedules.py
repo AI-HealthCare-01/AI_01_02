@@ -54,15 +54,19 @@ class ScheduleService:
             await ScheduleItem.filter(id__in=remove_ids, user_id=user.id).delete()
 
         create_keys = desired_keys - existing_keys
-        for key in create_keys:
-            category, title, scheduled_at, reminder_id = key
-            await ScheduleItem.create(
-                user_id=user.id,
-                reminder_id=reminder_id,
-                scheduled_at=scheduled_at,
-                category=category,
-                title=title,
-                status=ScheduleItemStatus.PENDING,
+        if create_keys:
+            await ScheduleItem.bulk_create(
+                [
+                    ScheduleItem(
+                        user_id=user.id,
+                        reminder_id=reminder_id,
+                        scheduled_at=scheduled_at,
+                        category=category,
+                        title=title,
+                        status=ScheduleItemStatus.PENDING,
+                    )
+                    for category, title, scheduled_at, reminder_id in create_keys
+                ]
             )
 
     async def _build_desired_schedule_specs(self, *, user: User, target_date: date, tz, setting) -> dict[tuple, None]:

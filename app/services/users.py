@@ -17,6 +17,8 @@ class UserManageService:
 
     async def update_user(self, user: User, data: UserUpdateRequest) -> User:
         update_payload = data.model_dump(exclude_none=True)
+        if not update_payload:
+            return user
         if data.email:
             await self.auth_service.check_email_exists(data.email, exclude_user_id=user.id)
         if data.phone_number:

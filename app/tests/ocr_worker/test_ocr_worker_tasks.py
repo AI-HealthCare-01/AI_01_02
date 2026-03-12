@@ -4,7 +4,8 @@ from unittest.mock import Mock, patch
 
 from tortoise.contrib.test import TestCase
 
-from ai_worker.tasks.ocr import compute_retry_delay_seconds, process_ocr_job
+from ai_worker.tasks.ocr import process_ocr_job
+from ai_worker.tasks.queue import compute_retry_delay_seconds
 from app.models.ocr import Document, DocumentType, OcrFailureCode, OcrJob, OcrJobStatus
 from app.models.users import Gender, User
 
@@ -176,11 +177,7 @@ class TestOcrWorkerTasks(TestCase):
         assert dead_letters == []
 
     async def test_retry_backoff_delay_calculation(self):
-        with (
-            patch("ai_worker.tasks.ocr.config.OCR_RETRY_BACKOFF_BASE_SECONDS", 2),
-            patch("ai_worker.tasks.ocr.config.OCR_RETRY_BACKOFF_MAX_SECONDS", 10),
-        ):
-            assert compute_retry_delay_seconds(1) == 2
-            assert compute_retry_delay_seconds(2) == 4
-            assert compute_retry_delay_seconds(3) == 8
-            assert compute_retry_delay_seconds(4) == 10
+        assert compute_retry_delay_seconds(1, base=2, maximum=10) == 2
+        assert compute_retry_delay_seconds(2, base=2, maximum=10) == 4
+        assert compute_retry_delay_seconds(3, base=2, maximum=10) == 8
+        assert compute_retry_delay_seconds(4, base=2, maximum=10) == 10

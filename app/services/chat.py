@@ -526,13 +526,17 @@ def _build_adhd_risk_message(risk_type: str, reminders: list[MedicationReminder]
     )
 
 
+_RAG_DOC_MAX_CHARS = 600
+
+
 def _build_rag_context(rag_docs: list) -> str:
     """REQ-036: 검색된 근거 문서를 프롬프트 컨텍스트로 변환"""
     if not rag_docs:
         return ""
     parts = ["\n\n[참고 의학 문서]"]
     for i, doc in enumerate(rag_docs, 1):
-        parts.append(f"{i}. [{doc.title}] {doc.content}")
+        content = doc.content[:_RAG_DOC_MAX_CHARS] + "…" if len(doc.content) > _RAG_DOC_MAX_CHARS else doc.content
+        parts.append(f"{i}. [{doc.title}] {content}")
     return "\n".join(parts)
 
 
@@ -574,10 +578,8 @@ async def _select_used_references(answer: str, rag_docs: list) -> list[dict[str,
             model=config.OPENAI_CHAT_MODEL,
             messages=[
                 {"role": "system", "content": _REFERENCE_SELECTION_PROMPT},
-                {
-                    "role": "user",
-                    "content": (f"[챗봇 답변]\n{answer}\n\n[후보 문헌]\n{json.dumps(candidates, ensure_ascii=False)}"),
-                },
+                {"role": "user", "content": f"[챗봇 답변]\n{answer}"},
+                {"role": "user", "content": f"[후보 문헌]\n{json.dumps(candidates, ensure_ascii=False)}"},
             ],
             temperature=0.0,
         )
@@ -597,7 +599,7 @@ async def _select_used_references(answer: str, rag_docs: list) -> list[dict[str,
 
 async def _get_user_medication_reminders(*, user: User) -> list[MedicationReminder]:
     try:
-        reminders = await MedicationReminder.filter(user_id=user.id).order_by("-updated_at")
+        reminders = await MedicationReminder.filter(user_id=user.id, enabled=True).order_by("-updated_at")
     except Exception:
         logger.warning("medication reminder load failed (user_id=%s)", user.id, exc_info=True)
         return []
@@ -665,6 +667,11 @@ async def close_inactive_sessions() -> int:
             status=ChatSessionStatus.CLOSED,
             updated_at=now,
         )
+        # 고아 STREAMING 메시지를 FAILED로 전환
+        await ChatMessage.filter(
+            session_id__in=ids_to_close,
+            status=ChatMessageStatus.STREAMING,
+        ).update(status=ChatMessageStatus.FAILED)
     return len(ids_to_close)
 
 
@@ -709,51 +716,52 @@ class ChatService:
 
         if intent == "medical":
             try:
-                profile, user_health_profile, (rag_docs, needs_clarification) = await asyncio.gather(
-                    HealthProfile.get_or_none(user_id=user.id),
-                    UserHealthProfile.get_or_none(user_id=user.id),
+                (profile, user_health_profile), (rag_docs, _rag_needs_clarification) = await asyncio.gather(
+                    asyncio.gather(
+                        HealthProfile.get_or_none(user_id=user.id),
+                        UserHealthProfile.get_or_none(user_id=user.id),
+                    ),
                     hybrid_search(message),
                 )
                 retrieved_doc_ids = [d.doc_id for d in rag_docs]
-                needs_clarification = False
-                return profile, user_health_profile, rag_docs, needs_clarification, retrieved_doc_ids
+                # NOTE: needs_clarification 비활성화 — RAG 지식베이스가 ADHD 전용이라
+                # 일반 약물/건강 질문의 유사도가 낮아 오탐이 빈번함.
+                # 지식베이스 확장 후 재활성화 필요.
             except Exception:
                 logger.warning("RAG hybrid_search failed (user_id=%s)", user.id, exc_info=True)
+                profile, user_health_profile = await asyncio.gather(
+                    HealthProfile.get_or_none(user_id=user.id),
+                    UserHealthProfile.get_or_none(user_id=user.id),
+                )
+        else:
+            profile, user_health_profile = await asyncio.gather(
+                HealthProfile.get_or_none(user_id=user.id),
+                UserHealthProfile.get_or_none(user_id=user.id),
+            )
 
-        profile, user_health_profile = await asyncio.gather(
-            HealthProfile.get_or_none(user_id=user.id),
-            UserHealthProfile.get_or_none(user_id=user.id),
-        )
         return profile, user_health_profile, rag_docs, needs_clarification, retrieved_doc_ids
 
     async def send_message(self, *, user: User, session_id: int, message: str) -> ChatMessage:
         session = await self._get_active_session(user=user, session_id=session_id)
-        intent = "emergency" if any(kw in message for kw in _GUARDRAIL_KEYWORDS) else await _classify_intent(message)
+        normalized_msg = message.lower().strip()
+        intent = (
+            "emergency" if any(kw in normalized_msg for kw in _GUARDRAIL_KEYWORDS) else await _classify_intent(message)
+        )
 
         # REQ-035: 안전 가드레일 — emergency 차단
-        early = await self._check_early_exit(session=session, message=message, intent=intent)
-        if early is not None:
-            async for _ in early:
-                pass
-            last_msg = (
-                await ChatMessage.filter(session_id=session.id, role=ChatRole.ASSISTANT).order_by("-created_at").first()
-            )
-            return last_msg  # type: ignore[return-value]
+        early_msg = await self._check_early_exit(session=session, message=message, intent=intent)
+        if early_msg is not None:
+            return early_msg
 
         reminders = await _get_user_medication_reminders(user=user)
-        risk_exit = await self._check_adhd_risk_exit(
+        risk_msg = await self._check_adhd_risk_exit(
             session=session,
             message=message,
             intent=intent,
             reminders=reminders,
         )
-        if risk_exit is not None:
-            async for _ in risk_exit:
-                pass
-            last_msg = (
-                await ChatMessage.filter(session_id=session.id, role=ChatRole.ASSISTANT).order_by("-created_at").first()
-            )
-            return last_msg  # type: ignore[return-value]
+        if risk_msg is not None:
+            return risk_msg
 
         (
             profile,
@@ -772,16 +780,11 @@ class ChatService:
         lifestyle_ctx = _build_lifestyle_context(profile, user_health_profile, intent=intent)
 
         # REQ-042: 저유사도 재질문 유도
-        clarification_gen = await self._check_clarification(
+        clarification_msg = await self._check_clarification(
             session=session, message=message, intent=intent, needs_clarification=needs_clarification
         )
-        if clarification_gen is not None:
-            async for _ in clarification_gen:
-                pass
-            last_msg = (
-                await ChatMessage.filter(session_id=session.id, role=ChatRole.ASSISTANT).order_by("-created_at").first()
-            )
-            return last_msg  # type: ignore[return-value]
+        if clarification_msg is not None:
+            return clarification_msg
 
         # REQ-036: RAG 컨텍스트 + 프로필 컨텍스트로 시스템 프롬프트 구성
         profile_ctx = _build_profile_context(profile, user_health_profile)
@@ -792,6 +795,16 @@ class ChatService:
         if medication_ctx:
             prompt_guidance += _MEDICATION_PROMPT_GUIDANCE
         system_content = _SYSTEM_PROMPT_BASE + prompt_guidance + profile_ctx + lifestyle_ctx + medication_ctx + rag_ctx
+
+        # 최근 대화 이력 조회 (사용자 메시지 저장 전에 조회해야 off-by-one 방지)
+        recent = await (
+            ChatMessage.filter(session_id=session.id, role__in=[ChatRole.USER, ChatRole.ASSISTANT])
+            .order_by("-created_at")
+            .limit(_MAX_HISTORY_TURNS * 2)
+        )
+        history = [{"role": m.role.lower(), "content": m.content} for m in reversed(recent)]
+        messages_payload = [{"role": "system", "content": system_content}] + history
+        messages_payload.append({"role": "user", "content": message})
 
         # 사용자 메시지 저장
         await ChatMessage.create(
@@ -804,19 +817,10 @@ class ChatService:
             model_version=config.OPENAI_CHAT_MODEL,
         )
 
-        # 최근 대화 이력 조회
-        recent = await (
-            ChatMessage.filter(session_id=session.id, role__in=[ChatRole.USER, ChatRole.ASSISTANT])
-            .order_by("-created_at")
-            .limit(_MAX_HISTORY_TURNS * 2)
-        )
-        history = [{"role": m.role.lower(), "content": m.content} for m in reversed(recent)]
-        messages_payload = [{"role": "system", "content": system_content}] + history
-
         assistant_msg = await ChatMessage.create(
             session_id=session.id,
             role=ChatRole.ASSISTANT,
-            status=ChatMessageStatus.COMPLETED,
+            status=ChatMessageStatus.PENDING,
             content="",
             intent_label=intent,
             references_json=[],
@@ -846,27 +850,37 @@ class ChatService:
         await self._update_session_activity(session)
         return assistant_msg
 
+    @staticmethod
+    def _single_token_stream(content: str) -> AsyncGenerator[tuple[str, dict[str, Any]]]:
+        async def _gen() -> AsyncGenerator[tuple[str, dict[str, Any]]]:
+            yield "token", {"content": content}
+
+        return _gen()
+
+    async def _save_user_message(self, *, session: ChatSession, message: str, intent: str) -> None:
+        await ChatMessage.create(
+            session_id=session.id,
+            role=ChatRole.USER,
+            status=ChatMessageStatus.COMPLETED,
+            content=message,
+            intent_label=intent,
+            prompt_version=CHAT_PROMPT_VERSION,
+            model_version=config.OPENAI_CHAT_MODEL,
+        )
+
     async def _update_session_activity(self, session: ChatSession) -> None:
         session.last_activity_at = datetime.now(config.TIMEZONE)
         await session.save(update_fields=["last_activity_at", "updated_at"])
 
-    async def _check_early_exit(self, *, session: ChatSession, message: str, intent: str) -> AsyncGenerator[str] | None:
-        """가드레일/재질문 조기 종료. None이면 정상 진행."""
+    async def _check_early_exit(self, *, session: ChatSession, message: str, intent: str) -> ChatMessage | None:
+        """가드레일 조기 종료. None이면 정상 진행."""
         if intent == "emergency":
             logger.warning(
                 "guardrail_blocked",
                 extra={"session_id": session.id, "message_preview": message[:50]},
             )
-            await ChatMessage.create(
-                session_id=session.id,
-                role=ChatRole.USER,
-                status=ChatMessageStatus.COMPLETED,
-                content=message,
-                intent_label=intent,
-                prompt_version=CHAT_PROMPT_VERSION,
-                model_version=config.OPENAI_CHAT_MODEL,
-            )
-            await ChatMessage.create(
+            await self._save_user_message(session=session, message=message, intent=intent)
+            assistant_msg = await ChatMessage.create(
                 session_id=session.id,
                 role=ChatRole.ASSISTANT,
                 status=ChatMessageStatus.COMPLETED,
@@ -878,11 +892,7 @@ class ChatService:
                 model_version=config.OPENAI_CHAT_MODEL,
             )
             await self._update_session_activity(session)
-
-            async def _emergency_gen() -> AsyncGenerator[str]:
-                yield _EMERGENCY_MESSAGE
-
-            return _emergency_gen()
+            return assistant_msg
         return None
 
     async def _check_adhd_risk_exit(
@@ -892,7 +902,7 @@ class ChatService:
         message: str,
         intent: str,
         reminders: list[MedicationReminder],
-    ) -> AsyncGenerator[str] | None:
+    ) -> ChatMessage | None:
         if intent != "medical":
             return None
 
@@ -912,16 +922,8 @@ class ChatService:
             lifestyle_context_available=False,
             risk_type=risk_type,
         )
-        await ChatMessage.create(
-            session_id=session.id,
-            role=ChatRole.USER,
-            status=ChatMessageStatus.COMPLETED,
-            content=message,
-            intent_label=intent,
-            prompt_version=CHAT_PROMPT_VERSION,
-            model_version=config.OPENAI_CHAT_MODEL,
-        )
-        await ChatMessage.create(
+        await self._save_user_message(session=session, message=message, intent=intent)
+        assistant_msg = await ChatMessage.create(
             session_id=session.id,
             role=ChatRole.ASSISTANT,
             status=ChatMessageStatus.COMPLETED,
@@ -933,15 +935,11 @@ class ChatService:
             model_version=config.OPENAI_CHAT_MODEL,
         )
         await self._update_session_activity(session)
-
-        async def _risk_gen() -> AsyncGenerator[str]:
-            yield reply
-
-        return _risk_gen()
+        return assistant_msg
 
     async def _check_clarification(
         self, *, session: ChatSession, message: str, intent: str, needs_clarification: bool
-    ) -> AsyncGenerator[str] | None:
+    ) -> ChatMessage | None:
         """저유사도 재질문 조기 종료. None이면 정상 진행."""
         if not needs_clarification:
             return None
@@ -949,16 +947,8 @@ class ChatService:
             "질문을 조금 더 구체적으로 해주세요. "
             "예: 복용 중인 약물명, 증상, 궁금한 점을 함께 알려주시면 더 정확한 답변을 드릴 수 있습니다."
         )
-        await ChatMessage.create(
-            session_id=session.id,
-            role=ChatRole.USER,
-            status=ChatMessageStatus.COMPLETED,
-            content=message,
-            intent_label=intent,
-            prompt_version=CHAT_PROMPT_VERSION,
-            model_version=config.OPENAI_CHAT_MODEL,
-        )
-        await ChatMessage.create(
+        await self._save_user_message(session=session, message=message, intent=intent)
+        assistant_msg = await ChatMessage.create(
             session_id=session.id,
             role=ChatRole.ASSISTANT,
             status=ChatMessageStatus.COMPLETED,
@@ -969,42 +959,31 @@ class ChatService:
             model_version=config.OPENAI_CHAT_MODEL,
         )
         await self._update_session_activity(session)
-
-        async def _clarification_gen() -> AsyncGenerator[str]:
-            yield clarification
-
-        return _clarification_gen()
+        return assistant_msg
 
     async def stream_message(  # noqa: C901
         self, *, user: User, session_id: int, message: str
     ) -> AsyncGenerator[tuple[str, dict[str, Any]]]:
         """REQ-038: 토큰 단위 SSE 스트리밍"""
         session = await self._get_active_session(user=user, session_id=session_id)
-        intent = "emergency" if any(kw in message for kw in _GUARDRAIL_KEYWORDS) else await _classify_intent(message)
+        normalized_msg = message.lower().strip()
+        intent = (
+            "emergency" if any(kw in normalized_msg for kw in _GUARDRAIL_KEYWORDS) else await _classify_intent(message)
+        )
 
-        early = await self._check_early_exit(session=session, message=message, intent=intent)
-        if early is not None:
-
-            async def _early_event_gen() -> AsyncGenerator[tuple[str, dict[str, Any]]]:
-                async for token in early:
-                    yield "token", {"content": token}
-
-            return _early_event_gen()
+        early_msg = await self._check_early_exit(session=session, message=message, intent=intent)
+        if early_msg is not None:
+            return self._single_token_stream(early_msg.content)
 
         reminders = await _get_user_medication_reminders(user=user)
-        risk_exit = await self._check_adhd_risk_exit(
+        risk_msg = await self._check_adhd_risk_exit(
             session=session,
             message=message,
             intent=intent,
             reminders=reminders,
         )
-        if risk_exit is not None:
-
-            async def _risk_event_gen() -> AsyncGenerator[tuple[str, dict[str, Any]]]:
-                async for token in risk_exit:
-                    yield "token", {"content": token}
-
-            return _risk_event_gen()
+        if risk_msg is not None:
+            return self._single_token_stream(risk_msg.content)
 
         (
             profile,
@@ -1022,16 +1001,11 @@ class ChatService:
         )
         lifestyle_ctx = _build_lifestyle_context(profile, user_health_profile, intent=intent)
 
-        clarification_gen = await self._check_clarification(
+        clarification_msg = await self._check_clarification(
             session=session, message=message, intent=intent, needs_clarification=needs_clarification
         )
-        if clarification_gen is not None:
-
-            async def _clarification_event_gen() -> AsyncGenerator[tuple[str, dict[str, Any]]]:
-                async for token in clarification_gen:
-                    yield "token", {"content": token}
-
-            return _clarification_event_gen()
+        if clarification_msg is not None:
+            return self._single_token_stream(clarification_msg.content)
 
         profile_ctx = _build_profile_context(profile, user_health_profile)
         rag_ctx = _build_rag_context(rag_docs)

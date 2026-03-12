@@ -47,8 +47,13 @@ class JwtService:
         except TokenError as err:
             raise AppException(ErrorCode.AUTH_INVALID_TOKEN, developer_message="Provided invalid token.") from err
 
-    def refresh_jwt(self, refresh_token: str) -> AccessToken:
+    async def refresh_jwt(self, refresh_token: str) -> AccessToken:
+        from app.services.auth import is_jti_blacklisted
+
         verified_rt = self.verify_jwt(token=refresh_token, token_type="refresh")
+        jti = verified_rt.payload.get("jti", "")
+        if jti and await is_jti_blacklisted(jti):
+            raise AppException(ErrorCode.AUTH_INVALID_TOKEN, developer_message="Refresh token has been revoked.")
         return verified_rt.access_token
 
     def issue_jwt_pair(self, user: User) -> dict[str, AccessToken | RefreshToken]:

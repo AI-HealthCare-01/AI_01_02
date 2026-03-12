@@ -358,10 +358,10 @@ export default function AiGuide() {
             <div>
               <p className="font-bold">AI 가이드 생성완료</p>
               <p className="text-sm text-green-100 mt-0.5">
-                처방전이나 일상 기록 정보을 수정하시면, 그에 맞춰 AI 가이드와 알림 설정이 자동으로 변경됩니다.
+                처방전이나 일상 기록 정보를 수정하시면, 그에 맞춰 AI 가이드와 알림 설정이 자동으로 변경됩니다.
               </p>
               {updatedAt && (
-                <p className="text-sm text-green-100 mt-0.5">최후 업데이트: {updatedAt}</p>
+                <p className="text-sm text-green-100 mt-0.5">최종 업데이트: {updatedAt}</p>
               )}
             </div>
           </div>

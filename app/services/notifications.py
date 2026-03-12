@@ -41,7 +41,6 @@ class NotificationService:
         return notifications, unread_count
 
     async def get_unread_count(self, *, user: User) -> int:
-        await self._sync_dynamic_notifications(user=user)
         return await self.repo.count_unread(user_id=user.id)
 
     async def mark_as_read(self, *, user: User, notification_id: int) -> Notification:
@@ -71,49 +70,46 @@ class NotificationService:
         if not dday_items:
             return
 
-        existing_notifications = await self.repo.list_notifications(
-            user_id=user.id,
-            limit=100,
-            offset=0,
-            is_read=None,
-        )
-        today = datetime.now(config.TIMEZONE).date()
-        existing_keys: set[tuple[str, int]] = set()
-        existing_daily_medication_keys: set[str] = set()
-        for notification in existing_notifications:
-            if notification.type != NotificationType.MEDICATION_DDAY:
-                continue
-            payload = notification.payload if isinstance(notification.payload, dict) else {}
-            medication_name = str(payload.get("medication_name") or "")
-            remaining_days = int(payload.get("remaining_days") or -1)
-            existing_keys.add((medication_name, remaining_days))
-            if medication_name and notification.created_at.astimezone(config.TIMEZONE).date() == today:
-                existing_daily_medication_keys.add(medication_name)
-
-        for item in dday_items:
-            dedup_key = (item.medication_name, item.remaining_days)
-            if dedup_key in existing_keys:
-                continue
-            if item.medication_name in existing_daily_medication_keys:
-                continue
-            dday_message = await generate_medication_dday_guidance(
-                medication_name=item.medication_name,
-                remaining_days=item.remaining_days,
-            )
-            await self.repo.create_notification(
+        async with in_transaction():
+            existing_dday_notifications = await Notification.filter(
                 user_id=user.id,
-                title="약 소진 알림",
-                message=dday_message,
-                notification_type=NotificationType.MEDICATION_DDAY,
-                payload={
-                    "event": "medication_dday",
-                    "medication_name": item.medication_name,
-                    "remaining_days": item.remaining_days,
-                    "estimated_depletion_date": item.estimated_depletion_date.isoformat(),
-                },
-            )
-            existing_keys.add(dedup_key)
-            existing_daily_medication_keys.add(item.medication_name)
+                type=NotificationType.MEDICATION_DDAY,
+            ).only("id", "payload", "created_at")
+            today = datetime.now(config.TIMEZONE).date()
+            existing_keys: set[tuple[str, int]] = set()
+            existing_daily_medication_keys: set[str] = set()
+            for notification in existing_dday_notifications:
+                payload = notification.payload if isinstance(notification.payload, dict) else {}
+                medication_name = str(payload.get("medication_name") or "")
+                remaining_days = int(payload.get("remaining_days") or -1)
+                existing_keys.add((medication_name, remaining_days))
+                if medication_name and notification.created_at.astimezone(config.TIMEZONE).date() == today:
+                    existing_daily_medication_keys.add(medication_name)
+
+            for item in dday_items:
+                dedup_key = (item.medication_name, item.remaining_days)
+                if dedup_key in existing_keys:
+                    continue
+                if item.medication_name in existing_daily_medication_keys:
+                    continue
+                dday_message = await generate_medication_dday_guidance(
+                    medication_name=item.medication_name,
+                    remaining_days=item.remaining_days,
+                )
+                await self.repo.create_notification(
+                    user_id=user.id,
+                    title="약 소진 알림",
+                    message=dday_message,
+                    notification_type=NotificationType.MEDICATION_DDAY,
+                    payload={
+                        "event": "medication_dday",
+                        "medication_name": item.medication_name,
+                        "remaining_days": item.remaining_days,
+                        "estimated_depletion_date": item.estimated_depletion_date.isoformat(),
+                    },
+                )
+                existing_keys.add(dedup_key)
+                existing_daily_medication_keys.add(item.medication_name)
 
     async def _sync_health_alert_notifications(self, *, user: User) -> None:
         summary = await self.analysis_service.get_summary(user=user)
@@ -121,36 +117,33 @@ class NotificationService:
         if not emergency_alerts:
             return
 
-        existing_notifications = await self.repo.list_notifications(
-            user_id=user.id,
-            limit=100,
-            offset=0,
-            is_read=None,
-        )
-        existing_alert_keys: set[str] = set()
-        for notification in existing_notifications:
-            if notification.type != NotificationType.HEALTH_ALERT:
-                continue
-            payload = notification.payload if isinstance(notification.payload, dict) else {}
-            alert_key = str(payload.get("alert_key") or "")
-            if alert_key:
-                existing_alert_keys.add(alert_key)
-
-        for alert in emergency_alerts:
-            if not isinstance(alert, dict):
-                continue
-            alert_key = str(alert.get("alert_key") or "")
-            if not alert_key or alert_key in existing_alert_keys:
-                continue
-            await self.repo.create_notification(
+        async with in_transaction():
+            existing_alert_notifications = await Notification.filter(
                 user_id=user.id,
-                title=str(alert.get("title") or "건강 경고 알림"),
-                message=str(alert.get("message") or ""),
-                notification_type=NotificationType.HEALTH_ALERT,
-                payload={
-                    "event": "health_alert",
-                    "alert_key": alert_key,
-                    "alert_type": str(alert.get("type") or "GENERAL"),
-                    "severity": str(alert.get("severity") or "MEDIUM"),
-                },
-            )
+                type=NotificationType.HEALTH_ALERT,
+            ).only("id", "payload")
+            existing_alert_keys: set[str] = set()
+            for notification in existing_alert_notifications:
+                payload = notification.payload if isinstance(notification.payload, dict) else {}
+                alert_key = str(payload.get("alert_key") or "")
+                if alert_key:
+                    existing_alert_keys.add(alert_key)
+
+            for alert in emergency_alerts:
+                if not isinstance(alert, dict):
+                    continue
+                alert_key = str(alert.get("alert_key") or "")
+                if not alert_key or alert_key in existing_alert_keys:
+                    continue
+                await self.repo.create_notification(
+                    user_id=user.id,
+                    title=str(alert.get("title") or "건강 경고 알림"),
+                    message=str(alert.get("message") or ""),
+                    notification_type=NotificationType.HEALTH_ALERT,
+                    payload={
+                        "event": "health_alert",
+                        "alert_key": alert_key,
+                        "alert_type": str(alert.get("type") or "GENERAL"),
+                        "severity": str(alert.get("severity") or "MEDIUM"),
+                    },
+                )

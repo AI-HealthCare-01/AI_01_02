@@ -28,7 +28,7 @@ async def get_daily_schedule(
     user: Annotated[User, Depends(get_request_user)],
     service: Annotated[ScheduleService, Depends(ScheduleService)],
     target_date: Annotated[date, Query(alias="date")],
-    timezone: Annotated[str | None, Query()] = None,
+    timezone: Annotated[str | None, Query(max_length=50)] = None,
 ) -> Response:
     items = await service.get_daily_schedule(user=user, target_date=target_date, timezone=timezone)
     done_count, total_count, adherence_rate = service.calculate_medication_adherence(items)

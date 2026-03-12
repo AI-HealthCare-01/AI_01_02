@@ -53,12 +53,13 @@ class GuideAutomationService:
         existing = await Notification.filter(
             user_id=user_id,
             type=NotificationType.HEALTH_ALERT,
-        ).order_by("-created_at", "-id")
+        ).only("id", "payload")
         for notification in existing:
             payload = notification.payload if isinstance(notification.payload, dict) else {}
-            if payload.get("event") != "guide_weekly_refresh_required":
-                continue
-            if int(payload.get("source_guide_job_id") or 0) == source_guide_job_id:
+            if (
+                payload.get("event") == "guide_weekly_refresh_required"
+                and int(payload.get("source_guide_job_id") or 0) == source_guide_job_id
+            ):
                 return
         await Notification.create(
             user_id=user_id,
@@ -113,36 +114,37 @@ class GuideAutomationService:
             return None
 
         job = await GuideJob.create(user_id=user_id, ocr_job_id=ocr_job_id, max_retries=config.GUIDE_JOB_MAX_RETRIES)
+        if not await self.enqueue_or_fail(job, reason=reason):
+            return None
+        return job
+
+    async def enqueue_or_fail(self, job: GuideJob, *, reason: str = "") -> bool:
+        """큐 등록 시도. 실패 시 FAILED로 전환하고 False 반환."""
         try:
             await self.queue_publisher.enqueue_job(job.id)
+            return True
         except RuntimeError:
             failed_at = datetime.now(config.TIMEZONE)
             await GuideJob.filter(id=job.id, status=GuideJobStatus.QUEUED).update(
                 status=GuideJobStatus.FAILED,
                 failure_code=GuideFailureCode.PROCESSING_ERROR,
-                error_message=f"[PROCESSING_ERROR] auto guide queue publish failed ({reason}).",
+                error_message=f"[PROCESSING_ERROR] guide queue publish failed ({reason}).",
                 completed_at=failed_at,
             )
-            default_logger.exception("auto guide queue publish failed (job_id=%s reason=%s)", job.id, reason)
-            return None
-        return job
+            default_logger.exception("guide queue publish failed (job_id=%s reason=%s)", job.id, reason)
+            return False
 
     async def process_weekly_refresh_due_users(self, *, batch_size: int) -> int:
         cutoff = datetime.now(config.TIMEZONE) - timedelta(days=7)
-        stale_jobs = (
+        user_ids = (
             await GuideJob.filter(status=GuideJobStatus.SUCCEEDED, completed_at__lte=cutoff)
-            .order_by("user_id", "-completed_at", "-id")
-            .limit(batch_size * 3)
+            .distinct()
+            .limit(batch_size)
+            .values_list("user_id", flat=True)
         )
         processed = 0
-        seen_user_ids: set[int] = set()
-        for job in stale_jobs:
-            if job.user_id in seen_user_ids:
-                continue
-            seen_user_ids.add(job.user_id)
-            notified = await self.notify_weekly_refresh_if_due(user_id=job.user_id)
+        for user_id in user_ids:
+            notified = await self.notify_weekly_refresh_if_due(user_id=user_id)
             if notified:
                 processed += 1
-            if processed >= batch_size:
-                break
         return processed

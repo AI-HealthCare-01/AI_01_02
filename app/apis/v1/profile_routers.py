@@ -7,7 +7,7 @@ from app.core.exceptions import AppException, ErrorCode
 from app.dependencies.security import get_request_user
 from app.dtos.profiles import HealthProfileResponse, HealthProfileUpsertRequest
 from app.models.users import User
-from app.services.profiles import HealthProfileService
+from app.services.profiles import OnboardingProfileService
 
 profile_router = APIRouter(prefix="/profiles", tags=["profiles"])
 
@@ -29,7 +29,7 @@ def _serialize(profile) -> HealthProfileResponse:  # type: ignore[no-untyped-def
 async def upsert_health_profile(
     data: HealthProfileUpsertRequest,
     user: Annotated[User, Depends(get_request_user)],
-    service: Annotated[HealthProfileService, Depends(HealthProfileService)],
+    service: Annotated[OnboardingProfileService, Depends(OnboardingProfileService)],
 ) -> Response:
     profile = await service.upsert_profile(user=user, data=data)
     return Response(_serialize(profile).model_dump(), status_code=status.HTTP_200_OK)
@@ -38,7 +38,7 @@ async def upsert_health_profile(
 @profile_router.get("/health", response_model=HealthProfileResponse, status_code=status.HTTP_200_OK)
 async def get_health_profile(
     user: Annotated[User, Depends(get_request_user)],
-    service: Annotated[HealthProfileService, Depends(HealthProfileService)],
+    service: Annotated[OnboardingProfileService, Depends(OnboardingProfileService)],
 ) -> Response:
     profile = await service.get_profile(user=user)
     if not profile:

@@ -6,6 +6,7 @@ Dense(벡터) + BM25(키워드) 결합 검색
 from __future__ import annotations
 
 import asyncio
+import logging
 from functools import lru_cache
 from typing import Any
 
@@ -14,6 +15,8 @@ from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
 
 from app.core import config
 from app.services.knowledge.adhd_docs import ADHD_DOCUMENTS
+
+logger = logging.getLogger(__name__)
 
 
 class RagResult:
@@ -41,13 +44,20 @@ def _get_bm25() -> tuple[BM25Okapi, list[dict]]:
     return BM25Okapi(tokenized), ADHD_DOCUMENTS
 
 
-@lru_cache(maxsize=1)
+_chroma_collection_cache: chromadb.Collection | None = None
+
+
 def _get_chroma_collection() -> chromadb.Collection:
+    global _chroma_collection_cache
+    if _chroma_collection_cache is not None:
+        return _chroma_collection_cache
     client = chromadb.HttpClient(host=config.CHROMA_HOST, port=config.CHROMA_PORT)
-    return client.get_or_create_collection(
+    collection = client.get_or_create_collection(
         name=config.CHROMA_COLLECTION,
         metadata={"hnsw:space": "cosine"},
     )
+    _chroma_collection_cache = collection
+    return collection
 
 
 async def _embed(text: str) -> list[float]:
@@ -97,6 +107,9 @@ async def hybrid_search(query: str) -> tuple[list[RagResult], bool]:
             for doc_id, dist in zip(ids[0], distances[0], strict=True):
                 dense_id_score[doc_id] = 1.0 - dist
     except Exception:
+        global _chroma_collection_cache
+        _chroma_collection_cache = None
+        logger.warning("ChromaDB dense search failed, falling back to BM25 only", exc_info=True)
         dense_id_score = {}
 
     # 하이브리드 점수 계산

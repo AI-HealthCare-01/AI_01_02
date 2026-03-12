@@ -98,7 +98,7 @@ class TestNotificationApis(TestCase):
             assert response.status_code == status.HTTP_200_OK
             assert response.json()["unread_count"] == 1
 
-    async def test_get_unread_count_triggers_dynamic_notification_sync(self):
+    async def test_list_notifications_triggers_dynamic_notification_sync(self):
         email = "notification_unread_sync@example.com"
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             access_token = await self._signup_and_login(client, email=email, phone_number="01040004001")
@@ -122,7 +122,7 @@ class TestNotificationApis(TestCase):
             )
 
             headers = {"Authorization": f"Bearer {access_token}"}
-            response = await client.get("/api/v1/notifications/unread-count", headers=headers)
+            response = await client.get("/api/v1/notifications", headers=headers)
             assert response.status_code == status.HTTP_200_OK
             assert response.json()["unread_count"] == 1
 
@@ -258,8 +258,8 @@ class TestNotificationApis(TestCase):
             )
 
             headers = {"Authorization": f"Bearer {access_token}"}
-            first = await client.get("/api/v1/notifications/unread-count", headers=headers)
-            second = await client.get("/api/v1/notifications/unread-count", headers=headers)
+            first = await client.get("/api/v1/notifications", headers=headers)
+            second = await client.get("/api/v1/notifications", headers=headers)
 
             assert first.status_code == status.HTTP_200_OK
             assert second.status_code == status.HTTP_200_OK

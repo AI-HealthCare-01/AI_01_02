@@ -11,7 +11,6 @@ class DocumentUploadResponse(BaseSerializerModel):
     id: str
     document_type: DocumentType
     file_name: str
-    file_path: str
     file_size: int
     mime_type: str
     uploaded_at: datetime
@@ -62,7 +61,7 @@ class OcrResultConfirmRequest(BaseModel):
 class OcrJobResultResponse(BaseModel):
     job_id: str
     extracted_text: str
-    structured_data: dict
+    structured_data: dict[str, Any]
     created_at: datetime
     updated_at: datetime
 
@@ -82,7 +81,7 @@ class OcrMedicationItem(BaseModel):
 class OcrReviewConfirmRequest(BaseModel):
     confirmed: bool
     corrected_medications: list[OcrMedicationItem] = Field(default_factory=list)
-    comment: str | None = None
+    comment: str | None = Field(None, max_length=500)
 
 
 class OcrConfirmResponse(BaseModel):

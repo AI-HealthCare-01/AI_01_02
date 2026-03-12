@@ -64,8 +64,10 @@ class TestOcrApis(TestCase):
         assert body["document_type"] == "PRESCRIPTION"
         assert body["file_name"] == "test.png"
         assert body["file_size"] == len(b"fake-image-bytes")
+        assert "file_path" not in body
 
-        stored_path = Path(config.MEDIA_DIR) / body["file_path"]
+        document = await Document.get(id=int(body["id"]))
+        stored_path = Path(config.MEDIA_DIR) / document.temp_storage_key
         assert stored_path.exists() is True
 
     async def test_upload_document_invalid_extension(self):

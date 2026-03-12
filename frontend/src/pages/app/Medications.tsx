@@ -60,7 +60,7 @@ export default function Medications() {
     }
   }
 
-  async function reload() {
+  async function reload(initial = false) {
     try {
       const [remData, ddayData] = await Promise.all([
         reminderApi.list(),
@@ -70,30 +70,17 @@ export default function Medications() {
       const map: Record<string, DdayReminder> = {};
       for (const d of ddayData.items) map[d.medication_name] = d;
       setDdayMap(map);
+      if (initial && remData.items.length > 0) setExpandedId(remData.items[0].id);
     } catch (err) {
       toast.error(toUserMessage(err));
+    } finally {
+      if (initial) setLoading(false);
     }
   }
 
   useEffect(() => {
-    async function load() {
-      try {
-        const [remData, ddayData] = await Promise.all([
-          reminderApi.list(),
-          reminderApi.getDday(30),
-        ]);
-        setReminders(remData.items);
-        const map: Record<string, DdayReminder> = {};
-        for (const d of ddayData.items) map[d.medication_name] = d;
-        setDdayMap(map);
-
-        // 첫 번째 항목 자동 펼치기
-        if (remData.items.length > 0) setExpandedId(remData.items[0].id);
-      } catch (err) {
-        toast.error(toUserMessage(err));
-      } finally {
-        setLoading(false);
-      }
+    async function init() {
+      await reload(true);
 
       // 가이드 & 주간 복약률 (비동기)
       const jobId = localStorage.getItem("guide_job_id");
@@ -108,7 +95,7 @@ export default function Medications() {
       }
       loadWeeklyRates();
     }
-    load();
+    init();
   }, []); // eslint-disable-line
 
   async function handleSave(id: string, data: {

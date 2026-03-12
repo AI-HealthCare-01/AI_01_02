@@ -8,6 +8,7 @@ const ERROR_MAP: Record<string, ErrorMeta> = {
   FILE_INVALID_TYPE:         { message: "지원하지 않는 파일 형식입니다.", action: "PNG, JPG, PDF 파일을 선택해주세요." },
   FILE_TOO_LARGE:            { message: "파일 크기가 너무 큽니다.", action: "파일 크기를 줄인 후 다시 시도해주세요." },
   AUTH_INVALID_TOKEN:        { message: "인증에 실패했습니다. 다시 로그인해주세요." },
+  AUTH_INVALID_CREDENTIALS:  { message: "이메일 또는 비밀번호가 올바르지 않습니다.", action: "입력 정보를 확인 후 다시 시도해주세요." },
   AUTH_TOKEN_EXPIRED:        { message: "로그인이 만료되었습니다. 다시 로그인해주세요." },
   AUTH_FORBIDDEN:            { message: "접근 권한이 없습니다." },
   AUTH_ACCOUNT_INACTIVE:     { message: "비활성화된 계정입니다.", action: "고객센터에 문의해주세요." },

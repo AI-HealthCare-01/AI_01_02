@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from uuid import uuid4
 
 import httpx
 from openai import AsyncOpenAI
@@ -24,7 +25,7 @@ async def call_clova_ocr(file_path: Path) -> dict:
 
     payload = {
         "version": "V2",
-        "requestId": "ai-worker-ocr-request",
+        "requestId": str(uuid4()),
         "timestamp": 0,
         "images": [{"format": file_path.suffix.lstrip(".").lower(), "name": file_path.name}],
     }

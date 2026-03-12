@@ -1,16 +1,13 @@
-from datetime import datetime
-
 from tortoise.transactions import in_transaction
 
-from app.core import config, default_logger
+from app.core import config
 from app.core.exceptions import AppException, ErrorCode
 from app.dtos.guides import GuideJobCreateFromSnapshotRequest
-from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult
+from app.models.guides import GuideJob, GuideJobStatus, GuideResult
 from app.models.ocr import OcrJobStatus
 from app.models.users import User
 from app.repositories.guide_repository import GuideRepository
 from app.services.guide_automation import GuideAutomationService
-from app.services.guide_queue import GuideQueuePublisher
 from app.services.health_profiles import HealthProfileService
 from app.services.ocr import OcrService
 
@@ -18,7 +15,6 @@ from app.services.ocr import OcrService
 class GuideService:
     def __init__(self) -> None:
         self.repo = GuideRepository()
-        self.queue_publisher = GuideQueuePublisher()
         self.guide_automation_service = GuideAutomationService()
         self.health_profile_service = HealthProfileService()
         self.ocr_service = OcrService()
@@ -53,20 +49,8 @@ class GuideService:
                 max_retries=config.GUIDE_JOB_MAX_RETRIES,
             )
 
-        try:
-            await self.queue_publisher.enqueue_job(job.id)
-        except RuntimeError as err:
-            failed_at = datetime.now(config.TIMEZONE)
-            await GuideJob.filter(id=job.id, status=GuideJobStatus.QUEUED).update(
-                status=GuideJobStatus.FAILED,
-                failure_code=GuideFailureCode.PROCESSING_ERROR,
-                error_message="[PROCESSING_ERROR] guide queue publish failed.",
-                completed_at=failed_at,
-            )
-            default_logger.exception("guide queue publish failed (job_id=%s)", job.id)
-            raise AppException(
-                ErrorCode.QUEUE_UNAVAILABLE, developer_message="가이드 작업 큐 등록에 실패했습니다."
-            ) from err
+        if not await self.guide_automation_service.enqueue_or_fail(job, reason="create_guide_job"):
+            raise AppException(ErrorCode.QUEUE_UNAVAILABLE, developer_message="가이드 작업 큐 등록에 실패했습니다.")
 
         return job
 
@@ -105,20 +89,10 @@ class GuideService:
                 max_retries=config.GUIDE_JOB_MAX_RETRIES,
             )
 
-        try:
-            await self.queue_publisher.enqueue_job(new_job.id)
-        except RuntimeError as err:
-            failed_at = datetime.now(config.TIMEZONE)
-            await GuideJob.filter(id=new_job.id, status=GuideJobStatus.QUEUED).update(
-                status=GuideJobStatus.FAILED,
-                failure_code=GuideFailureCode.PROCESSING_ERROR,
-                error_message="[PROCESSING_ERROR] guide queue publish failed.",
-                completed_at=failed_at,
-            )
-            default_logger.exception("guide refresh queue publish failed (job_id=%s)", new_job.id)
+        if not await self.guide_automation_service.enqueue_or_fail(new_job, reason="refresh_guide_job"):
             raise AppException(
                 ErrorCode.QUEUE_UNAVAILABLE, developer_message="가이드 갱신 작업 큐 등록에 실패했습니다."
-            ) from err
+            )
 
         return new_job
 

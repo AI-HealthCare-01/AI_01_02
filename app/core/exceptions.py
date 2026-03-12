@@ -9,6 +9,7 @@ class ErrorCode(StrEnum):
     AUTH_TOKEN_EXPIRED = "AUTH_TOKEN_EXPIRED"
     AUTH_FORBIDDEN = "AUTH_FORBIDDEN"
     AUTH_ACCOUNT_INACTIVE = "AUTH_ACCOUNT_INACTIVE"
+    AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS"
 
     # 입력 검증
     VALIDATION_ERROR = "VALIDATION_ERROR"
@@ -58,6 +59,12 @@ _ERROR_META: dict[ErrorCode, tuple[int, str, str | None, bool]] = {
         status.HTTP_423_LOCKED,
         "비활성화된 계정입니다. 고객센터에 문의해주세요.",
         None,
+        False,
+    ),
+    ErrorCode.AUTH_INVALID_CREDENTIALS: (
+        status.HTTP_401_UNAUTHORIZED,
+        "이메일 또는 비밀번호가 올바르지 않습니다.",
+        "입력 정보를 확인 후 다시 시도해주세요.",
         False,
     ),
     ErrorCode.VALIDATION_ERROR: (

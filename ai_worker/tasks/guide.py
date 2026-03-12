@@ -1,18 +1,14 @@
-import asyncio
 import json
-import time
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime
 from logging import Logger
 from typing import Any, cast
 
 from openai import AsyncOpenAI
-from redis.asyncio import Redis
-from redis.exceptions import RedisError
-from redis.exceptions import TimeoutError as RedisTimeoutError
 from tortoise.transactions import in_transaction
 
 from ai_worker.core import config
+from ai_worker.tasks.queue import QueueConsumer
 from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult, GuideRiskLevel
 from app.models.health_profiles import UserHealthProfile
 from app.models.notifications import Notification, NotificationType
@@ -102,105 +98,17 @@ ALLOWED_STATUS_TRANSITIONS: dict[GuideJobStatus, set[GuideJobStatus]] = {
 }
 
 
-def compute_retry_delay_seconds(retry_count: int) -> int:
-    attempt = max(retry_count - 1, 0)
-    delay = config.GUIDE_RETRY_BACKOFF_BASE_SECONDS * (2**attempt)
-    return min(delay, config.GUIDE_RETRY_BACKOFF_MAX_SECONDS)
-
-
-class GuideQueueConsumer:
+class GuideQueueConsumer(QueueConsumer):
     def __init__(self, logger: Logger) -> None:
-        self.logger = logger
-        self.client = Redis(
-            host=config.REDIS_HOST,
-            port=config.REDIS_PORT,
-            db=config.REDIS_DB,
-            password=config.REDIS_PASSWORD,
-            decode_responses=True,
-            socket_connect_timeout=config.REDIS_SOCKET_TIMEOUT_SECONDS,
-            socket_timeout=config.REDIS_SOCKET_TIMEOUT_SECONDS,
+        super().__init__(
+            logger,
+            queue_key=config.GUIDE_QUEUE_KEY,
+            retry_queue_key=config.GUIDE_RETRY_QUEUE_KEY,
+            dead_letter_queue_key=config.GUIDE_DEAD_LETTER_QUEUE_KEY,
+            block_timeout_seconds=config.GUIDE_QUEUE_BLOCK_TIMEOUT_SECONDS,
+            retry_backoff_base_seconds=config.GUIDE_RETRY_BACKOFF_BASE_SECONDS,
+            retry_backoff_max_seconds=config.GUIDE_RETRY_BACKOFF_MAX_SECONDS,
         )
-
-    async def close(self) -> None:
-        await self.client.aclose()
-
-    async def pop_job_id(self) -> int | None:
-        try:
-            popped = await cast(
-                Awaitable[list[Any] | None],
-                self.client.blpop([config.GUIDE_QUEUE_KEY], timeout=config.GUIDE_QUEUE_BLOCK_TIMEOUT_SECONDS),
-            )
-        except RedisTimeoutError:
-            # BLPOP idle timeout: 큐가 비어있는 정상 상태이므로 경고를 남기지 않는다.
-            return None
-        except RedisError:
-            self.logger.warning("redis guide queue consume failed")
-            await asyncio.sleep(1)
-            return None
-
-        if popped is None:
-            return None
-
-        _, raw_job_id = popped
-        try:
-            return int(raw_job_id)
-        except ValueError:
-            self.logger.warning("invalid guide queue payload received: %s", raw_job_id)
-            return None
-
-    async def flush_due_retries(self, *, batch_size: int) -> int:
-        now = int(time.time())
-        moved = 0
-        try:
-            while moved < batch_size:
-                members = await self.client.zrangebyscore(
-                    config.GUIDE_RETRY_QUEUE_KEY,
-                    min="-inf",
-                    max=now,
-                    start=0,
-                    num=batch_size - moved,
-                )
-                if not members:
-                    break
-
-                for member in members:
-                    removed = await self.client.zrem(config.GUIDE_RETRY_QUEUE_KEY, member)
-                    if not removed:
-                        continue
-                    await cast(Awaitable[int], self.client.rpush(config.GUIDE_QUEUE_KEY, member))
-                    moved += 1
-                    if moved >= batch_size:
-                        break
-        except RedisError:
-            self.logger.warning("redis guide retry queue flush failed")
-            return moved
-
-        if moved:
-            self.logger.info("moved %s guide retry jobs back to main queue", moved)
-        return moved
-
-    async def schedule_retry(self, job_id: int, retry_count: int) -> None:
-        delay_seconds = compute_retry_delay_seconds(retry_count)
-        retry_at = int(time.time()) + delay_seconds
-        try:
-            await self.client.zadd(config.GUIDE_RETRY_QUEUE_KEY, {str(job_id): retry_at})
-            self.logger.warning(
-                "guide job scheduled for retry (job_id=%s retry_count=%s delay=%ss)",
-                job_id,
-                retry_count,
-                delay_seconds,
-            )
-        except RedisError:
-            self.logger.warning("redis guide retry schedule failed (job_id=%s retry_count=%s)", job_id, retry_count)
-
-    async def send_to_dead_letter(self, payload: dict[str, Any]) -> None:
-        try:
-            await cast(
-                Awaitable[int],
-                self.client.rpush(config.GUIDE_DEAD_LETTER_QUEUE_KEY, json.dumps(payload, ensure_ascii=False)),
-            )
-        except RedisError:
-            self.logger.warning("redis guide dead letter enqueue failed (payload=%s)", payload)
 
 
 def _ensure_transition(from_status: GuideJobStatus, to_status: GuideJobStatus) -> None:
@@ -320,13 +228,6 @@ def _derive_risk_level(profile: UserHealthProfile) -> GuideRiskLevel:
     if risk_score >= 2:
         return GuideRiskLevel.MEDIUM
     return GuideRiskLevel.LOW
-
-
-def _derive_nutrition_risk_code(profile: UserHealthProfile) -> str:
-    nutrition_risks = _derive_nutrition_risk_codes(profile)
-    if not nutrition_risks:
-        return "NONE"
-    return nutrition_risks[0]
 
 
 def _derive_nutrition_risk_codes(profile: UserHealthProfile) -> list[str]:
@@ -562,7 +463,11 @@ async def _generate_lifestyle_guide_with_llm(
         f"조건 데이터: {json.dumps(prompt_context, ensure_ascii=False)}"
     )
     try:
-        client = AsyncOpenAI(api_key=config.OPENAI_API_KEY, base_url=config.OPENAI_BASE_URL)
+        client = AsyncOpenAI(
+            api_key=config.OPENAI_API_KEY,
+            base_url=config.OPENAI_BASE_URL,
+            timeout=config.LLM_TIMEOUT_SECONDS,
+        )
         response = await client.chat.completions.create(
             model=config.OPENAI_GUIDE_MODEL,
             messages=[

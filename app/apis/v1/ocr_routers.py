@@ -39,7 +39,6 @@ async def upload_document(
             id=str(document.id),
             document_type=document.document_type,
             file_name=document.file_name,
-            file_path=document.temp_storage_key,
             file_size=document.file_size,
             mime_type=document.mime_type,
             uploaded_at=document.uploaded_at,
