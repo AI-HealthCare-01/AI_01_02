@@ -17,7 +17,7 @@ from app.services.llm import chat_completion, json_completion, stream_chat_compl
 from app.services.rag import hybrid_search
 
 # REQ-049: 프롬프트 버전 관리
-CHAT_PROMPT_VERSION = "v1.5"
+CHAT_PROMPT_VERSION = "v1.6"
 
 _GUARDRAIL_KEYWORDS = frozenset(["자살", "자해", "죽고 싶", "죽이고", "약물 오남용", "마약", "범죄"])
 _EMERGENCY_MESSAGE = (
@@ -109,12 +109,20 @@ _SYSTEM_PROMPT_BASE = (
     "- 너무 긴 답변은 피하고 핵심 정보를 중심으로 설명합니다.\n\n"
     "5. 정보 출처\n"
     "RAG를 통해 제공된 문헌이 있는 경우, 해당 정보를 기반으로 설명합니다.\n\n"
-    "6. 개인화 원칙\n"
-    "- [사용자 복약 정보]가 제공되면 약물 관련 질문에서 그 정보를 우선 반영합니다.\n"
-    "- [사용자 생활습관 정보]가 제공되면 수면, 카페인, 운동, 디지털 사용 습관을 반영해 개인화된 조언을 제공합니다.\n"
-    "- 카페인, 음주, 부작용, 상호작용 질문에서는 저장된 복약 정보를 함께 고려합니다.\n\n"
-    "7. 후속 질문\n"
+    "6. 후속 질문\n"
     "- 답변 마지막에는 사용자가 다음으로 이어서 물어볼 수 있는 짧은 후속 질문 1~3개를 제안합니다."
+)
+
+_LIFESTYLE_PROMPT_GUIDANCE = (
+    "\n\n[개인화 지침]\n"
+    "- 제공된 생활습관 정보를 반영해 수면, 카페인, 운동, 디지털 사용 습관에 맞춘 개인화된 조언을 제공합니다."
+)
+
+_MEDICATION_PROMPT_GUIDANCE = (
+    "\n\n[복약 개인화 지침]\n"
+    "- [사용자 복약 정보]가 제공되면 약물 관련 질문에서 그 정보를 우선 반영합니다.\n"
+    "- 카페인, 음주, 부작용, 상호작용 질문에서는 저장된 복약 정보를 함께 고려합니다.\n"
+    "- 목록에 없는 약을 사용자가 복용 중이라고 단정하지 않습니다."
 )
 
 # REQ-034: 의도 분류 프롬프트
@@ -779,7 +787,12 @@ class ChatService:
         # REQ-036: RAG 컨텍스트 + 프로필 컨텍스트로 시스템 프롬프트 구성
         profile_ctx = _build_profile_context(profile, user_health_profile)
         rag_ctx = _build_rag_context(rag_docs)
-        system_content = _SYSTEM_PROMPT_BASE + profile_ctx + lifestyle_ctx + medication_ctx + rag_ctx
+        prompt_guidance = ""
+        if lifestyle_ctx:
+            prompt_guidance += _LIFESTYLE_PROMPT_GUIDANCE
+        if medication_ctx:
+            prompt_guidance += _MEDICATION_PROMPT_GUIDANCE
+        system_content = _SYSTEM_PROMPT_BASE + prompt_guidance + profile_ctx + lifestyle_ctx + medication_ctx + rag_ctx
 
         # 사용자 메시지 저장
         await ChatMessage.create(
@@ -965,14 +978,14 @@ class ChatService:
 
     async def stream_message(
         self, *, user: User, session_id: int, message: str
-    ) -> AsyncGenerator[tuple[str, dict[str, Any]], None]:
+    ) -> AsyncGenerator[tuple[str, dict[str, Any]]]:
         """REQ-038: 토큰 단위 SSE 스트리밍"""
         session = await self._get_active_session(user=user, session_id=session_id)
         intent = "emergency" if any(kw in message for kw in _GUARDRAIL_KEYWORDS) else await _classify_intent(message)
 
         early = await self._check_early_exit(session=session, message=message, intent=intent)
         if early is not None:
-            async def _early_event_gen() -> AsyncGenerator[tuple[str, dict[str, Any]], None]:
+            async def _early_event_gen() -> AsyncGenerator[tuple[str, dict[str, Any]]]:
                 async for token in early:
                     yield "token", {"content": token}
 
@@ -986,7 +999,7 @@ class ChatService:
             reminders=reminders,
         )
         if risk_exit is not None:
-            async def _risk_event_gen() -> AsyncGenerator[tuple[str, dict[str, Any]], None]:
+            async def _risk_event_gen() -> AsyncGenerator[tuple[str, dict[str, Any]]]:
                 async for token in risk_exit:
                     yield "token", {"content": token}
 
@@ -1008,7 +1021,7 @@ class ChatService:
             session=session, message=message, intent=intent, needs_clarification=needs_clarification
         )
         if clarification_gen is not None:
-            async def _clarification_event_gen() -> AsyncGenerator[tuple[str, dict[str, Any]], None]:
+            async def _clarification_event_gen() -> AsyncGenerator[tuple[str, dict[str, Any]]]:
                 async for token in clarification_gen:
                     yield "token", {"content": token}
 
@@ -1016,7 +1029,12 @@ class ChatService:
 
         profile_ctx = _build_profile_context(profile, user_health_profile)
         rag_ctx = _build_rag_context(rag_docs)
-        system_content = _SYSTEM_PROMPT_BASE + profile_ctx + lifestyle_ctx + medication_ctx + rag_ctx
+        prompt_guidance = ""
+        if lifestyle_ctx:
+            prompt_guidance += _LIFESTYLE_PROMPT_GUIDANCE
+        if medication_ctx:
+            prompt_guidance += _MEDICATION_PROMPT_GUIDANCE
+        system_content = _SYSTEM_PROMPT_BASE + prompt_guidance + profile_ctx + lifestyle_ctx + medication_ctx + rag_ctx
         recent = await (
             ChatMessage.filter(session_id=session.id, role__in=[ChatRole.USER, ChatRole.ASSISTANT])
             .order_by("-created_at")
@@ -1048,7 +1066,7 @@ class ChatService:
         )
         await self._update_session_activity(session)
 
-        async def _stream_gen() -> AsyncGenerator[tuple[str, dict[str, Any]], None]:
+        async def _stream_gen() -> AsyncGenerator[tuple[str, dict[str, Any]]]:
             collected: list[str] = []
             try:
                 async for token in stream_chat_completion(model=config.OPENAI_CHAT_MODEL, messages=messages_payload):
