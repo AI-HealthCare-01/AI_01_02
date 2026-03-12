@@ -27,6 +27,7 @@ export default function OcrScan() {
       toast.error("이미지 파일만 업로드할 수 있습니다.");
       return;
     }
+    if (preview) URL.revokeObjectURL(preview);
     setFile(f);
     setPreview(URL.createObjectURL(f));
   }

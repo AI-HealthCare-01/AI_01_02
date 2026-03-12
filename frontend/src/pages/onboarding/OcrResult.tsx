@@ -244,15 +244,12 @@ export default function OcrResult() {
     setMedications((prev) => prev.map((m, i) => (i === index ? { ...m, [field]: value, confidence: 1.0 } : m)));
   }
 
-  const [guideJobId, setGuideJobId] = useState<string | null>(null);
-
   async function handleConfirm() {
     setPhase("confirming");
     try {
       await ocrApi.confirmResult(jobId, true, medications);
       const guide = await guideApi.createJob(jobId);
       localStorage.setItem("guide_job_id", guide.job_id);
-      setGuideJobId(guide.job_id);
       setPhase("summary");
     } catch (err: unknown) {
       toast.error(toUserMessage(err));
