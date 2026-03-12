@@ -376,6 +376,7 @@ function EditModal({
 }) {
   const sl = profile?.sleep_input;
   const ls = profile?.lifestyle;
+  const bi = profile?.basic_info;
   const EXERCISE_OPTIONS = [
     { value: "low", label: "낮음", desc: "주 1회 미만" },
     { value: "moderate", label: "보통", desc: "주 2~3회" },
@@ -394,6 +395,10 @@ function EditModal({
 
   const [bedTime, setBedTime] = useState(sl?.bed_time ?? "23:00");
   const [wakeTime, setWakeTime] = useState(sl?.wake_time ?? "07:00");
+  const [height, setHeight] = useState(String(bi?.height_cm ?? ""));
+  const [weight, setWeight] = useState(String(bi?.weight_kg ?? ""));
+  const [allergyInput, setAllergyInput] = useState("");
+  const [allergies, setAllergies] = useState<string[]>(bi?.drug_allergies ?? []);
   const [sleepLatency, setSleepLatency] = useState(String(sl?.sleep_latency_minutes ?? ""));
   const [nightAwakenings, setNightAwakenings] = useState(String(sl?.night_awakenings_per_week ?? ""));
   const [daytimeSleepiness, setDaytimeSleepiness] = useState(sl?.daytime_sleepiness ?? 3);
@@ -417,14 +422,36 @@ function EditModal({
   const [regularMeals, setRegularMeals] = useState(profile?.nutrition_status?.meal_regular ?? true);
   const [loading, setLoading] = useState(false);
 
+  function addAllergy() {
+    const value = allergyInput.trim();
+    if (!value) return;
+    if (allergies.includes(value)) {
+      setAllergyInput("");
+      return;
+    }
+    setAllergies((prev) => [...prev, value]);
+    setAllergyInput("");
+  }
+
+  function removeAllergy(target: string) {
+    setAllergies((prev) => prev.filter((item) => item !== target));
+  }
+
   async function handleSave() {
     setLoading(true);
     try {
       const exerciseMap: Record<string, number> = { low: 1, moderate: 3, high: 5 };
       const smokingMap: Record<string, number> = { none: 0, light: 1, heavy: 1 };
       const alcoholMap: Record<string, number> = { low: 1, moderate: 2, high: 4 };
+      const normalizedAllergies = Array.from(
+        new Set(allergies.map((item) => item.trim()).filter((item) => item.length > 0)),
+      );
       const payload: HealthProfileUpsertRequest = {
-        basic_info: profile?.basic_info ?? { height_cm: 0, weight_kg: 0, drug_allergies: [] },
+        basic_info: {
+          height_cm: parseFloat(height) || 0,
+          weight_kg: parseFloat(weight) || 0,
+          drug_allergies: normalizedAllergies,
+        },
         lifestyle: {
           exercise_frequency_per_week: exerciseMap[exercise] ?? 0,
           pc_hours_per_day: parseFloat(pcHours) || 0,
@@ -477,6 +504,73 @@ function EditModal({
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 my-4 animate-page-enter">
         <h3 className="text-base font-bold text-gray-800 mb-5">일상 정보 수정</h3>
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+          <p className="text-xs font-semibold text-gray-400 uppercase">기본 정보</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">키 (cm)</label>
+              <input
+                type="number"
+                min="100"
+                max="250"
+                value={height}
+                onChange={(e) => setHeight(e.target.value)}
+                placeholder="170"
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">체중 (kg)</label>
+              <input
+                type="number"
+                min="20"
+                max="300"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                placeholder="65"
+                className={inputCls}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1.5">약물 알레르기</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={allergyInput}
+                onChange={(e) => setAllergyInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addAllergy())}
+                placeholder="예: 페니실린"
+                className={inputCls}
+              />
+              <button
+                type="button"
+                onClick={addAllergy}
+                className="px-4 py-2.5 gradient-primary text-white text-xs font-semibold rounded-xl hover:shadow-md transition-all duration-200 shrink-0"
+              >
+                추가
+              </button>
+            </div>
+            {allergies.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {allergies.map((allergy) => (
+                  <span
+                    key={allergy}
+                    className="flex items-center gap-1 bg-green-100 text-green-700 text-xs font-medium px-3 py-1 rounded-full"
+                  >
+                    {allergy}
+                    <button
+                      type="button"
+                      onClick={() => removeAllergy(allergy)}
+                      className="ml-0.5 text-green-500 hover:text-green-800"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
           <p className="text-xs font-semibold text-gray-400 uppercase">수면</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
