@@ -140,6 +140,26 @@ export interface ChatSession {
   created_at: string;
 }
 
+export interface ChatReference {
+  document_id: string;
+  title: string;
+  source: string;
+  url?: string | null;
+  score?: number | null;
+}
+
+export interface ChatMessageItem {
+  id: string;
+  role: string;
+  content: string;
+  created_at: string;
+  references: ChatReference[];
+}
+
+export type ChatStreamChunk =
+  | { type: "token"; content: string }
+  | { type: "reference"; references: ChatReference[] };
+
 export const chatApi = {
   createSession: (title?: string) =>
     request<ChatSession>("/chat/sessions", {
@@ -158,10 +178,13 @@ export const chatApi = {
     if (params?.limit !== undefined) q.set("limit", String(params.limit));
     if (params?.offset !== undefined) q.set("offset", String(params.offset));
     const qs = q.toString() ? `?${q}` : "";
-    return request<{ items: { id: string; role: string; content: string; created_at: string }[]; meta: { limit: number; offset: number; total: number } }>(`/chat/sessions/${sessionId}/messages${qs}`);
+    return request<{
+      items: ChatMessageItem[];
+      meta: { limit: number; offset: number; total: number };
+    }>(`/chat/sessions/${sessionId}/messages${qs}`);
   },
 
-  async *streamMessage(sessionId: string, message: string): AsyncGenerator<string> {
+  async *streamMessage(sessionId: string, message: string): AsyncGenerator<ChatStreamChunk> {
     const token = getToken();
     const res = await fetch(`${BASE}/chat/sessions/${sessionId}/stream`, {
       method: "POST",
@@ -175,6 +198,7 @@ export const chatApi = {
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buf = "";
+    let currentEvent = "message";
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -182,13 +206,29 @@ export const chatApi = {
       const lines = buf.split("\n");
       buf = lines.pop() ?? "";
       for (const line of lines) {
+        if (line.startsWith("event:")) {
+          currentEvent = line.replace(/^event:\s*/, "").trim();
+          continue;
+        }
+        if (line === "") {
+          currentEvent = "message";
+          continue;
+        }
         if (!line.startsWith("data:")) continue;
         const data = line.replace(/^data:\s*/, "");
-        if (!data || data === "{}") continue;
+        if (!data) continue;
         try {
           const parsed = JSON.parse(data);
-          if (parsed.content) yield parsed.content as string;
-        } catch { }
+          if (currentEvent === "token" && parsed.content) {
+            yield { type: "token", content: parsed.content as string };
+          }
+          if (currentEvent === "reference") {
+            yield {
+              type: "reference",
+              references: (parsed.references ?? []) as ChatReference[],
+            };
+          }
+        } catch {}
       }
     }
   },

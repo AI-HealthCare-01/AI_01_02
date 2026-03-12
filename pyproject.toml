@@ -69,6 +69,7 @@ asyncio_default_fixture_loop_scope = "session"
 # 기본 라인 길이 설정
 line-length = 120
 target-version = "py313"
+extend-exclude = ["test_fastapi.py", "test_openai.py"]
 
 [tool.ruff.lint]
 # 사용할 린트 규칙들 선택

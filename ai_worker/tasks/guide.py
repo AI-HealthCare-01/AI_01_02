@@ -260,7 +260,7 @@ async def _build_medication_guide(confirmed_ocr: dict[str, Any]) -> list[dict[st
             cache_key = f"{drug_name.lower()}|{medication.get('dose')}"
             if cache_key not in info_cache:
                 dose_val = medication.get("dose")
-                dose_mg = float(dose_val) if isinstance(dose_val, (int, float)) else None
+                dose_mg = float(dose_val) if isinstance(dose_val, int | float) else None
                 info_cache[cache_key] = await info_service.get_info(name=drug_name, dose_mg=dose_mg)
             info = info_cache.get(cache_key)
             if info:
