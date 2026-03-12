@@ -5,6 +5,10 @@ from starlette import status
 from tortoise.contrib.test import TestCase
 
 from app.main import app
+from app.models.health_profiles import UserHealthProfile
+from app.models.profiles import HealthProfile
+from app.models.reminders import MedicationReminder
+from app.models.users import User
 from app.services.rag import RagResult
 
 
@@ -51,7 +55,236 @@ class TestChatApis(TestCase):
             lr = await c.get(f"/api/v1/chat/sessions/{sid}/messages", headers=h)
             assert lr.json()["meta"]["total"] == 2
 
+    @patch("app.services.chat.hybrid_search", new_callable=AsyncMock, return_value=([], False))
     @patch("app.services.chat.chat_completion", new_callable=AsyncMock, return_value="mock reply")
+    @patch("app.services.chat._classify_intent", new_callable=AsyncMock, return_value="medical")
+    async def test_medication_context_injected_for_medication_question(self, _mock_intent, mock_chat, _mock_search):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            email = "cm_medctx@e.com"
+            t = await self._login(c, email, "01095001009")
+            h = {"Authorization": f"Bearer {t}"}
+            user = await User.get(email=email)
+            await MedicationReminder.create(
+                user_id=user.id,
+                medication_name="콘서타",
+                dose_text="18mg",
+                schedule_times=["09:00"],
+                enabled=True,
+            )
+            sid = (await c.post("/api/v1/chat/sessions", json={}, headers=h)).json()["id"]
+            r = await c.post(
+                f"/api/v1/chat/sessions/{sid}/messages",
+                json={"message": "내가 먹는 약의 기전을 알려줘"},
+                headers=h,
+            )
+
+        assert r.status_code == status.HTTP_200_OK
+        system_content = mock_chat.await_args.kwargs["messages"][0]["content"]
+        assert "[사용자 복약 정보]" in system_content
+        assert "콘서타" in system_content
+        assert "용량 18mg" in system_content
+
+    @patch("app.services.chat.hybrid_search", new_callable=AsyncMock, return_value=([], False))
+    @patch("app.services.chat.chat_completion", new_callable=AsyncMock, return_value="mock reply")
+    @patch("app.services.chat._classify_intent", new_callable=AsyncMock, return_value="medical")
+    async def test_medication_context_not_injected_for_non_medication_medical_question(
+        self, _mock_intent, mock_chat, _mock_search
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            email = "cm_lifestyle@e.com"
+            t = await self._login(c, email, "01095001010")
+            h = {"Authorization": f"Bearer {t}"}
+            user = await User.get(email=email)
+            await MedicationReminder.create(
+                user_id=user.id,
+                medication_name="콘서타",
+                dose_text="18mg",
+                schedule_times=["09:00"],
+                enabled=True,
+            )
+            sid = (await c.post("/api/v1/chat/sessions", json={}, headers=h)).json()["id"]
+            r = await c.post(
+                f"/api/v1/chat/sessions/{sid}/messages",
+                json={"message": "ADHD에 운동이 도움이 되나요?"},
+                headers=h,
+            )
+
+        assert r.status_code == status.HTTP_200_OK
+        system_content = mock_chat.await_args.kwargs["messages"][0]["content"]
+        assert "[사용자 복약 정보]" not in system_content
+
+    @patch("app.services.chat.hybrid_search", new_callable=AsyncMock, return_value=([], False))
+    @patch("app.services.chat.chat_completion", new_callable=AsyncMock, return_value="mock reply")
+    @patch("app.services.chat._classify_intent", new_callable=AsyncMock, return_value="medical")
+    async def test_medication_context_injected_for_caffeine_question(self, _mock_intent, mock_chat, _mock_search):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            email = "cm_caffeine@e.com"
+            t = await self._login(c, email, "01095001011")
+            h = {"Authorization": f"Bearer {t}"}
+            user = await User.get(email=email)
+            await MedicationReminder.create(
+                user_id=user.id,
+                medication_name="메틸페니데이트",
+                dose_text="27mg",
+                schedule_times=["08:30"],
+                enabled=True,
+            )
+            sid = (await c.post("/api/v1/chat/sessions", json={}, headers=h)).json()["id"]
+            r = await c.post(
+                f"/api/v1/chat/sessions/{sid}/messages",
+                json={"message": "커피 마셔도 돼?"},
+                headers=h,
+            )
+
+        assert r.status_code == status.HTTP_200_OK
+        system_content = mock_chat.await_args.kwargs["messages"][0]["content"]
+        assert "[사용자 복약 정보]" in system_content
+        assert "메틸페니데이트" in system_content
+
+    @patch("app.services.chat.hybrid_search", new_callable=AsyncMock, return_value=([], False))
+    @patch("app.services.chat.chat_completion", new_callable=AsyncMock, return_value="생활습관을 조정해보세요.")
+    @patch("app.services.chat._classify_intent", new_callable=AsyncMock, return_value="medical")
+    async def test_lifestyle_context_injected_from_user_health_profile(self, _mock_intent, mock_chat, _mock_search):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            email = "cm_user_health_profile@e.com"
+            t = await self._login(c, email, "01095001015")
+            h = {"Authorization": f"Bearer {t}"}
+            user = await User.get(email=email)
+            await UserHealthProfile.create(
+                user=user,
+                height_cm=175.0,
+                weight_kg=70.0,
+                drug_allergies=[],
+                exercise_frequency_per_week=4,
+                pc_hours_per_day=5,
+                smartphone_hours_per_day=6,
+                caffeine_cups_per_day=3,
+                smoking=0,
+                alcohol_frequency_per_week=1,
+                bed_time="23:30",
+                wake_time="06:30",
+                sleep_latency_minutes=20,
+                night_awakenings_per_week=1,
+                daytime_sleepiness=4,
+                appetite_level=5,
+                meal_regular=True,
+                bmi=22.86,
+                sleep_time_hours=7.0,
+                caffeine_mg=300,
+                digital_time_hours=11,
+            )
+            sid = (await c.post("/api/v1/chat/sessions", json={}, headers=h)).json()["id"]
+            r = await c.post(
+                f"/api/v1/chat/sessions/{sid}/messages",
+                json={"message": "내 생활습관을 고려해서 ADHD 관리를 어떻게 하면 좋을까?"},
+                headers=h,
+            )
+
+        assert r.status_code == status.HTTP_200_OK
+        system_content = mock_chat.await_args.kwargs["messages"][0]["content"]
+        assert "[사용자 생활습관 정보]" in system_content
+        assert "예상 수면 시간 7시간" in system_content
+        assert "카페인 섭취 하루 3잔" in system_content
+        assert "주간 운동 빈도 4회" in system_content
+        assert "스마트폰 사용 하루 6시간" in system_content
+
+    @patch("app.services.chat.hybrid_search", new_callable=AsyncMock, return_value=([], False))
+    @patch("app.services.chat.chat_completion", new_callable=AsyncMock, return_value="생활습관을 조정해보세요.")
+    @patch("app.services.chat._classify_intent", new_callable=AsyncMock, return_value="medical")
+    async def test_lifestyle_context_injected_for_personalized_guidance(self, _mock_intent, mock_chat, _mock_search):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            email = "cm_lifestyle_ctx@e.com"
+            t = await self._login(c, email, "01095001012")
+            h = {"Authorization": f"Bearer {t}"}
+            user = await User.get(email=email)
+            await HealthProfile.create(
+                user_id=user.id,
+                lifestyle_input={
+                    "caffeine_cups_per_day": 3,
+                    "smartphone_hours_per_day": 5,
+                    "exercise_hours": {
+                        "low_intensity": 1,
+                        "moderate_intensity": 1,
+                        "high_intensity": 0,
+                    },
+                },
+                sleep_input={"sleep_hours": 5.5},
+            )
+            sid = (await c.post("/api/v1/chat/sessions", json={}, headers=h)).json()["id"]
+            r = await c.post(
+                f"/api/v1/chat/sessions/{sid}/messages",
+                json={"message": "ADHD를 더 잘 관리하려면 어떻게 해야 해?"},
+                headers=h,
+            )
+
+        assert r.status_code == status.HTTP_200_OK
+        system_content = mock_chat.await_args.kwargs["messages"][0]["content"]
+        assert "[사용자 생활습관 정보]" in system_content
+        assert "예상 수면 시간 5.5시간" in system_content
+        assert "카페인 섭취 하루 3잔" in system_content
+        assert "스마트폰 사용 하루 5시간" in system_content
+
+    @patch("app.services.chat.hybrid_search", new_callable=AsyncMock, return_value=([], False))
+    @patch("app.services.chat.chat_completion", new_callable=AsyncMock, return_value="메틸페니데이트는 도파민과 노르에피네프린에 영향을 줍니다.")
+    @patch("app.services.chat._classify_intent", new_callable=AsyncMock, return_value="medical")
+    async def test_follow_up_questions_appended(self, _mock_intent, _mock_chat, _mock_search):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            t = await self._login(c, "cm_followup@e.com", "01095001013")
+            h = {"Authorization": f"Bearer {t}"}
+            sid = (await c.post("/api/v1/chat/sessions", json={}, headers=h)).json()["id"]
+            r = await c.post(
+                f"/api/v1/chat/sessions/{sid}/messages",
+                json={"message": "내가 먹는 약의 기전을 알려줘"},
+                headers=h,
+            )
+
+        assert r.status_code == status.HTTP_200_OK
+        body = r.json()
+        assert "더 도와드릴 수 있는 내용" in body["content"]
+        assert body["content"].count("• ") >= 3
+
+    @patch("app.services.chat.chat_completion", new_callable=AsyncMock)
+    @patch("app.services.chat._classify_intent", new_callable=AsyncMock, return_value="medical")
+    async def test_adhd_risk_behavior_blocks_normal_answer(self, _mock_intent, mock_chat):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            email = "cm_risk@e.com"
+            t = await self._login(c, email, "01095001014")
+            h = {"Authorization": f"Bearer {t}"}
+            user = await User.get(email=email)
+            await MedicationReminder.create(
+                user_id=user.id,
+                medication_name="콘서타",
+                dose_text="18mg",
+                schedule_times=["09:00"],
+                enabled=True,
+            )
+            sid = (await c.post("/api/v1/chat/sessions", json={}, headers=h)).json()["id"]
+            r = await c.post(
+                f"/api/v1/chat/sessions/{sid}/messages",
+                json={"message": "콘서타 두 알 먹어도 돼?"},
+                headers=h,
+            )
+
+        assert r.status_code == status.HTTP_200_OK
+        body = r.json()
+        assert "복약 안전 안내" in body["content"]
+        assert "추가 복용은 하지 마세요." in body["content"]
+        mock_chat.assert_not_awaited()
+
+    @patch("app.services.chat.chat_completion", new_callable=AsyncMock, return_value="mock reply")
+    @patch(
+        "app.services.chat._select_used_references",
+        new_callable=AsyncMock,
+        return_value=[
+            {
+                "document_id": "adhd-med-001",
+                "title": "메틸페니데이트(콘서타/리탈린) 복약 안내",
+                "source": "대한소아청소년정신의학회",
+                "url": "https://www.kacap.or.kr",
+                "score": 0.91,
+            }
+        ],
+    )
     @patch(
         "app.services.chat.hybrid_search",
         new_callable=AsyncMock,
@@ -64,13 +297,21 @@ class TestChatApis(TestCase):
                     "https://www.kacap.or.kr",
                     "dummy content",
                     0.91,
+                ),
+                RagResult(
+                    "adhd-exercise-001",
+                    "ADHD 환자의 운동 효과와 권장 사항",
+                    "대한스포츠의학회",
+                    "https://www.sportsmed.or.kr",
+                    "other content",
+                    0.72,
                 )
             ],
             False,
         ),
     )
     @patch("app.services.chat._classify_intent", new_callable=AsyncMock, return_value="medical")
-    async def test_send_message_includes_references(self, _mock_intent, _mock_search, _mock_chat):
+    async def test_send_message_includes_references(self, _mock_intent, _mock_search, _mock_select_refs, _mock_chat):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             t = await self._login(c, "cm_ref@e.com", "01095001007")
             h = {"Authorization": f"Bearer {t}"}
@@ -83,6 +324,7 @@ class TestChatApis(TestCase):
 
         assert r.status_code == status.HTTP_200_OK
         body = r.json()
+        assert len(body["references"]) == 1
         assert body["references"][0]["document_id"] == "adhd-med-001"
         assert body["references"][0]["source"] == "대한소아청소년정신의학회"
 
@@ -126,9 +368,22 @@ class TestChatApis(TestCase):
         yield "mock "
         yield "reply"
 
+    @patch(
+        "app.services.chat._select_used_references",
+        new_callable=AsyncMock,
+        return_value=[
+            {
+                "document_id": "adhd-med-001",
+                "title": "메틸페니데이트(콘서타/리탈린) 복약 안내",
+                "source": "대한소아청소년정신의학회",
+                "url": "https://www.kacap.or.kr",
+                "score": 0.91,
+            }
+        ],
+    )
     @patch("app.services.chat.hybrid_search")
     @patch("app.services.chat._classify_intent", new_callable=AsyncMock, return_value="medical")
-    async def test_stream_message_emits_reference_event(self, _mock_intent, mock_search):
+    async def test_stream_message_emits_reference_event(self, _mock_intent, mock_search, _mock_select_refs):
         mock_search.return_value = (
             [
                 RagResult(

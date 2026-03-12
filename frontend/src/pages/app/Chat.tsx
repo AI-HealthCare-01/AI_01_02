@@ -39,6 +39,18 @@ function dateLabel(iso: string) {
 
 const WELCOME_MESSAGE = "안녕하세요! 복약, 부작용에 대해서 무엇이든 질문하세요.";
 
+function formatAssistantContent(content: string): string[] {
+  const normalized = content
+    .replace(/\r\n/g, "\n")
+    .replace(/([.!?]|다\.)\s*(💊|⚠️|✅|☕|📱|🥗|🍽️|🏃|😴|📞)/g, "$1\n\n$2")
+    .replace(/([.!?]|다\.)\s*(복약|약물|운동|식단|영양|디지털 사용|카페인|수면|주의|도움)(?=[:：\s])/g, "$1\n\n$2")
+    .replace(/\s*•\s*/g, "\n• ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return normalized ? normalized.split("\n\n") : [];
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -281,7 +293,17 @@ export default function Chat() {
                     : "bg-white border border-gray-200/60 text-gray-700 rounded-bl-md shadow-sm"
                 }`}
               >
-                {msg.content}
+                {msg.role === "assistant" ? (
+                  <div className="space-y-3">
+                    {formatAssistantContent(msg.content).map((paragraph, idx) => (
+                      <p key={`${idx}-${paragraph.slice(0, 24)}`} className="whitespace-pre-wrap">
+                        {paragraph}
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                )}
                 {msg.streaming && (
                   <span className="inline-block w-1.5 h-4 bg-green-300 animate-pulse ml-1 rounded-sm align-middle" />
                 )}
