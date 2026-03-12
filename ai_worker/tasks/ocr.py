@@ -91,7 +91,7 @@ async def _parse_medications_with_llm(extracted_text: str, raw_blocks: list[dict
     )
     parsed = json.loads(response.choices[0].message.content or "{}")
     overall_confidence = parsed.get("overall_confidence", 1.0)
-    
+
     # 후처리 검증 (신뢰도 강제 감점 로직)
     medications = parsed.get("medications", [])
     for med in medications:
@@ -100,7 +100,7 @@ async def _parse_medications_with_llm(extracted_text: str, raw_blocks: list[dict
             if not med.get(req_field):
                 med["confidence"] = 0.7
                 overall_confidence = min(overall_confidence, 0.7)
-                
+
         # 2. 텍스트 품질 감점 (용법 관련 필드 합쳐서 2글자 이하)
         # 스키마 상 intake_time 또는 administration_timing
         usage_text = str(med.get("intake_time", "") or "") + str(med.get("administration_timing", "") or "")
@@ -108,9 +108,9 @@ async def _parse_medications_with_llm(extracted_text: str, raw_blocks: list[dict
         if len(usage_text) <= 2:
             med["confidence"] = 0.7
             overall_confidence = min(overall_confidence, 0.7)
-            
+
     parsed["overall_confidence"] = overall_confidence
-            
+
     parsed["raw_blocks"] = raw_blocks
     parsed["processor"] = f"clova-ocr+openai-{config.OPENAI_CHAT_MODEL}"
     return parsed
