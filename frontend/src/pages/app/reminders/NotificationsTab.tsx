@@ -22,6 +22,19 @@ function isWithinOneWeek(createdAt: string) {
   return Date.now() - new Date(createdAt).getTime() <= ONE_WEEK_MS;
 }
 
+function formatNotificationTime(createdAt: string) {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 export default function NotificationsTab() {
   const [notifications, setNotifications] = useState<ApiNotification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,6 +151,9 @@ export default function NotificationsTab() {
                       {n.title}
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{n.message}</p>
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      {formatNotificationTime(n.created_at)}
+                    </p>
                   </div>
                   <div className="shrink-0">
                     {n.is_read ? (

@@ -9,6 +9,7 @@ from app.main import app
 from app.models.guides import GuideJob, GuideJobStatus
 from app.models.notifications import Notification, NotificationType
 from app.models.ocr import Document, DocumentType, OcrJob, OcrJobStatus
+from app.models.reminders import MedicationReminder
 from app.models.users import User
 
 
@@ -240,3 +241,31 @@ class TestNotificationApis(TestCase):
             ]
             assert len(weekly_alerts) == 1
             assert "가이드 생성 후 7일이 지났습니다" in weekly_alerts[0]["message"]
+
+    async def test_medication_dday_notification_created_once_per_day(self):
+        email = "noti_dday_daily_once@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01082228222")
+            user = await User.get(email=email)
+            today = datetime.now(config.TIMEZONE).date()
+            await MedicationReminder.create(
+                user=user,
+                medication_name="메틸페니데이트",
+                schedule_times=["09:00"],
+                dispensed_date=today - timedelta(days=1),
+                total_days=3,
+                enabled=True,
+            )
+
+            headers = {"Authorization": f"Bearer {access_token}"}
+            first = await client.get("/api/v1/notifications/unread-count", headers=headers)
+            second = await client.get("/api/v1/notifications/unread-count", headers=headers)
+
+            assert first.status_code == status.HTTP_200_OK
+            assert second.status_code == status.HTTP_200_OK
+
+            dday_notifications = await Notification.filter(
+                user_id=user.id,
+                type=NotificationType.MEDICATION_DDAY,
+            )
+            assert len(dday_notifications) == 1
