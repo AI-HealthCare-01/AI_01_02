@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
 
@@ -7,8 +7,8 @@ from app.dtos.base import BaseSerializerModel
 
 
 class BasicInfo(BaseModel):
-    height_cm: float
-    weight_kg: float
+    height_cm: Annotated[float, Field(gt=0, le=300)]
+    weight_kg: Annotated[float, Field(gt=0, le=500)]
     drug_allergies: list[str] = Field(default_factory=list)
 
 

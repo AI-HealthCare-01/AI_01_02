@@ -19,7 +19,7 @@ class TestChatApis(TestCase):
             json={
                 "email": email,
                 "password": "Password123!",
-                "name": "t",
+                "name": "테스터",
                 "gender": "MALE",
                 "birth_date": "1990-01-01",
                 "phone_number": phone,
@@ -50,7 +50,7 @@ class TestChatApis(TestCase):
             h = {"Authorization": f"Bearer {t}"}
             sid = (await c.post("/api/v1/chat/sessions", json={}, headers=h)).json()["id"]
             sr = await c.post(f"/api/v1/chat/sessions/{sid}/messages", json={"message": "hello"}, headers=h)
-            assert sr.status_code == status.HTTP_200_OK
+            assert sr.status_code == status.HTTP_201_CREATED
             assert sr.json()["role"] == "ASSISTANT"
             lr = await c.get(f"/api/v1/chat/sessions/{sid}/messages", headers=h)
             assert lr.json()["meta"]["total"] == 2
@@ -78,7 +78,7 @@ class TestChatApis(TestCase):
                 headers=h,
             )
 
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_201_CREATED
         system_content = mock_chat.await_args.kwargs["messages"][0]["content"]
         assert "[사용자 복약 정보]" in system_content
         assert "콘서타" in system_content
@@ -109,7 +109,7 @@ class TestChatApis(TestCase):
                 headers=h,
             )
 
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_201_CREATED
         system_content = mock_chat.await_args.kwargs["messages"][0]["content"]
         assert "[사용자 복약 정보]" not in system_content
 
@@ -136,7 +136,7 @@ class TestChatApis(TestCase):
                 headers=h,
             )
 
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_201_CREATED
         system_content = mock_chat.await_args.kwargs["messages"][0]["content"]
         assert "[사용자 복약 정보]" in system_content
         assert "메틸페니데이트" in system_content
@@ -180,7 +180,7 @@ class TestChatApis(TestCase):
                 headers=h,
             )
 
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_201_CREATED
         system_content = mock_chat.await_args.kwargs["messages"][0]["content"]
         assert "[사용자 생활습관 정보]" in system_content
         assert "예상 수면 시간 7시간" in system_content
@@ -217,7 +217,7 @@ class TestChatApis(TestCase):
                 headers=h,
             )
 
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_201_CREATED
         system_content = mock_chat.await_args.kwargs["messages"][0]["content"]
         assert "[사용자 생활습관 정보]" in system_content
         assert "예상 수면 시간 5.5시간" in system_content
@@ -242,7 +242,7 @@ class TestChatApis(TestCase):
                 headers=h,
             )
 
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_201_CREATED
         body = r.json()
         assert "더 도와드릴 수 있는 내용" in body["content"]
         assert body["content"].count("• ") >= 3
@@ -269,7 +269,7 @@ class TestChatApis(TestCase):
                 headers=h,
             )
 
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_201_CREATED
         body = r.json()
         assert "복약 안전 안내" in body["content"]
         assert "추가 복용은 하지 마세요." in body["content"]
@@ -326,7 +326,7 @@ class TestChatApis(TestCase):
                 headers=h,
             )
 
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_201_CREATED
         body = r.json()
         assert len(body["references"]) == 1
         assert body["references"][0]["document_id"] == "adhd-med-001"
@@ -342,7 +342,7 @@ class TestChatApis(TestCase):
                 json={"message": "\uc790\uc0b4\ud558\uace0 \uc2f6\uc5b4\uc694"},
                 headers=h,
             )
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_201_CREATED
         assert "1577-0199" in r.json()["content"] or "1393" in r.json()["content"]
 
     async def test_delete_and_404(self):

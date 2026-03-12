@@ -11,7 +11,6 @@ class DocumentUploadResponse(BaseSerializerModel):
     id: str
     document_type: DocumentType
     file_name: str
-    file_path: str
     file_size: int
     mime_type: str
     uploaded_at: datetime

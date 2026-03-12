@@ -1,5 +1,4 @@
 from datetime import date, datetime
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -20,7 +19,7 @@ class ReminderResponse(BaseModel):
     id: str
     medication_name: str
     dose: str | None
-    schedule_times: list[Any]
+    schedule_times: list[str]
     start_date: date | None
     end_date: date | None
     dispensed_date: date | None

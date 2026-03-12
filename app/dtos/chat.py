@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.chat import ChatMessageStatus, ChatRole, ChatSessionStatus
 
@@ -30,7 +30,7 @@ class ChatPromptOptionsResponse(BaseModel):
 
 
 class ChatMessageSendRequest(BaseModel):
-    message: str
+    message: str = Field(min_length=1, max_length=5000)
     stream: bool = True
 
 
