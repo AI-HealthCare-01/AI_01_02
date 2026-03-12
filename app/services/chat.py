@@ -576,12 +576,7 @@ async def _select_used_references(answer: str, rag_docs: list) -> list[dict[str,
                 {"role": "system", "content": _REFERENCE_SELECTION_PROMPT},
                 {
                     "role": "user",
-                    "content": (
-                        "[챗봇 답변]\n"
-                        f"{answer}\n\n"
-                        "[후보 문헌]\n"
-                        f"{json.dumps(candidates, ensure_ascii=False)}"
-                    ),
+                    "content": (f"[챗봇 답변]\n{answer}\n\n[후보 문헌]\n{json.dumps(candidates, ensure_ascii=False)}"),
                 },
             ],
             temperature=0.0,
@@ -760,9 +755,13 @@ class ChatService:
             )
             return last_msg  # type: ignore[return-value]
 
-        profile, user_health_profile, rag_docs, needs_clarification, retrieved_doc_ids = await self._prepare_rag_context(
-            user=user, intent=intent, message=message
-        )
+        (
+            profile,
+            user_health_profile,
+            rag_docs,
+            needs_clarification,
+            retrieved_doc_ids,
+        ) = await self._prepare_rag_context(user=user, intent=intent, message=message)
         medication_related = _is_medication_related_question(intent=intent, message=message)
         medication_ctx = await _prepare_medication_context(
             user=user,
@@ -985,6 +984,7 @@ class ChatService:
 
         early = await self._check_early_exit(session=session, message=message, intent=intent)
         if early is not None:
+
             async def _early_event_gen() -> AsyncGenerator[tuple[str, dict[str, Any]]]:
                 async for token in early:
                     yield "token", {"content": token}
@@ -999,15 +999,20 @@ class ChatService:
             reminders=reminders,
         )
         if risk_exit is not None:
+
             async def _risk_event_gen() -> AsyncGenerator[tuple[str, dict[str, Any]]]:
                 async for token in risk_exit:
                     yield "token", {"content": token}
 
             return _risk_event_gen()
 
-        profile, user_health_profile, rag_docs, needs_clarification, retrieved_doc_ids = await self._prepare_rag_context(
-            user=user, intent=intent, message=message
-        )
+        (
+            profile,
+            user_health_profile,
+            rag_docs,
+            needs_clarification,
+            retrieved_doc_ids,
+        ) = await self._prepare_rag_context(user=user, intent=intent, message=message)
         medication_related = _is_medication_related_question(intent=intent, message=message)
         medication_ctx = await _prepare_medication_context(
             user=user,
@@ -1021,6 +1026,7 @@ class ChatService:
             session=session, message=message, intent=intent, needs_clarification=needs_clarification
         )
         if clarification_gen is not None:
+
             async def _clarification_event_gen() -> AsyncGenerator[tuple[str, dict[str, Any]]]:
                 async for token in clarification_gen:
                     yield "token", {"content": token}
@@ -1084,7 +1090,7 @@ class ChatService:
                 assistant_msg.content = final_reply
                 stripped_reply = raw_reply.rstrip()
                 if final_reply != raw_reply and final_reply.startswith(stripped_reply):
-                    yield "token", {"content": final_reply[len(stripped_reply):]}
+                    yield "token", {"content": final_reply[len(stripped_reply) :]}
                 assistant_msg.status = ChatMessageStatus.COMPLETED
                 if assistant_msg.references_json:
                     yield "reference", {"references": assistant_msg.references_json}

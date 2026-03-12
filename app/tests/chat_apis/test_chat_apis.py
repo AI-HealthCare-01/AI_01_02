@@ -225,7 +225,11 @@ class TestChatApis(TestCase):
         assert "스마트폰 사용 하루 5시간" in system_content
 
     @patch("app.services.chat.hybrid_search", new_callable=AsyncMock, return_value=([], False))
-    @patch("app.services.chat.chat_completion", new_callable=AsyncMock, return_value="메틸페니데이트는 도파민과 노르에피네프린에 영향을 줍니다.")
+    @patch(
+        "app.services.chat.chat_completion",
+        new_callable=AsyncMock,
+        return_value="메틸페니데이트는 도파민과 노르에피네프린에 영향을 줍니다.",
+    )
     @patch("app.services.chat._classify_intent", new_callable=AsyncMock, return_value="medical")
     async def test_follow_up_questions_appended(self, _mock_intent, _mock_chat, _mock_search):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -305,7 +309,7 @@ class TestChatApis(TestCase):
                     "https://www.sportsmed.or.kr",
                     "other content",
                     0.72,
-                )
+                ),
             ],
             False,
         ),
