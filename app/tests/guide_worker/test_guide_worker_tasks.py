@@ -2,7 +2,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from tortoise.contrib.test import TestCase
 
-from ai_worker.tasks.guide import GUIDE_SAFETY_NOTICE, compute_retry_delay_seconds, process_guide_job
+from ai_worker.tasks.guide import GUIDE_SAFETY_NOTICE, process_guide_job
+from ai_worker.tasks.queue import compute_retry_delay_seconds
 from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus, GuideResult
 from app.models.health_profiles import UserHealthProfile
 from app.models.notifications import Notification, NotificationType
@@ -179,11 +180,7 @@ class TestGuideWorkerTasks(TestCase):
         assert guide_job.status == GuideJobStatus.SUCCEEDED
 
     async def test_retry_backoff_delay_calculation(self):
-        with (
-            patch("ai_worker.tasks.guide.config.GUIDE_RETRY_BACKOFF_BASE_SECONDS", 2),
-            patch("ai_worker.tasks.guide.config.GUIDE_RETRY_BACKOFF_MAX_SECONDS", 10),
-        ):
-            assert compute_retry_delay_seconds(1) == 2
-            assert compute_retry_delay_seconds(2) == 4
-            assert compute_retry_delay_seconds(3) == 8
-            assert compute_retry_delay_seconds(4) == 10
+        assert compute_retry_delay_seconds(1, base=2, maximum=10) == 2
+        assert compute_retry_delay_seconds(2, base=2, maximum=10) == 4
+        assert compute_retry_delay_seconds(3, base=2, maximum=10) == 8
+        assert compute_retry_delay_seconds(4, base=2, maximum=10) == 10

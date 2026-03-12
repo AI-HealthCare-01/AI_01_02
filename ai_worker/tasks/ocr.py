@@ -1,4 +1,3 @@
-import asyncio
 import base64
 import json
 import time
@@ -7,16 +6,14 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import httpx
 from openai import AsyncOpenAI
-from redis.asyncio import Redis
-from redis.exceptions import RedisError
-from redis.exceptions import TimeoutError as RedisTimeoutError
 from tortoise.transactions import in_transaction
 
 from ai_worker.core import config
+from ai_worker.tasks.queue import QueueConsumer
 from app.models.ocr import OcrFailureCode, OcrJob, OcrJobStatus
 
 _PARSE_SYSTEM_PROMPT = (
@@ -42,7 +39,8 @@ async def _call_clova_ocr(file_bytes: bytes, file_name: str) -> tuple[str, list[
         raise ValueError("Clova OCR 설정이 없습니다. CLOVA_OCR_APIGW_URL, CLOVA_OCR_SECRET을 설정하세요.")
 
     ext = Path(file_name).suffix.lstrip(".").lower()
-    fmt = "pdf" if ext == "pdf" else "jpg"
+    _SUPPORTED_FORMATS = {"jpg", "jpeg", "png", "pdf", "tiff", "tif"}
+    fmt = ext if ext in _SUPPORTED_FORMATS else "jpg"
     payload = {
         "version": "V2",
         "requestId": str(uuid.uuid4()),
@@ -79,7 +77,13 @@ async def _call_clova_ocr(file_bytes: bytes, file_name: str) -> tuple[str, list[
 
 async def _parse_medications_with_llm(extracted_text: str, raw_blocks: list[dict]) -> dict:
     """LLM으로 약물 정보 파싱 → structured_data"""
-    client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
+    if not config.OPENAI_API_KEY:
+        raise ValueError("OPENAI_API_KEY is not configured — cannot parse OCR text")
+    client = AsyncOpenAI(
+        api_key=config.OPENAI_API_KEY,
+        base_url=config.OPENAI_BASE_URL,
+        timeout=config.GUIDE_LLM_TIMEOUT_SECONDS,
+    )
     response = await client.chat.completions.create(
         model=config.OPENAI_CHAT_MODEL,
         messages=[
@@ -124,105 +128,17 @@ ALLOWED_STATUS_TRANSITIONS: dict[OcrJobStatus, set[OcrJobStatus]] = {
 }
 
 
-def compute_retry_delay_seconds(retry_count: int) -> int:
-    attempt = max(retry_count - 1, 0)
-    delay = config.OCR_RETRY_BACKOFF_BASE_SECONDS * (2**attempt)
-    return min(delay, config.OCR_RETRY_BACKOFF_MAX_SECONDS)
-
-
-class OcrQueueConsumer:
+class OcrQueueConsumer(QueueConsumer):
     def __init__(self, logger: Logger) -> None:
-        self.logger = logger
-        self.client = Redis(
-            host=config.REDIS_HOST,
-            port=config.REDIS_PORT,
-            db=config.REDIS_DB,
-            password=config.REDIS_PASSWORD,
-            decode_responses=True,
-            socket_connect_timeout=config.REDIS_SOCKET_TIMEOUT_SECONDS,
-            socket_timeout=config.REDIS_SOCKET_TIMEOUT_SECONDS,
+        super().__init__(
+            logger,
+            queue_key=config.OCR_QUEUE_KEY,
+            retry_queue_key=config.OCR_RETRY_QUEUE_KEY,
+            dead_letter_queue_key=config.OCR_DEAD_LETTER_QUEUE_KEY,
+            block_timeout_seconds=config.OCR_QUEUE_BLOCK_TIMEOUT_SECONDS,
+            retry_backoff_base_seconds=config.OCR_RETRY_BACKOFF_BASE_SECONDS,
+            retry_backoff_max_seconds=config.OCR_RETRY_BACKOFF_MAX_SECONDS,
         )
-
-    async def close(self) -> None:
-        await self.client.aclose()
-
-    async def pop_job_id(self) -> int | None:
-        try:
-            popped = await cast(
-                Awaitable[list[Any] | None],
-                self.client.blpop([config.OCR_QUEUE_KEY], timeout=config.OCR_QUEUE_BLOCK_TIMEOUT_SECONDS),
-            )
-        except RedisTimeoutError:
-            # BLPOP idle timeout: 큐가 비어있는 정상 상태이므로 경고를 남기지 않는다.
-            return None
-        except RedisError:
-            self.logger.warning("redis queue consume failed")
-            await asyncio.sleep(1)
-            return None
-
-        if popped is None:
-            return None
-
-        _, raw_job_id = popped
-        try:
-            return int(raw_job_id)
-        except ValueError:
-            self.logger.warning("invalid queue payload received: %s", raw_job_id)
-            return None
-
-    async def flush_due_retries(self, *, batch_size: int) -> int:
-        now = int(time.time())
-        moved = 0
-        try:
-            while moved < batch_size:
-                members = await self.client.zrangebyscore(
-                    config.OCR_RETRY_QUEUE_KEY,
-                    min="-inf",
-                    max=now,
-                    start=0,
-                    num=batch_size - moved,
-                )
-                if not members:
-                    break
-
-                for member in members:
-                    removed = await self.client.zrem(config.OCR_RETRY_QUEUE_KEY, member)
-                    if not removed:
-                        continue
-                    await cast(Awaitable[int], self.client.rpush(config.OCR_QUEUE_KEY, member))
-                    moved += 1
-                    if moved >= batch_size:
-                        break
-        except RedisError:
-            self.logger.warning("redis retry queue flush failed")
-            return moved
-
-        if moved:
-            self.logger.info("moved %s retry jobs back to main queue", moved)
-        return moved
-
-    async def schedule_retry(self, job_id: int, retry_count: int) -> None:
-        delay_seconds = compute_retry_delay_seconds(retry_count)
-        retry_at = int(time.time()) + delay_seconds
-        try:
-            await self.client.zadd(config.OCR_RETRY_QUEUE_KEY, {str(job_id): retry_at})
-            self.logger.warning(
-                "ocr job scheduled for retry (job_id=%s retry_count=%s delay=%ss)",
-                job_id,
-                retry_count,
-                delay_seconds,
-            )
-        except RedisError:
-            self.logger.warning("redis retry schedule failed (job_id=%s retry_count=%s)", job_id, retry_count)
-
-    async def send_to_dead_letter(self, payload: dict[str, Any]) -> None:
-        try:
-            await cast(
-                Awaitable[int],
-                self.client.rpush(config.OCR_DEAD_LETTER_QUEUE_KEY, json.dumps(payload, ensure_ascii=False)),
-            )
-        except RedisError:
-            self.logger.warning("redis dead letter enqueue failed (payload=%s)", payload)
 
 
 def _ensure_transition(from_status: OcrJobStatus, to_status: OcrJobStatus) -> None:
