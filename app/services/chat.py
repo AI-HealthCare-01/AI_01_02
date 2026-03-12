@@ -214,7 +214,7 @@ def _build_profile_context(
 def _to_float(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return float(value)
     if isinstance(value, str) and value.strip():
         try:
@@ -246,6 +246,7 @@ def _compute_sleep_hours_from_input(sleep_input: dict[str, Any]) -> float | None
     wake_total = wake_hours * 60 + wake_minutes
     duration_minutes = (wake_total - bed_total) % (24 * 60)
     return round(duration_minutes / 60, 2)
+
 
 def _build_lifestyle_context(  # noqa: C901
     profile: HealthProfile | None,
@@ -974,6 +975,7 @@ class ChatService:
             yield clarification
 
         return _clarification_gen()
+
     async def stream_message(  # noqa: C901
         self, *, user: User, session_id: int, message: str
     ) -> AsyncGenerator[tuple[str, dict[str, Any]]]:
