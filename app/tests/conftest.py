@@ -2,7 +2,7 @@ import asyncio
 import os
 from collections.abc import Generator
 from typing import Any
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 import pytest_asyncio
@@ -42,6 +42,17 @@ def initialize(request: FixtureRequest) -> Generator[None]:
     yield
     finalizer()
     loop.close()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def mock_redis_jti_check() -> Generator[None]:
+    """Redis가 없는 테스트 환경에서 is_jti_blacklisted를 mock (항상 False 반환)."""
+    mock = AsyncMock(return_value=False)
+    with (
+        patch("app.services.auth.is_jti_blacklisted", mock),
+        patch("app.dependencies.security.is_jti_blacklisted", mock),
+    ):
+        yield
 
 
 @pytest_asyncio.fixture(autouse=True, scope="session")  # type: ignore[type-var]

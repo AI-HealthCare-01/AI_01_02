@@ -55,7 +55,7 @@ async def token_refresh(
 ) -> Response:
     if not refresh_token:
         raise AppException(ErrorCode.AUTH_INVALID_TOKEN, developer_message="Refresh token is missing.")
-    access_token = jwt_service.refresh_jwt(refresh_token)
+    access_token = await jwt_service.refresh_jwt(refresh_token)
     return Response(
         content=TokenRefreshResponse(access_token=str(access_token)).model_dump(), status_code=status.HTTP_200_OK
     )

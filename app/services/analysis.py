@@ -160,14 +160,14 @@ class AnalysisService:
                         for allergy in drug_allergies:
                             allergy_text = str(allergy or "")
                             if allergy_text and allergy_text.lower() in drug_name.lower():
-                                guidance_message = await generate_allergy_medication_guidance(
-                                    medication_name=drug_name,
-                                    allergy_substance=allergy_text,
-                                )
                                 alert_key = f"ALLERGY::{allergy_text}::{drug_name}"
                                 if alert_key in seen_emergency_keys:
                                     continue
                                 seen_emergency_keys.add(alert_key)
+                                guidance_message = await generate_allergy_medication_guidance(
+                                    medication_name=drug_name,
+                                    allergy_substance=allergy_text,
+                                )
                                 allergy_alerts.append(
                                     {
                                         "medication_name": drug_name,

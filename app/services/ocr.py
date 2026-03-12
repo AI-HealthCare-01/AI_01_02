@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -40,7 +41,7 @@ class OcrService:
         user_dir = media_root / "documents" / str(user.id)
         user_dir.mkdir(parents=True, exist_ok=True)
 
-        safe_file_name = Path(file.filename).name
+        safe_file_name = re.sub(r"[^\w.\-]", "_", Path(file.filename).name)
         stored_file_name = f"{uuid4().hex}_{safe_file_name}"
         target_path = user_dir / stored_file_name
         temp_storage_key = target_path.relative_to(media_root).as_posix()
@@ -61,16 +62,11 @@ class OcrService:
                     mime_type=file.content_type or "application/octet-stream",
                 )
             return document
-        except AppException:
-            target_path.unlink(missing_ok=True)
-            raise
-        except Exception:
+        except BaseException:
             target_path.unlink(missing_ok=True)
             raise
 
-    def _dispose_uploaded_document_file(self, *, temp_storage_key: str, job_id: int) -> None:
-        from datetime import datetime  # noqa: PLC0415
-
+    async def _dispose_uploaded_document_file(self, *, temp_storage_key: str, job_id: int) -> None:
         absolute_file_path = Path(config.MEDIA_DIR).resolve() / temp_storage_key
         try:
             absolute_file_path.unlink(missing_ok=True)
@@ -80,21 +76,9 @@ class OcrService:
             )
             return
         # REQ-126: 폐기 시각 기록
-        import asyncio  # noqa: PLC0415
-
-        async def _mark_disposed() -> None:
-            from app.models.ocr import Document  # noqa: PLC0415
-
-            job = await OcrJob.get_or_none(id=job_id)
-            if job:
-                await Document.filter(id=job.document_id).update(disposed_at=datetime.now(config.TIMEZONE))
-
-        try:
-            loop = asyncio.get_running_loop()
-            if loop.is_running():
-                loop.create_task(_mark_disposed())
-        except RuntimeError:
-            pass
+        job = await OcrJob.get_or_none(id=job_id)
+        if job:
+            await Document.filter(id=job.document_id).update(disposed_at=datetime.now(config.TIMEZONE))
 
     async def create_ocr_job(self, *, user: User, document_id: int) -> OcrJob:
         document = await self.repo.get_user_document(document_id=document_id, user_id=user.id)
@@ -119,7 +103,7 @@ class OcrService:
                 error_message="[PROCESSING_ERROR] OCR queue publish failed.",
                 completed_at=datetime.now(config.TIMEZONE),
             )
-            self._dispose_uploaded_document_file(temp_storage_key=document.temp_storage_key, job_id=job.id)
+            await self._dispose_uploaded_document_file(temp_storage_key=document.temp_storage_key, job_id=job.id)
             default_logger.exception("ocr queue publish failed (job_id=%s)", job.id)
             raise AppException(
                 ErrorCode.OCR_QUEUE_UNAVAILABLE, developer_message="OCR 작업 큐 등록에 실패했습니다."
@@ -189,11 +173,11 @@ class OcrService:
             if isinstance(meds, list):
                 await self.reminder_service.sync_from_ocr_medications(user=user, medications=meds)
 
-        await self.guide_automation_service.trigger_refresh_for_ocr_job(
-            user_id=user.id,
-            ocr_job_id=updated_job.id,
-            reason="ocr_review_corrected",
-        )
+            await self.guide_automation_service.trigger_refresh_for_ocr_job(
+                user_id=user.id,
+                ocr_job_id=updated_job.id,
+                reason="ocr_review_corrected",
+            )
         return updated_job
 
     async def confirm_ocr_result(self, *, user: User, job_id: int, request: OcrResultConfirmRequest) -> OcrJob:

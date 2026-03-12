@@ -23,7 +23,7 @@ class TestGuideApis(TestCase):
             new=AsyncMock(return_value=None),
         )
         self._guide_queue_patcher = patch(
-            "app.services.guides.GuideQueuePublisher.enqueue_job",
+            "app.services.guide_automation.GuideQueuePublisher.enqueue_job",
             new=AsyncMock(return_value=None),
         )
         self._ocr_queue_patcher.start()
@@ -177,7 +177,7 @@ class TestGuideApis(TestCase):
             await self._mark_ocr_succeeded(ocr_job_id=ocr_job_id)
 
             with patch(
-                "app.services.guides.GuideQueuePublisher.enqueue_job",
+                "app.services.guide_automation.GuideQueuePublisher.enqueue_job",
                 new=AsyncMock(side_effect=RuntimeError("redis unavailable")),
             ):
                 response = await client.post("/api/v1/guides/jobs", headers=headers, json={"ocr_job_id": ocr_job_id})
@@ -190,7 +190,7 @@ class TestGuideApis(TestCase):
         assert failed_job.status == GuideJobStatus.FAILED
         assert failed_job.failure_code == GuideFailureCode.PROCESSING_ERROR
         assert failed_job.completed_at is not None
-        assert failed_job.error_message == "[PROCESSING_ERROR] guide queue publish failed."
+        assert failed_job.error_message == "[PROCESSING_ERROR] guide queue publish failed (create_guide_job)."
 
     async def test_get_guide_result_not_ready(self):
         email = "guide_result_not_ready@example.com"

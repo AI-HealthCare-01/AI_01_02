@@ -63,32 +63,32 @@ class MedicationInfoService:
 
         names_to_try = [name]
         if dose_mg is not None:
-            dose_str = self.psych_drug_service._format_dose(dose_mg)
+            dose_str = PsychDrugService.format_dose(dose_mg)
             if dose_str and dose_str not in name:
                 names_to_try.insert(0, f"{name} {dose_str}mg")
 
         payload = None
-        for query_name in names_to_try:
-            params = {
-                "ServiceKey": service_key,
-                "itemName": query_name,
-                "type": "json",
-                "numOfRows": 1,
-                "pageNo": 1,
-            }
-            try:
-                async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            for query_name in names_to_try:
+                params = {
+                    "ServiceKey": service_key,
+                    "itemName": query_name,
+                    "type": "json",
+                    "numOfRows": 1,
+                    "pageNo": 1,
+                }
+                try:
                     resp = await client.get(self._BASE_URL, params=params)
                     resp.raise_for_status()
                     payload = resp.json()
-            except httpx.HTTPError:
+                except httpx.HTTPError:
+                    payload = None
+                    continue
+                body = payload.get("response", {}).get("body", {}) if isinstance(payload, dict) else {}
+                items = body.get("items", {}).get("item") if isinstance(body, dict) else None
+                if items:
+                    break
                 payload = None
-                continue
-            body = payload.get("response", {}).get("body", {}) if isinstance(payload, dict) else {}
-            items = body.get("items", {}).get("item") if isinstance(body, dict) else None
-            if items:
-                break
-            payload = None
 
         if not payload:
             return None

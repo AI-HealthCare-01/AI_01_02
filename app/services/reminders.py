@@ -87,15 +87,14 @@ class ReminderService:
             dispensed_date__isnull=False,
             total_days__isnull=False,
         )
-        count = 0
-        for r in reminders:
-            if r.dispensed_date is None or r.total_days is None:
-                continue
-            depletion = r.dispensed_date + timedelta(days=r.total_days)
-            if depletion < today:
-                r.enabled = False
-                await r.save(update_fields=["enabled", "updated_at"])
-                count += 1
+        depleted_ids = [
+            r.id
+            for r in reminders
+            if r.dispensed_date + timedelta(days=r.total_days) < today
+        ]
+        if not depleted_ids:
+            return 0
+        count = await MedicationReminder.filter(id__in=depleted_ids).update(enabled=False)
         return count
 
     async def get_dday_reminders(self, *, user: User, days: int) -> list[DdayReminderItem]:
@@ -108,8 +107,6 @@ class ReminderService:
         )
         result = []
         for r in reminders:
-            if r.dispensed_date is None or r.total_days is None:
-                continue
             depletion = r.dispensed_date + timedelta(days=r.total_days)
             remaining = (depletion - today).days
             if 0 <= remaining <= days:

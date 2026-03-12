@@ -3,7 +3,7 @@ from app.models.profiles import HealthProfile
 from app.models.users import User
 
 
-class HealthProfileService:
+class OnboardingProfileService:
     async def upsert_profile(self, *, user: User, data: HealthProfileUpsertRequest) -> HealthProfile:
         profile, _ = await HealthProfile.update_or_create(
             defaults={

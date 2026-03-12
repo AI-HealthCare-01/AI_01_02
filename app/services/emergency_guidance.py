@@ -117,8 +117,8 @@ def compute_sleep_hours(*, bed_time: str | None, wake_time: str | None) -> float
         wake = datetime.strptime(wake_time, "%H:%M")
     except ValueError:
         return None
-    delta = (wake - bed).seconds / 3600
-    if delta <= 0:
+    delta = (wake - bed).total_seconds() / 3600
+    if delta < 0:
         delta += 24
     return round(delta, 2)
 

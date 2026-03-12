@@ -52,8 +52,8 @@ async def is_jti_blacklisted(jti: str) -> bool:
         result = await cast(Awaitable, client.exists(f"{TOKEN_BLACKLIST_PREFIX}{jti}"))
         return bool(result)
     except RedisError:
-        logger.warning("failed to check jti blacklist — treating as not blacklisted", exc_info=True)
-        return False
+        logger.warning("failed to check jti blacklist — treating as blacklisted (fail-closed)", exc_info=True)
+        return True
 
 
 class AuthService:
@@ -90,13 +90,13 @@ class AuthService:
         user = await self.user_repo.get_user_by_email(email)
         if not user:
             raise AppException(
-                ErrorCode.AUTH_INVALID_TOKEN, developer_message="이메일 또는 비밀번호가 올바르지 않습니다."
+                ErrorCode.AUTH_INVALID_CREDENTIALS, developer_message="이메일 또는 비밀번호가 올바르지 않습니다."
             )
 
         # 비밀번호 검증
         if not verify_password(data.password, user.hashed_password):
             raise AppException(
-                ErrorCode.AUTH_INVALID_TOKEN, developer_message="이메일 또는 비밀번호가 올바르지 않습니다."
+                ErrorCode.AUTH_INVALID_CREDENTIALS, developer_message="이메일 또는 비밀번호가 올바르지 않습니다."
             )
 
         # 활성 사용자 체크
