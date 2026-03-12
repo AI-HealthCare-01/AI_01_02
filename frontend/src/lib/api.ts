@@ -12,6 +12,12 @@ export function clearToken() {
 
 let _refreshPromise: Promise<string | null> | null = null;
 
+function extractErrorMessage(err: Record<string, unknown>, status: number): string {
+  const detail = err?.detail;
+  const detailMsg = Array.isArray(detail) ? detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join(", ") : (detail as { message?: string })?.message;
+  return (err?.code as string) ?? detailMsg ?? (err?.message as string) ?? `HTTP ${status}`;
+}
+
 async function refreshAccessToken(): Promise<string | null> {
   try {
     const res = await fetch(`${BASE}/auth/token/refresh`, { credentials: "include" });
@@ -56,9 +62,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    const detail = err?.detail;
-    const detailMsg = Array.isArray(detail) ? detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join(", ") : detail?.message;
-    throw new Error(err?.code ?? detailMsg ?? err?.message ?? `HTTP ${res.status}`);
+    throw new Error(extractErrorMessage(err, res.status));
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -90,9 +94,7 @@ async function requestForm<T>(path: string, body: FormData): Promise<T> {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    const detail = err?.detail;
-    const detailMsg = Array.isArray(detail) ? detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join(", ") : detail?.message;
-    throw new Error(err?.code ?? detailMsg ?? err?.message ?? `HTTP ${res.status}`);
+    throw new Error(extractErrorMessage(err, res.status));
   }
   return res.json();
 }

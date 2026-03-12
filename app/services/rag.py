@@ -6,18 +6,17 @@ Dense(벡터) + BM25(키워드) 결합 검색
 from __future__ import annotations
 
 import asyncio
+import logging
 from functools import lru_cache
 from typing import Any
-
-import logging
 
 import chromadb
 from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
 
 from app.core import config
+from app.services.knowledge.adhd_docs import ADHD_DOCUMENTS
 
 logger = logging.getLogger(__name__)
-from app.services.knowledge.adhd_docs import ADHD_DOCUMENTS
 
 
 class RagResult:

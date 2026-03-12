@@ -466,7 +466,7 @@ async def _generate_lifestyle_guide_with_llm(
         client = AsyncOpenAI(
             api_key=config.OPENAI_API_KEY,
             base_url=config.OPENAI_BASE_URL,
-            timeout=config.GUIDE_LLM_TIMEOUT_SECONDS,
+            timeout=config.LLM_TIMEOUT_SECONDS,
         )
         response = await client.chat.completions.create(
             model=config.OPENAI_GUIDE_MODEL,

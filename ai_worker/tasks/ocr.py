@@ -16,6 +16,8 @@ from ai_worker.core import config
 from ai_worker.tasks.queue import QueueConsumer
 from app.models.ocr import OcrFailureCode, OcrJob, OcrJobStatus
 
+_SUPPORTED_IMAGE_FORMATS = {"jpg", "jpeg", "png", "pdf", "tiff", "tif"}
+
 _PARSE_SYSTEM_PROMPT = (
     "처방전/약봉투 OCR 텍스트에서 약물 정보를 추출하세요. "
     "각 필드 설명: "
@@ -39,8 +41,7 @@ async def _call_clova_ocr(file_bytes: bytes, file_name: str) -> tuple[str, list[
         raise ValueError("Clova OCR 설정이 없습니다. CLOVA_OCR_APIGW_URL, CLOVA_OCR_SECRET을 설정하세요.")
 
     ext = Path(file_name).suffix.lstrip(".").lower()
-    _SUPPORTED_FORMATS = {"jpg", "jpeg", "png", "pdf", "tiff", "tif"}
-    fmt = ext if ext in _SUPPORTED_FORMATS else "jpg"
+    fmt = ext if ext in _SUPPORTED_IMAGE_FORMATS else "jpg"
     payload = {
         "version": "V2",
         "requestId": str(uuid.uuid4()),
@@ -82,7 +83,7 @@ async def _parse_medications_with_llm(extracted_text: str, raw_blocks: list[dict
     client = AsyncOpenAI(
         api_key=config.OPENAI_API_KEY,
         base_url=config.OPENAI_BASE_URL,
-        timeout=config.GUIDE_LLM_TIMEOUT_SECONDS,
+        timeout=config.LLM_TIMEOUT_SECONDS,
     )
     response = await client.chat.completions.create(
         model=config.OPENAI_CHAT_MODEL,

@@ -74,7 +74,7 @@ class NotificationService:
             existing_dday_notifications = await Notification.filter(
                 user_id=user.id,
                 type=NotificationType.MEDICATION_DDAY,
-            )
+            ).only("id", "payload", "created_at")
             today = datetime.now(config.TIMEZONE).date()
             existing_keys: set[tuple[str, int]] = set()
             existing_daily_medication_keys: set[str] = set()
@@ -121,7 +121,7 @@ class NotificationService:
             existing_alert_notifications = await Notification.filter(
                 user_id=user.id,
                 type=NotificationType.HEALTH_ALERT,
-            )
+            ).only("id", "payload")
             existing_alert_keys: set[str] = set()
             for notification in existing_alert_notifications:
                 payload = notification.payload if isinstance(notification.payload, dict) else {}
