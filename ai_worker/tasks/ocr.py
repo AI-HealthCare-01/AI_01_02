@@ -115,7 +115,6 @@ async def _parse_medications_with_llm(extracted_text: str, raw_blocks: list[dict
     parsed["processor"] = f"clova-ocr+openai-{config.OPENAI_CHAT_MODEL}"
     return parsed
 
-
 ALLOWED_STATUS_TRANSITIONS: dict[OcrJobStatus, set[OcrJobStatus]] = {
     OcrJobStatus.QUEUED: {OcrJobStatus.PROCESSING},
     OcrJobStatus.PROCESSING: {OcrJobStatus.QUEUED, OcrJobStatus.SUCCEEDED, OcrJobStatus.FAILED},
@@ -123,12 +122,10 @@ ALLOWED_STATUS_TRANSITIONS: dict[OcrJobStatus, set[OcrJobStatus]] = {
     OcrJobStatus.FAILED: {OcrJobStatus.QUEUED},
 }
 
-
 def compute_retry_delay_seconds(retry_count: int) -> int:
     attempt = max(retry_count - 1, 0)
     delay = config.OCR_RETRY_BACKOFF_BASE_SECONDS * (2**attempt)
     return min(delay, config.OCR_RETRY_BACKOFF_MAX_SECONDS)
-
 
 class OcrQueueConsumer:
     def __init__(self, logger: Logger) -> None:

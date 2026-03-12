@@ -247,8 +247,7 @@ def _compute_sleep_hours_from_input(sleep_input: dict[str, Any]) -> float | None
     duration_minutes = (wake_total - bed_total) % (24 * 60)
     return round(duration_minutes / 60, 2)
 
-# noqa: C901
-def _build_lifestyle_context(
+def _build_lifestyle_context(  # noqa: C901
     profile: HealthProfile | None,
     user_health_profile: UserHealthProfile | None = None,
     *,
@@ -975,8 +974,7 @@ class ChatService:
             yield clarification
 
         return _clarification_gen()
-# noqa: C901
-    async def stream_message(
+    async def stream_message(  # noqa: C901
         self, *, user: User, session_id: int, message: str
     ) -> AsyncGenerator[tuple[str, dict[str, Any]]]:
         """REQ-038: 토큰 단위 SSE 스트리밍"""
