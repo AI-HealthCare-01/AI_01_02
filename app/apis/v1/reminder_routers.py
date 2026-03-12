@@ -25,6 +25,8 @@ def _serialize(r) -> ReminderResponse:  # type: ignore[no-untyped-def]
         schedule_times=r.schedule_times,
         start_date=r.start_date,
         end_date=r.end_date,
+        dispensed_date=r.dispensed_date,
+        total_days=r.total_days,
         enabled=r.enabled,
         created_at=r.created_at,
         updated_at=r.updated_at,

@@ -25,8 +25,10 @@ from app.db.databases import initialize_tortoise
 from app.dtos.errors import ApiError
 from app.services.chat import close_inactive_sessions
 from app.services.guide_automation import GuideAutomationService
+from app.services.reminders import ReminderService
 
 _SESSION_CLOSE_INTERVAL_SECONDS = 60
+_DEPLETION_CHECK_INTERVAL_SECONDS = 3600  # 1시간마다 소진 체크
 
 
 async def _session_auto_close_loop() -> None:
@@ -78,6 +80,18 @@ async def _run_migrations() -> None:
             logger.error("migration failed: %s | %s", name, e)
 
 
+async def _depletion_auto_disable_loop() -> None:
+    """소진된 리마인더를 주기적으로 자동 비활성화."""
+    while True:
+        await asyncio.sleep(_DEPLETION_CHECK_INTERVAL_SECONDS)
+        try:
+            count = await ReminderService.disable_depleted_reminders()
+            if count:
+                logger.info("depletion_auto_disable", extra={"disabled_count": count})
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("depletion_auto_disable_error", extra={"error": str(exc)})
+
+
 async def _guide_weekly_refresh_loop() -> None:
     service = GuideAutomationService()
     while True:
@@ -97,17 +111,23 @@ async def lifespan(application: FastAPI):
     await _run_migrations()
     session_task = asyncio.create_task(_session_auto_close_loop())
     weekly_refresh_task = asyncio.create_task(_guide_weekly_refresh_loop())
+    depletion_task = asyncio.create_task(_depletion_auto_disable_loop())
     try:
         yield
     finally:
         session_task.cancel()
         weekly_refresh_task.cancel()
+        depletion_task.cancel()
         try:
             await session_task
         except asyncio.CancelledError:
             pass
         try:
             await weekly_refresh_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await depletion_task
         except asyncio.CancelledError:
             pass
 

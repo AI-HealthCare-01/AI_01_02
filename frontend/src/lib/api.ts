@@ -454,6 +454,8 @@ export interface Reminder {
   schedule_times: string[];
   start_date: string | null;
   end_date: string | null;
+  dispensed_date: string | null;
+  total_days: number | null;
   enabled: boolean;
   created_at: string;
   updated_at: string;
@@ -493,6 +495,8 @@ export const reminderApi = {
       schedule_times: string[];
       start_date?: string;
       end_date?: string;
+      dispensed_date?: string;
+      total_days?: number;
       enabled?: boolean;
     },
   ) => request<Reminder>(`/reminders/${id}`, { method: "PATCH", body: JSON.stringify(data) }),

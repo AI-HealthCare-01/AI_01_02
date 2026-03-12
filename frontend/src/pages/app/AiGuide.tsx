@@ -219,8 +219,8 @@ export default function AiGuide() {
   }
 
   async function pollStatus(jobId: string) {
-    for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
+    for (let i = 0; i < 90; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
       if (cancelledRef.current) return;
       try {
         const s = await guideApi.getJobStatus(jobId);

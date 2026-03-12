@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Pill, ChevronDown, ChevronUp, AlertTriangle, Upload, BookOpen } from "lucide-react";
+import { Pill, ChevronDown, ChevronUp, AlertTriangle, Upload, BookOpen, Pencil, X, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { reminderApi, guideApi, Reminder, DdayReminder, GuideJobResult } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
@@ -22,6 +22,13 @@ function toDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+const TIME_OPTIONS = [
+  { label: "아침 (08:00)", value: "08:00" },
+  { label: "점심 (13:00)", value: "13:00" },
+  { label: "저녁 (19:00)", value: "19:00" },
+  { label: "취침 전 (22:00)", value: "22:00" },
+];
+
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────────────
 
 export default function Medications() {
@@ -32,6 +39,7 @@ export default function Medications() {
   const [weeklyRates, setWeeklyRates] = useState<Array<number | null>>(Array(7).fill(null));
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   function loadWeeklyRates() {
     try {
@@ -49,6 +57,21 @@ export default function Medications() {
       setWeeklyRates(parsed);
     } catch {
       setWeeklyRates(Array(7).fill(null));
+    }
+  }
+
+  async function reload() {
+    try {
+      const [remData, ddayData] = await Promise.all([
+        reminderApi.list(),
+        reminderApi.getDday(30),
+      ]);
+      setReminders(remData.items);
+      const map: Record<string, DdayReminder> = {};
+      for (const d of ddayData.items) map[d.medication_name] = d;
+      setDdayMap(map);
+    } catch (err) {
+      toast.error(toUserMessage(err));
     }
   }
 
@@ -87,6 +110,35 @@ export default function Medications() {
     }
     load();
   }, []); // eslint-disable-line
+
+  async function handleSave(id: string, data: {
+    medication_name: string;
+    dose?: string;
+    schedule_times: string[];
+    dispensed_date?: string;
+    total_days?: number;
+    enabled?: boolean;
+  }) {
+    try {
+      await reminderApi.update(id, data);
+      toast.success("약물 정보가 수정되었습니다.");
+      setEditingId(null);
+      await reload();
+    } catch (err) {
+      toast.error(toUserMessage(err));
+    }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await reminderApi.delete(id);
+      toast.success("약물이 삭제되었습니다.");
+      setEditingId(null);
+      await reload();
+    } catch (err) {
+      toast.error(toUserMessage(err));
+    }
+  }
 
   const active = reminders.filter((r) => r.enabled);
   const inactive = reminders.filter((r) => !r.enabled);
@@ -146,7 +198,11 @@ export default function Medications() {
                         reminder={r}
                         dday={ddayMap[r.medication_name]}
                         expanded={expandedId === r.id}
+                        editing={editingId === r.id}
                         onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                        onEdit={() => setEditingId(editingId === r.id ? null : r.id)}
+                        onSave={(data) => handleSave(r.id, data)}
+                        onDelete={() => handleDelete(r.id)}
                       />
                     ))}
                   </div>
@@ -164,7 +220,11 @@ export default function Medications() {
                         reminder={r}
                         dday={ddayMap[r.medication_name]}
                         expanded={expandedId === r.id}
+                        editing={editingId === r.id}
                         onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                        onEdit={() => setEditingId(editingId === r.id ? null : r.id)}
+                        onSave={(data) => handleSave(r.id, data)}
+                        onDelete={() => handleDelete(r.id)}
                       />
                     ))}
                   </div>
@@ -183,9 +243,7 @@ export default function Medications() {
               <p className="text-sm font-semibold text-gray-700">약물 상세 정보</p>
             </div>
             {guide ? (
-              <p className="text-xs text-gray-500 leading-relaxed line-clamp-[10]">
-                {guide.medication_guidance}
-              </p>
+              <MedicationGuideSummary raw={guide.medication_guidance} />
             ) : (
               <p className="text-xs text-gray-400">
                 처방전 스캔 후 AI 가이드가 생성되면 약물 상세 정보가 표시됩니다.
@@ -241,16 +299,84 @@ function MedicationAccordion({
   reminder: r,
   dday,
   expanded,
+  editing,
   onToggle,
+  onEdit,
+  onSave,
+  onDelete,
 }: {
   reminder: Reminder;
   dday?: DdayReminder;
   expanded: boolean;
+  editing: boolean;
   onToggle: () => void;
+  onEdit: () => void;
+  onSave: (data: {
+    medication_name: string;
+    dose?: string;
+    schedule_times: string[];
+    dispensed_date?: string;
+    total_days?: number;
+    enabled?: boolean;
+  }) => void;
+  onDelete: () => void;
 }) {
+  const [form, setForm] = useState({
+    medication_name: r.medication_name,
+    dose: r.dose ?? "",
+    schedule_times: [...r.schedule_times],
+    dispensed_date: r.dispensed_date ?? "",
+    total_days: r.total_days?.toString() ?? "",
+    enabled: r.enabled,
+  });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // editing 모드 진입 시 폼 초기화
+  useEffect(() => {
+    if (editing) {
+      setForm({
+        medication_name: r.medication_name,
+        dose: r.dose ?? "",
+        schedule_times: [...r.schedule_times],
+        dispensed_date: r.dispensed_date ?? "",
+        total_days: r.total_days?.toString() ?? "",
+        enabled: r.enabled,
+      });
+      setConfirmDelete(false);
+    }
+  }, [editing, r]);
+
   // 남은 약 갯수 추정: remaining_days × 하루 복용 횟수
   const estimatedRemaining =
     dday != null ? dday.remaining_days * (r.schedule_times.length || 1) : null;
+
+  function toggleTime(time: string) {
+    setForm((f) => ({
+      ...f,
+      schedule_times: f.schedule_times.includes(time)
+        ? f.schedule_times.filter((t) => t !== time)
+        : [...f.schedule_times, time].sort(),
+    }));
+  }
+
+  function handleSubmit() {
+    if (!form.medication_name.trim()) {
+      toast.error("약물명을 입력해주세요.");
+      return;
+    }
+    if (form.schedule_times.length === 0) {
+      toast.error("복용 시간을 하나 이상 선택해주세요.");
+      return;
+    }
+    onSave({
+      medication_name: form.medication_name.trim(),
+      dose: form.dose.trim() || undefined,
+      schedule_times: form.schedule_times,
+      dispensed_date: form.dispensed_date || undefined,
+      total_days: form.total_days ? parseInt(form.total_days) : undefined,
+      enabled: form.enabled,
+    });
+  }
 
   return (
     <div className="card-warm rounded-xl overflow-hidden">
@@ -276,7 +402,7 @@ function MedicationAccordion({
       </button>
 
       {/* 펼쳐진 내용 */}
-      {expanded && (
+      {expanded && !editing && (
         <div className="px-5 pb-5 border-t border-gray-100">
           <div className="flex gap-6 mt-4">
             <div className="text-center">
@@ -286,8 +412,8 @@ function MedicationAccordion({
               </p>
             </div>
             <div className="text-center">
-              <p className="text-xs font-medium text-gray-400 mb-1">준수율</p>
-              <p className="text-sm font-bold text-green-600">
+              <p className="text-xs font-medium text-gray-400 mb-1">상태</p>
+              <p className={`text-sm font-bold ${r.enabled ? "text-green-600" : "text-gray-400"}`}>
                 {r.enabled ? "복용 중" : "중단"}
               </p>
             </div>
@@ -319,8 +445,210 @@ function MedicationAccordion({
               {r.start_date ?? "—"} ~ {r.end_date ?? "계속"}
             </p>
           )}
+
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            className="mt-3 flex items-center gap-1.5 text-xs font-medium text-green-600 hover:text-green-700 transition-colors"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            수정
+          </button>
         </div>
       )}
+
+      {/* 수정 폼 */}
+      {expanded && editing && (
+        <div className="px-5 pb-5 border-t border-gray-100">
+          <div className="space-y-3 mt-4">
+            {/* 약물명 */}
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1 block">약물명</label>
+              <input
+                type="text"
+                value={form.medication_name}
+                onChange={(e) => setForm((f) => ({ ...f, medication_name: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500"
+              />
+            </div>
+
+            {/* 용량 */}
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1 block">용량</label>
+              <input
+                type="text"
+                value={form.dose}
+                onChange={(e) => setForm((f) => ({ ...f, dose: e.target.value }))}
+                placeholder="예: 10mg"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500"
+              />
+            </div>
+
+            {/* 복용 시간 */}
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1 block">복용 시간</label>
+              <div className="flex flex-wrap gap-2">
+                {TIME_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => toggleTime(opt.value)}
+                    className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${
+                      form.schedule_times.includes(opt.value)
+                        ? "bg-green-500 text-white"
+                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 조제일 */}
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1 block">조제일</label>
+              <input
+                type="date"
+                value={form.dispensed_date}
+                onChange={(e) => setForm((f) => ({ ...f, dispensed_date: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500"
+              />
+            </div>
+
+            {/* 총 투약 일수 */}
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1 block">총 투약 일수</label>
+              <input
+                type="number"
+                value={form.total_days}
+                onChange={(e) => setForm((f) => ({ ...f, total_days: e.target.value }))}
+                placeholder="예: 30"
+                min={1}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500"
+              />
+            </div>
+
+            {/* 복용 상태 토글 */}
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-gray-500">복용 상태</label>
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, enabled: !f.enabled }))}
+                className={`relative w-10 h-5 rounded-full transition-colors ${
+                  form.enabled ? "bg-green-500" : "bg-gray-300"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                    form.enabled ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* 버튼 */}
+            <div className="flex items-center justify-between pt-2">
+              <div>
+                {!confirmDelete ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(true)}
+                    className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    삭제
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-red-500">정말 삭제할까요?</span>
+                    <button
+                      type="button"
+                      onClick={onDelete}
+                      className="text-xs font-medium text-red-600 hover:text-red-700"
+                    >
+                      확인
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="text-xs font-medium text-gray-400 hover:text-gray-600"
+                    >
+                      취소
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  className="px-4 py-1.5 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  저장
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 약물 가이드 요약 ────────────────────────────────────────────────────────
+
+interface MedGuideItem {
+  drug_name?: string;
+  dose?: string | number;
+  frequency_per_day?: number;
+  intake_time?: string[] | string;
+  precautions?: string;
+  side_effects?: string;
+}
+
+function MedicationGuideSummary({ raw }: { raw: string }) {
+  let items: MedGuideItem[] = [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) items = parsed;
+  } catch {
+    // JSON 파싱 실패 시 원본 텍스트 요약 표시
+    return <p className="text-xs text-gray-500 leading-relaxed line-clamp-[8]">{raw}</p>;
+  }
+
+  if (items.length === 0) {
+    return <p className="text-xs text-gray-400">약물 정보가 없습니다.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {items.map((item, i) => (
+        <div key={i}>
+          <p className="text-xs font-semibold text-gray-700">
+            {item.drug_name ?? "약물"}{item.dose ? ` ${item.dose}` : ""}
+          </p>
+          {item.frequency_per_day && (
+            <p className="text-xs text-gray-500">
+              1일 {item.frequency_per_day}회
+              {item.intake_time && ` (${Array.isArray(item.intake_time) ? item.intake_time.join(", ") : item.intake_time})`}
+            </p>
+          )}
+          {item.precautions && (
+            <p className="text-xs text-amber-600 mt-0.5">주의: {item.precautions}</p>
+          )}
+          {item.side_effects && (
+            <p className="text-xs text-red-400 mt-0.5">부작용: {item.side_effects}</p>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
