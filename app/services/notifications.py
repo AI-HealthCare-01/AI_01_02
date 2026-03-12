@@ -1,5 +1,8 @@
+from datetime import datetime
+
 from tortoise.transactions import in_transaction
 
+from app.core import config
 from app.core.exceptions import AppException, ErrorCode
 from app.models.notifications import Notification, NotificationType
 from app.models.users import User
@@ -74,7 +77,9 @@ class NotificationService:
             offset=0,
             is_read=None,
         )
+        today = datetime.now(config.TIMEZONE).date()
         existing_keys: set[tuple[str, int]] = set()
+        existing_daily_medication_keys: set[str] = set()
         for notification in existing_notifications:
             if notification.type != NotificationType.MEDICATION_DDAY:
                 continue
@@ -82,10 +87,14 @@ class NotificationService:
             medication_name = str(payload.get("medication_name") or "")
             remaining_days = int(payload.get("remaining_days") or -1)
             existing_keys.add((medication_name, remaining_days))
+            if medication_name and notification.created_at.astimezone(config.TIMEZONE).date() == today:
+                existing_daily_medication_keys.add(medication_name)
 
         for item in dday_items:
             dedup_key = (item.medication_name, item.remaining_days)
             if dedup_key in existing_keys:
+                continue
+            if item.medication_name in existing_daily_medication_keys:
                 continue
             dday_message = await generate_medication_dday_guidance(
                 medication_name=item.medication_name,
@@ -103,6 +112,8 @@ class NotificationService:
                     "estimated_depletion_date": item.estimated_depletion_date.isoformat(),
                 },
             )
+            existing_keys.add(dedup_key)
+            existing_daily_medication_keys.add(item.medication_name)
 
     async def _sync_health_alert_notifications(self, *, user: User) -> None:
         summary = await self.analysis_service.get_summary(user=user)
