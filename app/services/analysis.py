@@ -157,7 +157,9 @@ async def _resolve_allergy_ingredient(allergy_text: str, psych_drug_service: Psy
 
     ingredient_match = await PsychDrug.filter(ingredient_name__iexact=cleaned).order_by("ingredient_name").first()
     if not ingredient_match:
-        ingredient_match = await PsychDrug.filter(ingredient_name__icontains=cleaned).order_by("ingredient_name").first()
+        ingredient_match = (
+            await PsychDrug.filter(ingredient_name__icontains=cleaned).order_by("ingredient_name").first()
+        )
     if ingredient_match and ingredient_match.ingredient_name:
         ingredient = str(ingredient_match.ingredient_name).strip()
         return ingredient, _build_ingredient_candidates(ingredient)

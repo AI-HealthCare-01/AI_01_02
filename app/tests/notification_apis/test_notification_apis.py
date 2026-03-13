@@ -289,7 +289,9 @@ class TestNotificationApis(TestCase):
 
             alerts = [
                 alert
-                for alert in await Notification.filter(user_id=user.id, type=NotificationType.HEALTH_ALERT).order_by("id")
+                for alert in await Notification.filter(user_id=user.id, type=NotificationType.HEALTH_ALERT).order_by(
+                    "id"
+                )
                 if isinstance(alert.payload, dict) and alert.payload.get("alert_key") == "SLEEP::CONDITION_1"
             ]
             assert len(alerts) == 2
