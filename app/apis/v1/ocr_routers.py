@@ -2,12 +2,12 @@ import os
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Path as PathParam, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile, status
+from fastapi import Path as PathParam
 from fastapi.responses import ORJSONResponse as Response
 
 from app.core import config
 from app.core.exceptions import AppException, ErrorCode
-
 from app.dependencies.security import get_request_user
 from app.dtos.ocr import (
     DocumentUploadResponse,
