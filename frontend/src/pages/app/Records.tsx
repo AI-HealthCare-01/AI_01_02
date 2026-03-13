@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Edit2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Edit2, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import {
   scheduleApi,
@@ -18,6 +18,14 @@ import MedicationScheduleCard from "@/components/medication/MedicationScheduleCa
 
 function toDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function isSameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate()
+  );
 }
 
 function getMondayOfWeek(d: Date) {
@@ -49,6 +57,10 @@ function getDailyDiaryStorageKey(date: string, userId: string | number | null | 
 
 export default function Records() {
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(
+    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  );
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [weeklyRates, setWeeklyRates] = useState<Array<number | null>>(Array(7).fill(null));
   const [profile, setProfile] = useState<HealthProfile | null>(null);
@@ -203,9 +215,38 @@ export default function Records() {
     const d = new Date(selectedDate);
     d.setDate(d.getDate() + offset);
     setSelectedDate(d);
+    setCalendarMonth(new Date(d.getFullYear(), d.getMonth(), 1));
     load(d);
   }
 
+  function selectDate(date: Date) {
+    setSelectedDate(date);
+    setCalendarMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    setCalendarOpen(false);
+    load(date);
+  }
+
+  const today = new Date();
+  const calendarMonthLabel = calendarMonth.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+  });
+  const calendarDays = useMemo(() => {
+    const firstDay = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+    const mondayOffset = (firstDay.getDay() + 6) % 7;
+    const gridStart = new Date(firstDay);
+    gridStart.setDate(firstDay.getDate() - mondayOffset);
+
+    return Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(gridStart);
+      date.setDate(gridStart.getDate() + index);
+      return {
+        date,
+        inCurrentMonth: date.getMonth() === calendarMonth.getMonth(),
+        isFuture: toDateStr(date) > toDateStr(today),
+      };
+    });
+  }, [calendarMonth, today]);
   const dateLabel = selectedDate.toLocaleDateString("ko-KR", {
     month: "long",
     day: "numeric",
@@ -237,7 +278,7 @@ export default function Records() {
         {/* Left column */}
         <div className="md:col-span-2 space-y-4">
           {/* Date navigator */}
-          <div className="card-warm p-4">
+          <div className="card-warm p-4 relative">
             <div className="flex items-center justify-between">
               <button
                 onClick={() => goDay(-1)}
@@ -245,7 +286,14 @@ export default function Records() {
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="text-sm font-semibold text-gray-700">{dateLabel}</span>
+              <button
+                type="button"
+                onClick={() => setCalendarOpen((prev) => !prev)}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-all duration-200"
+              >
+                <span>{dateLabel}</span>
+                <CalendarDays className="w-4 h-4 text-gray-400" />
+              </button>
               <button
                 onClick={() => goDay(1)}
                 className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 transition-all duration-200"
@@ -254,6 +302,68 @@ export default function Records() {
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
+            {calendarOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-label="캘린더 닫기"
+                  className="fixed inset-0 z-10 cursor-default"
+                  onClick={() => setCalendarOpen(false)}
+                />
+                <div className="absolute left-1/2 top-full z-20 mt-3 w-[320px] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl">
+                  <div className="mb-3 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <p className="text-sm font-bold text-gray-800">{calendarMonthLabel}</p>
+                    <button
+                      type="button"
+                      onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                      disabled={
+                        calendarMonth.getFullYear() === today.getFullYear()
+                        && calendarMonth.getMonth() >= today.getMonth()
+                      }
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="mb-2 grid grid-cols-7 gap-1">
+                    {DOW_LABELS.map((label) => (
+                      <div key={label} className="py-1 text-center text-xs font-semibold text-gray-400">
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-1">
+                    {calendarDays.map(({ date, inCurrentMonth, isFuture }) => {
+                      const selected = isSameDay(date, selectedDate);
+                      return (
+                        <button
+                          key={toDateStr(date)}
+                          type="button"
+                          onClick={() => selectDate(date)}
+                          disabled={isFuture}
+                          className={`h-10 rounded-xl text-sm font-medium transition-all duration-200 ${
+                            selected
+                              ? "bg-green-500 text-white shadow-sm"
+                              : inCurrentMonth
+                                ? "text-gray-700 hover:bg-green-50"
+                                : "text-gray-300 hover:bg-gray-50"
+                          } disabled:cursor-not-allowed disabled:text-gray-200 disabled:hover:bg-transparent`}
+                        >
+                          {date.getDate()}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           <MedicationScheduleCard
@@ -378,7 +488,7 @@ function EditModal({
   const ls = profile?.lifestyle;
   const bi = profile?.basic_info;
   const EXERCISE_OPTIONS = [
-    { value: "low", label: "낮음", desc: "주 1회 미만" },
+    { value: "low", label: "낮음", desc: "주 1회 이하" },
     { value: "moderate", label: "보통", desc: "주 2~3회" },
     { value: "high", label: "높음", desc: "주 4회 이상" },
   ];
@@ -410,7 +520,8 @@ function EditModal({
   });
   const [pcHours, setPcHours] = useState(String(ls?.pc_hours_per_day ?? 0));
   const [phoneHours, setPhoneHours] = useState(String(ls?.smartphone_hours_per_day ?? 0));
-  const [coffee, setCoffee] = useState(String(ls?.caffeine_cups_per_day ?? 1));
+  const [coffee, setCoffee] = useState(String(ls?.caffeine_cups_per_day ?? 0));
+  const coffeeMg = (parseInt(coffee, 10) || 0) * 150;
   const [smoking, setSmoking] = useState(() => (ls?.smoking ?? 0) > 0 ? "light" : "none");
   const [alcohol, setAlcohol] = useState(() => {
     const freq = ls?.alcohol_frequency_per_week ?? 0;
@@ -456,7 +567,7 @@ function EditModal({
           exercise_frequency_per_week: exerciseMap[exercise] ?? 0,
           pc_hours_per_day: parseFloat(pcHours) || 0,
           smartphone_hours_per_day: parseFloat(phoneHours) || 0,
-          caffeine_cups_per_day: parseInt(coffee, 10) || 1,
+          caffeine_cups_per_day: parseInt(coffee, 10) || 0,
           smoking: smokingMap[smoking] ?? 0,
           alcohol_frequency_per_week: alcoholMap[alcohol] ?? 1,
         },
@@ -636,13 +747,18 @@ function EditModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-gray-600 mb-1">커피</label>
-              <select value={coffee} onChange={(e) => setCoffee(e.target.value)} className={inputCls}>
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((cup) => (
-                  <option key={cup} value={cup}>
-                    {cup}잔
-                  </option>
-                ))}
-              </select>
+              <div className="grid grid-cols-[minmax(0,1fr)_132px] gap-2">
+                <select value={coffee} onChange={(e) => setCoffee(e.target.value)} className={inputCls}>
+                  {Array.from({ length: 11 }, (_, i) => i).map((cup) => (
+                    <option key={cup} value={cup}>
+                      {cup}잔
+                    </option>
+                  ))}
+                </select>
+                <div className="flex items-center justify-center whitespace-nowrap text-xs font-medium tabular-nums text-gray-500">
+                  카페인 함량 {coffeeMg}mg
+                </div>
+              </div>
             </div>
           </div>
           <div>

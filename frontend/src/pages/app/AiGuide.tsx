@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Sparkles } from "lucide-react";
+import { Bell, RefreshCw, AlertTriangle, Sparkles } from "lucide-react";
 import { guideApi, GuideJobResult, GuideStatus, medicationApi, MedicationInfo } from "@/lib/api";
 
 interface MedicationGuideItem {
@@ -154,33 +154,20 @@ function renderLifestyleGuidanceContent(raw: string): React.ReactNode {
   );
 }
 
-// ── 아코디언 ──────────────────────────────────────────────────────────────────
-
-function Accordion({ title, children }: { title: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+function GuideSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="card-warm overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 transition-all duration-200 text-left"
-      >
+      <div className="w-full flex items-center justify-between px-5 py-4 text-left">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-lg bg-green-50 flex items-center justify-center">
             <Bell className="w-3.5 h-3.5 text-green-600" />
           </div>
           <span className="text-sm font-bold text-gray-700">{title}</span>
         </div>
-        {open ? (
-          <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
-        )}
-      </button>
-      {open && (
-        <div className="px-5 pb-5 pt-1 border-t border-gray-100/60 bg-white">
-          <div className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{children}</div>
-        </div>
-      )}
+      </div>
+      <div className="px-5 pb-5 pt-1 border-t border-gray-100/60 bg-white">
+        <div className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{children}</div>
+      </div>
     </div>
   );
 }
@@ -367,14 +354,14 @@ export default function AiGuide() {
           </div>
 
           {result.medication_guidance && formatMedicationGuidanceText(result.medication_guidance, medInfoByName) && (
-            <Accordion title="복약 안내">
+            <GuideSection title="복약 안내">
               {formatMedicationGuidanceText(result.medication_guidance, medInfoByName)}
-            </Accordion>
+            </GuideSection>
           )}
           {result.lifestyle_guidance && (
-            <Accordion title="생활 습관 가이드">
+            <GuideSection title="생활 습관 가이드">
               {renderLifestyleGuidanceContent(result.lifestyle_guidance)}
-            </Accordion>
+            </GuideSection>
           )}
           {result.source_references?.length > 0 && (
             <div className="card-warm p-4">
