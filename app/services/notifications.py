@@ -57,6 +57,10 @@ class NotificationService:
         async with in_transaction():
             return await self.repo.mark_all_as_read(user_id=user.id)
 
+    async def delete_read_notifications(self, *, user: User) -> int:
+        async with in_transaction():
+            return await self.repo.delete_read_notifications(user_id=user.id)
+
     async def _sync_dynamic_notifications(self, *, user: User) -> None:
         await self.guide_automation_service.notify_weekly_refresh_if_due(user_id=user.id)
         await self._sync_health_alert_notifications(user=user)

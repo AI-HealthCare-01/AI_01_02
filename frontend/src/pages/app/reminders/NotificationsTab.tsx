@@ -76,8 +76,19 @@ export default function NotificationsTab() {
     }
   }
 
+  async function deleteRead() {
+    try {
+      const { updated_count } = await notificationApi.deleteRead();
+      setNotifications((prev) => prev.filter((n) => !n.is_read));
+      toast.success(updated_count > 0 ? "읽은 알림을 삭제했습니다." : "삭제할 읽은 알림이 없습니다.");
+    } catch {
+      toast.error("읽은 알림 삭제에 실패했습니다.");
+    }
+  }
+
   const recentNotifications = notifications.filter((n) => isWithinOneWeek(n.created_at));
   const unread = recentNotifications.filter((n) => !n.is_read);
+  const read = recentNotifications.filter((n) => n.is_read);
   const filtered = filter === "unread" ? unread : recentNotifications;
   const displayed = filter === "all" && !showAllInAllTab
     ? filtered.slice(0, COLLAPSED_VISIBLE_COUNT)
@@ -115,13 +126,22 @@ export default function NotificationsTab() {
             </button>
           </div>
 
-          <button
-            onClick={markAllRead}
-            disabled={unread.length === 0}
-            className="py-2.5 px-4 text-sm font-medium border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-          >
-            모두 읽음
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={deleteRead}
+              disabled={read.length === 0}
+              className="py-2.5 px-4 text-sm font-medium border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              읽은 알림 삭제
+            </button>
+            <button
+              onClick={markAllRead}
+              disabled={unread.length === 0}
+              className="py-2.5 px-4 text-sm font-medium border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              모두 읽음
+            </button>
+          </div>
         </div>
 
         {/* 알림 목록 */}

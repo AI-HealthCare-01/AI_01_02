@@ -88,6 +88,17 @@ async def mark_all_notifications_as_read(
     )
 
 
+@notification_router.delete("/read", response_model=ReadAllNotificationsResponse, status_code=status.HTTP_200_OK)
+async def delete_read_notifications(
+    user: Annotated[User, Depends(get_request_user)],
+    notification_service: Annotated[NotificationService, Depends(NotificationService)],
+) -> Response:
+    deleted_count = await notification_service.delete_read_notifications(user=user)
+    return Response(
+        ReadAllNotificationsResponse(updated_count=deleted_count).model_dump(), status_code=status.HTTP_200_OK
+    )
+
+
 def _serialize_setting(setting) -> NotificationSettingResponse:  # type: ignore[no-untyped-def]
     return NotificationSettingResponse(
         home_schedule_enabled=setting.home_schedule_enabled,

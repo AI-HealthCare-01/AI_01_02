@@ -402,6 +402,36 @@ class TestNotificationApis(TestCase):
             assert unread_response.status_code == status.HTTP_200_OK
             assert unread_response.json()["unread_count"] == 0
 
+    async def test_delete_read_notifications_success(self):
+        email = "noti_delete_read@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01083338333")
+            user = await User.get(email=email)
+            await Notification.create(
+                user=user,
+                type=NotificationType.SYSTEM,
+                title="읽은 알림",
+                message="삭제 대상",
+                is_read=True,
+                read_at=datetime.now(config.TIMEZONE),
+            )
+            unread_notification = await Notification.create(
+                user=user,
+                type=NotificationType.HEALTH_ALERT,
+                title="안 읽은 알림",
+                message="유지 대상",
+            )
+
+            headers = {"Authorization": f"Bearer {access_token}"}
+            response = await client.delete("/api/v1/notifications/read", headers=headers)
+
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json()["updated_count"] == 1
+
+            remaining = await Notification.filter(user_id=user.id).order_by("id")
+            assert len(remaining) == 1
+            assert remaining[0].id == unread_notification.id
+
     async def test_list_notifications_creates_weekly_profile_refresh_alert_after_7_days(self):
         email = "noti_weekly_alert@example.com"
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
