@@ -41,7 +41,6 @@ class NotificationService:
         return notifications, unread_count
 
     async def get_unread_count(self, *, user: User) -> int:
-        await self._sync_dynamic_notifications(user=user)
         return await self.repo.count_unread(user_id=user.id)
 
     async def mark_as_read(self, *, user: User, notification_id: int) -> Notification:
