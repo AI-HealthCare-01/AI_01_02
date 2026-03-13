@@ -7,8 +7,10 @@ from tortoise.contrib.test import TestCase
 from app.core import config
 from app.main import app
 from app.models.guides import GuideJob, GuideJobStatus
+from app.models.health_profiles import UserHealthProfile
 from app.models.notifications import Notification, NotificationType
 from app.models.ocr import Document, DocumentType, OcrJob, OcrJobStatus
+from app.models.psych_drugs import PsychDrug
 from app.models.reminders import MedicationReminder
 from app.models.users import User
 
@@ -29,6 +31,47 @@ class TestNotificationApis(TestCase):
         login_response = await client.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
         assert login_response.status_code == status.HTTP_200_OK
         return login_response.json()["access_token"]
+
+    async def _create_health_profile_with_allergy(self, *, user: User, drug_allergies: list[str]) -> UserHealthProfile:
+        return await UserHealthProfile.create(
+            user=user,
+            height_cm=175.0,
+            weight_kg=70.0,
+            drug_allergies=drug_allergies,
+            exercise_frequency_per_week=2,
+            pc_hours_per_day=5,
+            smartphone_hours_per_day=3,
+            caffeine_cups_per_day=2,
+            smoking=0,
+            alcohol_frequency_per_week=1,
+            bed_time="23:00",
+            wake_time="07:00",
+            sleep_latency_minutes=20,
+            night_awakenings_per_week=1,
+            daytime_sleepiness=3,
+            appetite_level=6,
+            meal_regular=True,
+            bmi=22.86,
+            sleep_time_hours=8.0,
+            caffeine_mg=200,
+            digital_time_hours=8,
+        )
+
+    async def _create_prescription_ocr(self, *, user: User, file_name: str, drug_name: str) -> OcrJob:
+        document = await Document.create(
+            user=user,
+            document_type=DocumentType.PRESCRIPTION,
+            file_name=file_name,
+            temp_storage_key=f"documents/test/{file_name}",
+            file_size=100,
+            mime_type="image/png",
+        )
+        return await OcrJob.create(
+            user=user,
+            document=document,
+            status=OcrJobStatus.SUCCEEDED,
+            structured_result={"extracted_medications": [{"drug_name": drug_name}]},
+        )
 
     async def test_list_notifications_and_filter(self):
         email = "notification_list@example.com"
@@ -97,6 +140,132 @@ class TestNotificationApis(TestCase):
             response = await client.get("/api/v1/notifications/unread-count", headers=headers)
             assert response.status_code == status.HTTP_200_OK
             assert response.json()["unread_count"] == 1
+
+    async def test_get_unread_count_triggers_dynamic_notification_sync(self):
+        email = "notification_unread_dynamic@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01040004002")
+            user = await User.get(email=email)
+
+            document = await Document.create(
+                user=user,
+                document_type=DocumentType.PRESCRIPTION,
+                file_name="dynamic_sync.png",
+                temp_storage_key="documents/test/dynamic_sync.png",
+                file_size=100,
+                mime_type="image/png",
+            )
+            ocr_job = await OcrJob.create(user=user, document=document, status=OcrJobStatus.SUCCEEDED)
+            old_completed_at = datetime.now(config.TIMEZONE) - timedelta(days=8)
+            await GuideJob.create(
+                user=user,
+                ocr_job=ocr_job,
+                status=GuideJobStatus.SUCCEEDED,
+                completed_at=old_completed_at,
+            )
+
+            headers = {"Authorization": f"Bearer {access_token}"}
+            response = await client.get("/api/v1/notifications/unread-count", headers=headers)
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json()["unread_count"] == 1
+
+    async def test_health_alert_is_created_once_per_day_for_same_source(self):
+        email = "noti_health_once@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01040004003")
+            user = await User.get(email=email)
+
+            await self._create_health_profile_with_allergy(user=user, drug_allergies=["페니드정"])
+            await PsychDrug.create(
+                ingredient_name="메틸페니데이트",
+                product_name="페니드정",
+                side_effects="",
+                precautions="",
+            )
+            await PsychDrug.create(
+                ingredient_name="메틸페니데이트",
+                product_name="메디키넷리타드캡슐",
+                side_effects="",
+                precautions="",
+            )
+            await self._create_prescription_ocr(user=user, file_name="same_source.png", drug_name="메디키넷리타드캡슐")
+
+            headers = {"Authorization": f"Bearer {access_token}"}
+            first = await client.get("/api/v1/notifications", headers=headers)
+            second = await client.get("/api/v1/notifications", headers=headers)
+
+            assert first.status_code == status.HTTP_200_OK
+            assert second.status_code == status.HTTP_200_OK
+            alerts = await Notification.filter(user_id=user.id, type=NotificationType.HEALTH_ALERT)
+            assert len(alerts) == 1
+
+    async def test_health_alert_is_created_again_when_prescription_changes_same_day(self):
+        email = "noti_health_newocr@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01040004004")
+            user = await User.get(email=email)
+
+            await self._create_health_profile_with_allergy(user=user, drug_allergies=["페니드정"])
+            await PsychDrug.create(
+                ingredient_name="메틸페니데이트",
+                product_name="페니드정",
+                side_effects="",
+                precautions="",
+            )
+            await PsychDrug.create(
+                ingredient_name="메틸페니데이트",
+                product_name="메디키넷리타드캡슐",
+                side_effects="",
+                precautions="",
+            )
+
+            await self._create_prescription_ocr(user=user, file_name="ocr1.png", drug_name="메디키넷리타드캡슐")
+            headers = {"Authorization": f"Bearer {access_token}"}
+            first = await client.get("/api/v1/notifications", headers=headers)
+            assert first.status_code == status.HTTP_200_OK
+
+            await self._create_prescription_ocr(user=user, file_name="ocr2.png", drug_name="메디키넷리타드캡슐")
+            second = await client.get("/api/v1/notifications", headers=headers)
+            assert second.status_code == status.HTTP_200_OK
+
+            alerts = await Notification.filter(user_id=user.id, type=NotificationType.HEALTH_ALERT).order_by("id")
+            assert len(alerts) == 2
+            assert alerts[0].payload["source_ocr_job_id"] != alerts[1].payload["source_ocr_job_id"]
+
+    async def test_health_alert_is_created_again_when_profile_changes_same_day(self):
+        email = "noti_health_profile@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01040004005")
+            user = await User.get(email=email)
+
+            profile = await self._create_health_profile_with_allergy(user=user, drug_allergies=["페니드정"])
+            await PsychDrug.create(
+                ingredient_name="메틸페니데이트",
+                product_name="페니드정",
+                side_effects="",
+                precautions="",
+            )
+            await PsychDrug.create(
+                ingredient_name="메틸페니데이트",
+                product_name="메디키넷리타드캡슐",
+                side_effects="",
+                precautions="",
+            )
+
+            await self._create_prescription_ocr(user=user, file_name="profile1.png", drug_name="메디키넷리타드캡슐")
+            headers = {"Authorization": f"Bearer {access_token}"}
+            first = await client.get("/api/v1/notifications", headers=headers)
+            assert first.status_code == status.HTTP_200_OK
+
+            await UserHealthProfile.filter(id=profile.id).update(
+                updated_at=datetime.now(config.TIMEZONE) + timedelta(minutes=1)
+            )
+            second = await client.get("/api/v1/notifications", headers=headers)
+            assert second.status_code == status.HTTP_200_OK
+
+            alerts = await Notification.filter(user_id=user.id, type=NotificationType.HEALTH_ALERT).order_by("id")
+            assert len(alerts) == 2
+            assert alerts[0].payload["profile_updated_at"] != alerts[1].payload["profile_updated_at"]
 
     async def test_list_notifications_triggers_dynamic_notification_sync(self):
         email = "notification_unread_sync@example.com"

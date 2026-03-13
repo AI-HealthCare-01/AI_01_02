@@ -41,6 +41,7 @@ class NotificationService:
         return notifications, unread_count
 
     async def get_unread_count(self, *, user: User) -> int:
+        await self._sync_dynamic_notifications(user=user)
         return await self.repo.count_unread(user_id=user.id)
 
     async def mark_as_read(self, *, user: User, notification_id: int) -> Notification:
@@ -118,22 +119,44 @@ class NotificationService:
             return
 
         async with in_transaction():
+            today = datetime.now(config.TIMEZONE).date()
             existing_alert_notifications = await Notification.filter(
                 user_id=user.id,
                 type=NotificationType.HEALTH_ALERT,
-            ).only("id", "payload")
-            existing_alert_keys: set[str] = set()
+            ).only("id", "payload", "created_at")
+            existing_alerts_by_key: dict[str, list[Notification]] = {}
             for notification in existing_alert_notifications:
                 payload = notification.payload if isinstance(notification.payload, dict) else {}
                 alert_key = str(payload.get("alert_key") or "")
                 if alert_key:
-                    existing_alert_keys.add(alert_key)
+                    existing_alerts_by_key.setdefault(alert_key, []).append(notification)
 
             for alert in emergency_alerts:
                 if not isinstance(alert, dict):
                     continue
                 alert_key = str(alert.get("alert_key") or "")
-                if not alert_key or alert_key in existing_alert_keys:
+                if not alert_key:
+                    continue
+                source_ocr_job_id = int(alert.get("source_ocr_job_id") or 0)
+                profile_updated_at = str(alert.get("profile_updated_at") or "")
+
+                existing_today = [
+                    notification
+                    for notification in existing_alerts_by_key.get(alert_key, [])
+                    if notification.created_at.astimezone(config.TIMEZONE).date() == today
+                ]
+                already_notified_for_same_source = False
+                for notification in existing_today:
+                    payload = notification.payload if isinstance(notification.payload, dict) else {}
+                    existing_source_ocr_job_id = int(payload.get("source_ocr_job_id") or 0)
+                    existing_profile_updated_at = str(payload.get("profile_updated_at") or "")
+                    if (
+                        existing_source_ocr_job_id == source_ocr_job_id
+                        and existing_profile_updated_at == profile_updated_at
+                    ):
+                        already_notified_for_same_source = True
+                        break
+                if already_notified_for_same_source:
                     continue
                 await self.repo.create_notification(
                     user_id=user.id,
@@ -145,5 +168,7 @@ class NotificationService:
                         "alert_key": alert_key,
                         "alert_type": str(alert.get("type") or "GENERAL"),
                         "severity": str(alert.get("severity") or "MEDIUM"),
+                        "source_ocr_job_id": source_ocr_job_id,
+                        "profile_updated_at": profile_updated_at,
                     },
                 )

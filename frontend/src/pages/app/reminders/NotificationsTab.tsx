@@ -139,7 +139,7 @@ export default function NotificationsTab() {
                 <div
                   key={n.id}
                   onClick={() => !n.is_read && markRead(n.id)}
-                  className={`flex items-center gap-3 bg-white/80 rounded-xl px-4 py-3.5 shadow-sm transition-all duration-200 ${
+                  className={`flex items-start gap-3 bg-white/80 rounded-xl px-4 py-3.5 shadow-sm transition-all duration-200 ${
                     n.is_read
                       ? "cursor-default"
                       : "hover:bg-gray-50 cursor-pointer"
@@ -150,7 +150,9 @@ export default function NotificationsTab() {
                     <p className={`text-sm font-medium ${n.is_read ? "text-gray-400" : "text-gray-800"}`}>
                       {n.title}
                     </p>
-                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{n.message}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 whitespace-normal break-words leading-relaxed">
+                      {n.message}
+                    </p>
                     <p className="text-[11px] text-gray-400 mt-1">
                       {formatNotificationTime(n.created_at)}
                     </p>

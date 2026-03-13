@@ -206,7 +206,9 @@ class AnalysisService:
 
             drug_allergies = basic_info.get("drug_allergies", [])
             if drug_allergies:
-                ocr_jobs = await OcrJob.filter(user_id=user.id, status=OcrJobStatus.SUCCEEDED)
+                ocr_jobs = await OcrJob.filter(user_id=user.id, status=OcrJobStatus.SUCCEEDED).order_by(
+                    "-created_at", "-id"
+                )
                 for job in ocr_jobs:
                     if not job.structured_result:
                         continue
@@ -251,6 +253,8 @@ class AnalysisService:
                                     "severity": "HIGH",
                                     "title": "알레르기 약물 충돌 가능성",
                                     "message": guidance_message,
+                                    "source_ocr_job_id": job.id,
+                                    "profile_updated_at": profile.updated_at.isoformat() if profile.updated_at else "",
                                 }
                             )
 
