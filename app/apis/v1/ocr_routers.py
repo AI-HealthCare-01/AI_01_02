@@ -1,7 +1,12 @@
+import os
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Path, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Path as PathParam, Query, UploadFile, status
 from fastapi.responses import ORJSONResponse as Response
+
+from app.core import config
+from app.core.exceptions import AppException, ErrorCode
 
 from app.dependencies.security import get_request_user
 from app.dtos.ocr import (
@@ -26,6 +31,16 @@ ocr_router = APIRouter(prefix="/ocr", tags=["ocr"])
 medication_router = APIRouter(prefix="/medications", tags=["medications"])
 
 
+def delete_file_securely(file_path: str):
+    """보안을 위한 원본 파일 즉시 삭제 (BackgroundTasks 호출용)"""
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            print(f"🔒 보안을 위해 원본 파일이 즉시 삭제되었습니다: {file_path}")
+    except Exception as e:
+        print(f"⚠️ 임시 파일 삭제 실패: {e}")
+
+
 @ocr_router.post("/documents/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     user: Annotated[User, Depends(get_request_user)],
@@ -33,6 +48,19 @@ async def upload_document(
     document_type: Annotated[DocumentType, Form()],
     file: Annotated[UploadFile, File()],
 ) -> Response:
+    # 1. 확장자 검증
+    if not file.filename:
+        raise AppException(ErrorCode.VALIDATION_ERROR, developer_message="파일명이 필요합니다.")
+    
+    ext = file.filename.split(".")[-1].lower() if "." in file.filename else ""
+    if ext not in config.OCR_ALLOWED_EXTENSIONS:
+        raise AppException(ErrorCode.FILE_INVALID_TYPE)
+
+    # 2. 파일 크기 검증 (FastAPI UploadFile.size 지원 시 사용, 아니면 content-length 활용 가능)
+    # 10MB = 10 * 1024 * 1024 bytes
+    if file.size and file.size > config.OCR_MAX_FILE_SIZE_BYTES:
+        raise AppException(ErrorCode.FILE_TOO_LARGE)
+
     document = await ocr_service.upload_document(user=user, document_type=document_type, file=file)
     return Response(
         DocumentUploadResponse(
@@ -92,11 +120,21 @@ async def get_ocr_job_status(
 
 @ocr_router.get("/jobs/{job_id}/result", response_model=OcrJobResultResponse, status_code=status.HTTP_200_OK)
 async def get_ocr_job_result(
-    job_id: Annotated[str, Path(pattern=r"^\d+$")],
+    job_id: Annotated[str, PathParam(pattern=r"^\d+$")],
     user: Annotated[User, Depends(get_request_user)],
     ocr_service: Annotated[OcrService, Depends(OcrService)],
+    background_tasks: BackgroundTasks,
 ) -> Response:
     result = await ocr_service.get_ocr_result(user=user, job_id=int(job_id))
+
+    # Re-fetch document info for secure deletion from router as a safeguard
+    job = await ocr_service.get_ocr_job(user=user, job_id=int(job_id))
+    if job:
+        await job.fetch_related("document")
+        if job.document:
+            abs_path = os.path.join(config.MEDIA_DIR, job.document.temp_storage_key)
+            background_tasks.add_task(delete_file_securely, abs_path)
+
     return Response(
         OcrJobResultResponse(
             job_id=str(result["job_id"]),

@@ -75,7 +75,7 @@ _ERROR_META: dict[ErrorCode, tuple[int, str, str | None, bool]] = {
     ),
     ErrorCode.FILE_INVALID_TYPE: (
         status.HTTP_400_BAD_REQUEST,
-        "지원하지 않는 파일 형식입니다. (PDF, JPG, PNG만 허용)",
+        "지원하지 않는 파일 형식입니다. (JPG, JPEG, PNG, PDF만 허용)",
         "다른 파일을 선택해주세요.",
         False,
     ),

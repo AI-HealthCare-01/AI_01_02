@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
-import { Loader2, AlertTriangle, Search } from "lucide-react";
+import { Loader2, AlertTriangle, Search, Bell, X } from "lucide-react";
 import { toast } from "sonner";
 import { ocrApi, guideApi, OcrMedication, request } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
@@ -186,6 +186,7 @@ export default function OcrResult() {
   const [editable, setEditable] = useState(false);
   const [hasLowConfidence, setHasLowConfidence] = useState(false);
   const [loadingResult, setLoadingResult] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
 
   // 이미 분석된 결과가 있으면 바로 result 단계로
   useEffect(() => {
@@ -251,6 +252,7 @@ export default function OcrResult() {
       const guide = await guideApi.createJob(jobId);
       localStorage.setItem("guide_job_id", guide.job_id);
       setPhase("summary");
+      setShowReminderModal(true);
     } catch (err: unknown) {
       toast.error(toUserMessage(err));
       setPhase("result");
@@ -412,6 +414,38 @@ export default function OcrResult() {
           </div>
         )}
       </div>
+
+      {/* 복약 알림 설정 제안 모달 */}
+      {showReminderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="bg-green-50 p-6 flex flex-col items-center text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <Bell className="w-8 h-8 text-green-600 animate-bounce" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">복약 알림을 설정할까요?</h3>
+              <p className="text-sm text-gray-500 leading-relaxed">
+                처방받은 약을 잊지 않고 제때 복용할 수 있도록<br />
+                맞춤형 복약 알림을 설정해 드릴까요?
+              </p>
+            </div>
+            <div className="p-4 flex flex-col gap-2">
+              <button
+                onClick={() => navigate("/medications")}
+                className="w-full py-3.5 gradient-primary text-white text-sm rounded-xl font-bold hover:shadow-lg transition-all active:scale-95"
+              >
+                지금 설정하기
+              </button>
+              <button
+                onClick={() => setShowReminderModal(false)}
+                className="w-full py-3.5 text-sm text-gray-400 font-medium hover:text-gray-600 transition-colors flex items-center justify-center gap-1"
+              >
+                <X className="w-4 h-4" /> 나중에 하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

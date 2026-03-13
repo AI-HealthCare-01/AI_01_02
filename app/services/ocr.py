@@ -69,16 +69,24 @@ class OcrService:
     async def _dispose_uploaded_document_file(self, *, temp_storage_key: str, job_id: int) -> None:
         absolute_file_path = Path(config.MEDIA_DIR).resolve() / temp_storage_key
         try:
-            absolute_file_path.unlink(missing_ok=True)
-        except OSError:
+            if absolute_file_path.exists():
+                absolute_file_path.unlink()
+                print(f"🔒 보안을 위해 원본 파일이 즉시 삭제되었습니다: {absolute_file_path}")
+            else:
+                default_logger.debug("File already disposed or not found: %s", absolute_file_path)
+        except Exception as e:
             default_logger.warning(
-                "failed to dispose raw ocr file on queue failure (job_id=%s path=%s)", job_id, absolute_file_path
+                "failed to dispose raw ocr file (job_id=%s path=%s, error=%s)", job_id, absolute_file_path, str(e)
             )
             return
+
         # REQ-126: 폐기 시각 기록
-        job = await OcrJob.get_or_none(id=job_id)
-        if job:
-            await Document.filter(id=job.document_id).update(disposed_at=datetime.now(config.TIMEZONE))
+        try:
+            job = await OcrJob.get_or_none(id=job_id)
+            if job:
+                await Document.filter(id=job.document_id).update(disposed_at=datetime.now(config.TIMEZONE))
+        except Exception:
+            default_logger.exception("failed to record disposal timestamp for job_id=%s", job_id)
 
     async def create_ocr_job(self, *, user: User, document_id: int) -> OcrJob:
         document = await self.repo.get_user_document(document_id=document_id, user_id=user.id)
