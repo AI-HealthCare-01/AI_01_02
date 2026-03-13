@@ -51,7 +51,7 @@ async def upload_document(
     # 1. 확장자 검증
     if not file.filename:
         raise AppException(ErrorCode.VALIDATION_ERROR, developer_message="파일명이 필요합니다.")
-    
+
     ext = file.filename.split(".")[-1].lower() if "." in file.filename else ""
     if ext not in config.OCR_ALLOWED_EXTENSIONS:
         raise AppException(ErrorCode.FILE_INVALID_TYPE)
