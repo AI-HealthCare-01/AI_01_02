@@ -430,7 +430,7 @@ export default function Records() {
           {/* 입력된 일상정보 */}
           <div className="card-warm p-5">
             <h3 className="text-sm font-bold text-gray-700 mb-3">입력된 일상정보</h3>
-            <div className="h-56 rounded-xl border border-gray-200 bg-white/70 p-3 overflow-y-auto">
+            <div className="rounded-xl border border-gray-200 bg-white/70 p-3">
               {!profile ? (
                 <p className="text-sm text-gray-400">온보딩 정보가 아직 없습니다.</p>
               ) : (
