@@ -60,3 +60,6 @@ class NotificationRepository:
             is_read=True,
             read_at=datetime.now(config.TIMEZONE),
         )
+
+    async def delete_read_notifications(self, *, user_id: int) -> int:
+        return await self._model.filter(user_id=user_id, is_read=True).delete()

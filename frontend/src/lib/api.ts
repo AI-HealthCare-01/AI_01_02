@@ -543,4 +543,7 @@ export const notificationApi = {
 
   markAllAsRead: () =>
     request<{ updated_count: number }>("/notifications/read-all", { method: "PATCH" }),
+
+  deleteRead: () =>
+    request<{ updated_count: number }>("/notifications/read", { method: "DELETE" }),
 };
