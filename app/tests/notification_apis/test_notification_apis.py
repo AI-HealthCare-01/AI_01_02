@@ -267,6 +267,34 @@ class TestNotificationApis(TestCase):
             assert len(alerts) == 2
             assert alerts[0].payload["profile_updated_at"] != alerts[1].payload["profile_updated_at"]
 
+    async def test_sleep_alert_is_created_again_when_profile_changes_same_day(self):
+        email = "noti_sleep_profile@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01040004006")
+            user = await User.get(email=email)
+
+            profile = await self._create_health_profile_with_allergy(user=user, drug_allergies=[])
+            await UserHealthProfile.filter(id=profile.id).update(daytime_sleepiness=9)
+
+            headers = {"Authorization": f"Bearer {access_token}"}
+            first = await client.get("/api/v1/notifications", headers=headers)
+            assert first.status_code == status.HTTP_200_OK
+
+            await UserHealthProfile.filter(id=profile.id).update(
+                daytime_sleepiness=9,
+                updated_at=datetime.now(config.TIMEZONE) + timedelta(minutes=1),
+            )
+            second = await client.get("/api/v1/notifications", headers=headers)
+            assert second.status_code == status.HTTP_200_OK
+
+            alerts = [
+                alert
+                for alert in await Notification.filter(user_id=user.id, type=NotificationType.HEALTH_ALERT).order_by("id")
+                if isinstance(alert.payload, dict) and alert.payload.get("alert_key") == "SLEEP::CONDITION_1"
+            ]
+            assert len(alerts) == 2
+            assert alerts[0].payload["profile_updated_at"] != alerts[1].payload["profile_updated_at"]
+
     async def test_list_notifications_triggers_dynamic_notification_sync(self):
         email = "notification_unread_sync@example.com"
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

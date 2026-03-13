@@ -266,6 +266,7 @@ class AnalysisService:
                         "severity": "HIGH",
                         "title": "영양 상태 주의 알림",
                         "message": await generate_nutrition_guidance(),
+                        "profile_updated_at": profile.updated_at.isoformat() if profile.updated_at else "",
                     }
                 )
 
@@ -277,6 +278,7 @@ class AnalysisService:
                         "severity": "HIGH",
                         "title": "수면 안전 알림",
                         "message": await generate_sleep_guidance(),
+                        "profile_updated_at": profile.updated_at.isoformat() if profile.updated_at else "",
                     }
                 )
         else:
