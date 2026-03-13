@@ -3,6 +3,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, Path, Query, UploadFile, status
 from fastapi.responses import ORJSONResponse as Response
 
+from app.core import config
+from app.core.exceptions import AppException, ErrorCode
+
 from app.dependencies.security import get_request_user
 from app.dtos.ocr import (
     DocumentUploadResponse,
@@ -33,6 +36,19 @@ async def upload_document(
     document_type: Annotated[DocumentType, Form()],
     file: Annotated[UploadFile, File()],
 ) -> Response:
+    # 1. 확장자 검증
+    if not file.filename:
+        raise AppException(ErrorCode.VALIDATION_ERROR, developer_message="파일명이 필요합니다.")
+    
+    ext = file.filename.split(".")[-1].lower() if "." in file.filename else ""
+    if ext not in config.OCR_ALLOWED_EXTENSIONS:
+        raise AppException(ErrorCode.FILE_INVALID_TYPE)
+
+    # 2. 파일 크기 검증 (FastAPI UploadFile.size 지원 시 사용, 아니면 content-length 활용 가능)
+    # 10MB = 10 * 1024 * 1024 bytes
+    if file.size and file.size > config.OCR_MAX_FILE_SIZE_BYTES:
+        raise AppException(ErrorCode.FILE_TOO_LARGE)
+
     document = await ocr_service.upload_document(user=user, document_type=document_type, file=file)
     return Response(
         DocumentUploadResponse(

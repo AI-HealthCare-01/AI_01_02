@@ -23,13 +23,29 @@ export default function OcrScan() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   function handleFile(f: File) {
-    if (!f.type.startsWith("image/")) {
-      toast.error("이미지 파일만 업로드할 수 있습니다.");
+    const allowedExtensions = ["jpg", "jpeg", "png", "pdf"];
+    const ext = f.name.split(".").pop()?.toLowerCase() || "";
+    const isAllowedExt = allowedExtensions.includes(ext);
+    const isAllowedType = f.type.startsWith("image/") || f.type === "application/pdf";
+
+    if (!isAllowedExt || !isAllowedType) {
+      toast.error("지원하지 않는 파일 형식입니다. (JPG, JPEG, PNG, PDF만 허용)");
       return;
     }
+
+    if (f.size > 10 * 1024 * 1024) {
+      toast.error("파일 크기가 10MB를 초과했습니다.");
+      return;
+    }
+
     if (preview) URL.revokeObjectURL(preview);
     setFile(f);
-    setPreview(URL.createObjectURL(f));
+    // PDF는 미리보기를 지원하지 않으므로 아이콘 등을 보여줄 수 있지만, 일단 null 처리하거나 처리 보류
+    if (f.type.startsWith("image/")) {
+      setPreview(URL.createObjectURL(f));
+    } else {
+      setPreview(null); // PDF의 경우 미리보기 생략 (혹은 PDF 아이콘 처리 가능)
+    }
   }
 
   function onDrop(e: React.DragEvent) {
@@ -96,20 +112,25 @@ export default function OcrScan() {
 
         {/* 업로드 영역 */}
         <div
-          className={`border-2 border-dashed rounded-xl bg-white transition-all duration-200 ${
-            dragging ? "border-green-400 bg-green-50" : "border-gray-200"
-          }`}
+          className={`border-2 border-dashed rounded-xl bg-white transition-all duration-200 ${dragging ? "border-green-400 bg-green-50" : "border-gray-200"
+            }`}
           onDrop={onDrop}
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
         >
           {preview ? (
             <div className="p-4">
-              <img
-                src={preview}
-                alt="처방전 미리보기"
-                className="w-full max-h-64 object-contain rounded-lg mx-auto"
-              />
+              {file?.type === "application/pdf" ? (
+                <div className="w-full h-48 flex flex-col items-center justify-center bg-gray-50 rounded-lg border border-gray-100">
+                  <p className="text-sm font-semibold text-gray-400">PDF 문서 파일</p>
+                </div>
+              ) : (
+                <img
+                  src={preview || ""}
+                  alt="처방전 미리보기"
+                  className="w-full max-h-64 object-contain rounded-lg mx-auto"
+                />
+              )}
               <p className="text-center text-xs text-gray-400 mt-2">{file?.name}</p>
             </div>
           ) : (
@@ -122,7 +143,7 @@ export default function OcrScan() {
               </button>
               <p className="text-sm text-green-600">파일을 드래그 하거나 클릭하여 선택하세요</p>
               <p className="text-xs text-gray-400 mt-4">
-                PNG, JPG, JPEG 형식 지원 · 처방전 전체가 잘 보이도록 촬영해주세요.
+                JPG, PNG, PDF 지원 (최대 10MB) · 처방전 전체가 잘 보이도록 촬영해주세요.
               </p>
             </div>
           )}
@@ -130,7 +151,7 @@ export default function OcrScan() {
           <input
             ref={inputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,.pdf"
             capture="environment"
             className="hidden"
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
