@@ -14,6 +14,8 @@ import {
 import { toUserMessage } from "@/lib/errorMessages";
 import MedicationScheduleCard from "@/components/medication/MedicationScheduleCard";
 
+const CAFFEINE_MG_PER_CUP = 150;
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function toDateStr(d: Date) {
@@ -226,6 +228,7 @@ export default function Records() {
     load(date);
   }
 
+  const todayStr = toDateStr(new Date());
   const today = new Date();
   const calendarMonthLabel = calendarMonth.toLocaleDateString("ko-KR", {
     year: "numeric",
@@ -243,10 +246,10 @@ export default function Records() {
       return {
         date,
         inCurrentMonth: date.getMonth() === calendarMonth.getMonth(),
-        isFuture: toDateStr(date) > toDateStr(today),
+        isFuture: toDateStr(date) > todayStr,
       };
     });
-  }, [calendarMonth, today]);
+  }, [calendarMonth, todayStr]);
   const dateLabel = selectedDate.toLocaleDateString("ko-KR", {
     month: "long",
     day: "numeric",
@@ -325,8 +328,9 @@ export default function Records() {
                       onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
                       disabled={
-                        calendarMonth.getFullYear() === today.getFullYear()
-                        && calendarMonth.getMonth() >= today.getMonth()
+                        calendarMonth.getFullYear() > today.getFullYear()
+                        || (calendarMonth.getFullYear() === today.getFullYear()
+                            && calendarMonth.getMonth() >= today.getMonth())
                       }
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -521,7 +525,7 @@ function EditModal({
   const [pcHours, setPcHours] = useState(String(ls?.pc_hours_per_day ?? 0));
   const [phoneHours, setPhoneHours] = useState(String(ls?.smartphone_hours_per_day ?? 0));
   const [coffee, setCoffee] = useState(String(ls?.caffeine_cups_per_day ?? 0));
-  const coffeeMg = (parseInt(coffee, 10) || 0) * 150;
+  const coffeeMg = (parseInt(coffee, 10) || 0) * CAFFEINE_MG_PER_CUP;
   const [smoking, setSmoking] = useState(() => (ls?.smoking ?? 0) > 0 ? "light" : "none");
   const [alcohol, setAlcohol] = useState(() => {
     const freq = ls?.alcohol_frequency_per_week ?? 0;

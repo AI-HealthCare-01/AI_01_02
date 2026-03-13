@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import OnboardingShell from "./OnboardingShell";
 
+const CAFFEINE_MG_PER_CUP = 150;
+
 const EXERCISE_OPTIONS = [
   { value: "low", label: "낮음", desc: "주 1회 이하" },
   { value: "moderate", label: "보통", desc: "주 2~3회" },
@@ -28,7 +30,7 @@ export default function Lifestyle() {
   const [caffeineCups, setCaffeineCups] = useState("0");
   const [smoking, setSmoking] = useState("none");
   const [alcohol, setAlcohol] = useState("low");
-  const caffeineMg = (parseInt(caffeineCups, 10) || 0) * 150;
+  const caffeineMg = (parseInt(caffeineCups, 10) || 0) * CAFFEINE_MG_PER_CUP;
 
   function handleNext() {
     const exerciseMap: Record<string, number> = {
