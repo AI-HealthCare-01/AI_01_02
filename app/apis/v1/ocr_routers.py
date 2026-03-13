@@ -2,12 +2,12 @@ import os
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Path as PathParam, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile, status
+from fastapi import Path as PathParam
 from fastapi.responses import ORJSONResponse as Response
 
 from app.core import config
 from app.core.exceptions import AppException, ErrorCode
-
 from app.dependencies.security import get_request_user
 from app.dtos.ocr import (
     DocumentUploadResponse,
@@ -51,7 +51,7 @@ async def upload_document(
     # 1. 확장자 검증
     if not file.filename:
         raise AppException(ErrorCode.VALIDATION_ERROR, developer_message="파일명이 필요합니다.")
-    
+
     ext = file.filename.split(".")[-1].lower() if "." in file.filename else ""
     if ext not in config.OCR_ALLOWED_EXTENSIONS:
         raise AppException(ErrorCode.FILE_INVALID_TYPE)

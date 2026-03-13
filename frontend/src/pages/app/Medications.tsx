@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Pill, ChevronDown, ChevronUp, AlertTriangle, Upload, BookOpen, Pencil, X, Trash2 } from "lucide-react";
+import { Pill, ChevronDown, ChevronUp, AlertTriangle, Upload, Pencil, X, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { reminderApi, guideApi, Reminder, DdayReminder, GuideJobResult } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
@@ -127,6 +127,19 @@ export default function Medications() {
     }
   }
 
+  // 가이드 데이터를 drug_name 기준 맵으로 파싱
+  const guideMap: Record<string, MedGuideItem> = {};
+  if (guide) {
+    try {
+      const parsed = JSON.parse(guide.medication_guidance);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed as MedGuideItem[]) {
+          if (item.drug_name) guideMap[item.drug_name] = item;
+        }
+      }
+    } catch {}
+  }
+
   const active = reminders.filter((r) => r.enabled);
   const inactive = reminders.filter((r) => !r.enabled);
   const ddayWarnings = Object.values(ddayMap).filter((d) => d.remaining_days <= 7);
@@ -184,6 +197,7 @@ export default function Medications() {
                         key={r.id}
                         reminder={r}
                         dday={ddayMap[r.medication_name]}
+                        guideItem={guideMap[r.medication_name]}
                         expanded={expandedId === r.id}
                         editing={editingId === r.id}
                         onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
@@ -206,6 +220,7 @@ export default function Medications() {
                         key={r.id}
                         reminder={r}
                         dday={ddayMap[r.medication_name]}
+                        guideItem={guideMap[r.medication_name]}
                         expanded={expandedId === r.id}
                         editing={editingId === r.id}
                         onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
@@ -223,21 +238,6 @@ export default function Medications() {
 
         {/* ── 우측 패널 ── */}
         <div className="w-full lg:w-64 shrink-0 space-y-3">
-          {/* 약물 상세 정보 */}
-          <div className="card-warm rounded-xl p-5 min-h-[160px]">
-            <div className="flex items-center gap-2 mb-3">
-              <BookOpen className="w-4 h-4 text-green-500" />
-              <p className="text-sm font-semibold text-gray-700">약물 상세 정보</p>
-            </div>
-            {guide ? (
-              <MedicationGuideSummary raw={guide.medication_guidance} />
-            ) : (
-              <p className="text-xs text-gray-400">
-                처방전 스캔 후 AI 가이드가 생성되면 약물 상세 정보가 표시됩니다.
-              </p>
-            )}
-          </div>
-
           {/* 이번 주 복약 */}
           <div className="card-warm rounded-xl p-5">
             <h3 className="text-sm font-bold text-gray-700 mb-4">이번 주 복약</h3>
@@ -285,6 +285,7 @@ export default function Medications() {
 function MedicationAccordion({
   reminder: r,
   dday,
+  guideItem,
   expanded,
   editing,
   onToggle,
@@ -294,6 +295,7 @@ function MedicationAccordion({
 }: {
   reminder: Reminder;
   dday?: DdayReminder;
+  guideItem?: MedGuideItem;
   expanded: boolean;
   editing: boolean;
   onToggle: () => void;
@@ -431,6 +433,22 @@ function MedicationAccordion({
             <p className="text-xs font-medium text-gray-400 mt-2">
               {r.start_date ?? "—"} ~ {r.end_date ?? "계속"}
             </p>
+          )}
+
+          {/* 약물 상세 정보 (가이드) */}
+          {guideItem && (guideItem.precautions || guideItem.side_effects) && (
+            <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
+              {guideItem.precautions && (
+                <p className="text-xs text-amber-600">
+                  <span className="font-semibold">주의:</span> {guideItem.precautions}
+                </p>
+              )}
+              {guideItem.side_effects && (
+                <p className="text-xs text-red-400">
+                  <span className="font-semibold">부작용:</span> {guideItem.side_effects}
+                </p>
+              )}
+            </div>
           )}
 
           <button
@@ -601,41 +619,3 @@ interface MedGuideItem {
   side_effects?: string;
 }
 
-function MedicationGuideSummary({ raw }: { raw: string }) {
-  let items: MedGuideItem[] = [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) items = parsed;
-  } catch {
-    // JSON 파싱 실패 시 원본 텍스트 요약 표시
-    return <p className="text-xs text-gray-500 leading-relaxed line-clamp-[8]">{raw}</p>;
-  }
-
-  if (items.length === 0) {
-    return <p className="text-xs text-gray-400">약물 정보가 없습니다.</p>;
-  }
-
-  return (
-    <div className="space-y-3">
-      {items.map((item, i) => (
-        <div key={i}>
-          <p className="text-xs font-semibold text-gray-700">
-            {item.drug_name ?? "약물"}{item.dose ? ` ${item.dose}` : ""}
-          </p>
-          {item.frequency_per_day && (
-            <p className="text-xs text-gray-500">
-              1일 {item.frequency_per_day}회
-              {item.intake_time && ` (${Array.isArray(item.intake_time) ? item.intake_time.join(", ") : item.intake_time})`}
-            </p>
-          )}
-          {item.precautions && (
-            <p className="text-xs text-amber-600 mt-0.5">주의: {item.precautions}</p>
-          )}
-          {item.side_effects && (
-            <p className="text-xs text-red-400 mt-0.5">부작용: {item.side_effects}</p>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
