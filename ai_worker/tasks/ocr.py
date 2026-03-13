@@ -161,9 +161,13 @@ def _format_error_message(*, failure_code: OcrFailureCode, detail: str) -> str:
 
 def _dispose_raw_document_file(*, file_path: Path, job_id: int, logger: Logger) -> None:
     try:
-        file_path.unlink(missing_ok=True)
-    except OSError:
-        logger.warning("failed to dispose raw ocr file (job_id=%s path=%s)", job_id, file_path)
+        if file_path.exists():
+            file_path.unlink()
+            print(f"🔒 보안을 위해 원본 파일이 즉시 삭제되었습니다: {file_path}")
+        else:
+            logger.debug("File already disposed or not found (job_id=%s): %s", job_id, file_path)
+    except Exception as e:
+        logger.warning("failed to dispose raw ocr file (job_id=%s path=%s, error=%s)", job_id, file_path, str(e))
 
 
 async def process_ocr_job(
@@ -265,5 +269,10 @@ async def process_ocr_job(
             )
         _dispose_raw_document_file(file_path=absolute_file_path, job_id=current.id, logger=logger)
         logger.exception("ocr job processing failed (job_id=%s)", job_id)
+    finally:
+        # 1-Pass 구조이므로 이미지 데이터(bytes)를 이미 읽었다면
+        # 성공/실패 무관하게 여기서 최종적으로 파일을 정리합니다.
+        if absolute_file_path.exists():
+            _dispose_raw_document_file(file_path=absolute_file_path, job_id=job_id, logger=logger)
 
     return True
