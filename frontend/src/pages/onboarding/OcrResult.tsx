@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
-import { Loader2, AlertTriangle, Search, Bell, X } from "lucide-react";
+import { Loader2, AlertTriangle, Search, Bell, X, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { ocrApi, guideApi, OcrMedication, request } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
@@ -189,7 +189,7 @@ type Phase = "preview" | "analyzing" | "result" | "confirming" | "summary";
 export default function OcrResult() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { file, preview: statePreview } = (location.state ?? {}) as { file?: File; preview?: string };
+  const { file, preview: statePreview } = (location.state ?? {}) as { file?: File; preview?: string | null };
 
   const [phase, setPhase] = useState<Phase>("preview");
   const [preview] = useState<string | null>(statePreview ?? null);
@@ -303,8 +303,9 @@ export default function OcrResult() {
           {preview ? (
             <img src={preview} alt="처방전" className="w-full object-contain" />
           ) : (
-            <div className="h-48 flex items-center justify-center text-gray-300 text-sm">
-              이미지 없음
+            <div className="h-48 flex flex-col items-center justify-center text-gray-400">
+              <FileText className="w-10 h-10 text-gray-300 mb-2" />
+              <p className="text-sm font-medium">{file?.name ?? "PDF 문서"}</p>
             </div>
           )}
 

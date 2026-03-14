@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router";
-import { CheckCircle, XCircle } from "lucide-react";
+import { Camera, CheckCircle, Upload, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const GOOD_TIPS = [
@@ -21,6 +21,7 @@ export default function OcrScan() {
   const [preview, setPreview] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   function handleFile(f: File) {
     const allowedExtensions = ["jpg", "jpeg", "png", "pdf"];
@@ -118,10 +119,11 @@ export default function OcrScan() {
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
         >
-          {preview ? (
+          {file ? (
             <div className="p-4">
-              {file?.type === "application/pdf" ? (
+              {file.type === "application/pdf" ? (
                 <div className="w-full h-48 flex flex-col items-center justify-center bg-gray-50 rounded-lg border border-gray-100">
+                  <Upload className="w-8 h-8 text-gray-300 mb-2" />
                   <p className="text-sm font-semibold text-gray-400">PDF 문서 파일</p>
                 </div>
               ) : (
@@ -131,17 +133,27 @@ export default function OcrScan() {
                   className="w-full max-h-64 object-contain rounded-lg mx-auto"
                 />
               )}
-              <p className="text-center text-xs text-gray-400 mt-2">{file?.name}</p>
+              <p className="text-center text-xs text-gray-400 mt-2">{file.name}</p>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-              <button
-                onClick={() => inputRef.current?.click()}
-                className="px-8 py-3 gradient-primary text-white text-sm rounded-xl font-bold hover:shadow-lg transition-all duration-200 mb-3"
-              >
-                파일 업로드
-              </button>
-              <p className="text-sm text-green-600">파일을 드래그 하거나 클릭하여 선택하세요</p>
+              <div className="flex gap-3 mb-3">
+                <button
+                  onClick={() => cameraRef.current?.click()}
+                  className="px-6 py-3 gradient-primary text-white text-sm rounded-xl font-bold hover:shadow-lg transition-all duration-200 flex items-center gap-2"
+                >
+                  <Camera className="w-4 h-4" />
+                  사진 촬영
+                </button>
+                <button
+                  onClick={() => inputRef.current?.click()}
+                  className="px-6 py-3 border border-gray-200 text-sm text-gray-600 rounded-xl font-bold hover:bg-gray-50 transition-all duration-200 flex items-center gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  파일 선택
+                </button>
+              </div>
+              <p className="text-sm text-green-600">파일을 드래그 하거나 위 버튼을 클릭하세요</p>
               <p className="text-xs text-gray-400 mt-4">
                 JPG, PNG, PDF 지원 (최대 10MB) · 처방전 전체가 잘 보이도록 촬영해주세요.
               </p>
@@ -149,10 +161,17 @@ export default function OcrScan() {
           )}
 
           <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+          />
+          <input
             ref={inputRef}
             type="file"
             accept="image/*,.pdf"
-            capture="environment"
             className="hidden"
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
           />
