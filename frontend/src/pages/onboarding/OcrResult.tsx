@@ -37,13 +37,25 @@ function MedRow({
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSug, setShowSug] = useState(false);
   const sugRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchIdRef = useRef(0);
 
-  async function handleDrugNameChange(v: string) {
+  // cleanup debounce timer on unmount
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }, []);
+
+  function handleDrugNameChange(v: string) {
     onChange(index, "drug_name", v);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     if (v.length >= 1) {
-      const results = await searchMedications(v);
-      setSuggestions(results);
-      setShowSug(results.length > 0);
+      debounceRef.current = setTimeout(async () => {
+        const id = ++searchIdRef.current;
+        const results = await searchMedications(v);
+        if (id !== searchIdRef.current) return; // stale
+        setSuggestions(results);
+        setShowSug(results.length > 0);
+      }, 300);
     } else {
       setShowSug(false);
     }
