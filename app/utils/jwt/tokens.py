@@ -35,9 +35,7 @@ class Token:
                 raise TokenError("Token is invalid") from err
 
             if self.payload.get("type") != self.token_type:
-                raise TokenError(
-                    f"Token type mismatch: expected '{self.token_type}', got '{self.payload.get('type')}'"
-                )
+                raise TokenError(f"Token type mismatch: expected '{self.token_type}', got '{self.payload.get('type')}'")
         else:
             self.payload = {"type": self.token_type}
             self.set_exp(from_time=self.current_time, lifetime=self.lifetime)
