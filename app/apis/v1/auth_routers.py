@@ -8,7 +8,7 @@ from app.core import config
 from app.core.config import Env
 from app.core.exceptions import AppException, ErrorCode
 from app.dtos.auth import LoginRequest, LoginResponse, SignUpRequest, TokenRefreshResponse
-from app.services.auth import AuthService
+from app.services.auth import AuthService, blacklist_jti
 from app.services.jwt import JwtService
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
@@ -55,7 +55,45 @@ async def token_refresh(
 ) -> Response:
     if not refresh_token:
         raise AppException(ErrorCode.AUTH_INVALID_TOKEN, developer_message="Refresh token is missing.")
-    access_token = await jwt_service.refresh_jwt(refresh_token)
-    return Response(
-        content=TokenRefreshResponse(access_token=str(access_token)).model_dump(), status_code=status.HTTP_200_OK
+    tokens = await jwt_service.refresh_jwt(refresh_token)
+    new_refresh_token = tokens["refresh_token"]
+    refresh_token_exp = datetime.fromtimestamp(new_refresh_token.payload["exp"], tz=UTC)
+    resp = Response(
+        content=TokenRefreshResponse(access_token=str(tokens["access_token"])).model_dump(),
+        status_code=status.HTTP_200_OK,
     )
+    resp.set_cookie(
+        key="refresh_token",
+        value=str(new_refresh_token),
+        httponly=True,
+        secure=config.ENV == Env.PROD,
+        samesite="lax",
+        domain=config.COOKIE_DOMAIN or None,
+        expires=refresh_token_exp,
+        max_age=config.REFRESH_TOKEN_EXPIRE_MINUTES * 60,
+    )
+    return resp
+
+
+@auth_router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout(
+    jwt_service: Annotated[JwtService, Depends(JwtService)],
+    refresh_token: Annotated[str | None, Cookie()] = None,
+) -> Response:
+    if refresh_token:
+        try:
+            verified_rt = jwt_service.verify_jwt(token=refresh_token, token_type="refresh")
+            rt_jti = verified_rt.payload.get("jti", "")
+            if rt_jti:
+                await blacklist_jti(rt_jti)
+        except AppException:
+            pass
+    resp = Response(content={"detail": "로그아웃되었습니다."}, status_code=status.HTTP_200_OK)
+    resp.delete_cookie(
+        key="refresh_token",
+        httponly=True,
+        secure=config.ENV == Env.PROD,
+        samesite="lax",
+        domain=config.COOKIE_DOMAIN or None,
+    )
+    return resp

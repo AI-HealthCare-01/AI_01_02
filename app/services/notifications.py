@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 
 from tortoise.transactions import in_transaction
@@ -62,8 +63,10 @@ class NotificationService:
 
     async def _sync_dynamic_notifications(self, *, user: User) -> None:
         await self.guide_automation_service.notify_weekly_refresh_if_due(user_id=user.id)
-        await self._sync_health_alert_notifications(user=user)
-        await self._sync_dday_notifications(user=user)
+        await asyncio.gather(
+            self._sync_health_alert_notifications(user=user),
+            self._sync_dday_notifications(user=user),
+        )
 
     async def _sync_dday_notifications(self, *, user: User) -> None:
         setting = await self.notification_setting_service.get_or_create(user=user)

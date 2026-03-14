@@ -109,6 +109,9 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
+
+  logout: () =>
+    fetch(`${BASE}/auth/logout`, { method: "POST", credentials: "include" }).catch(() => {}),
 };
 
 // ── Schedules ─────────────────────────────────────────

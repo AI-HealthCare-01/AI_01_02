@@ -73,6 +73,9 @@ def _similarity(a: str, b: str) -> float:
 
 
 class PsychDrugService:
+    _MATCH_CACHE_MAX_SIZE = 512
+    _match_cache: dict[str, PsychDrug | None] = {}
+
     @staticmethod
     def _strip_dose_from_name(name: str) -> str:
         cleaned = re.sub(r"\(\s*\d+(?:\.\d+)?\s*mg\s*\)", "", name, flags=re.IGNORECASE)
@@ -132,6 +135,11 @@ class PsychDrugService:
     async def find_best_match(self, *, product_name: str, dose_mg: float | None = None) -> PsychDrug | None:
         if not product_name:
             return None
+        cache_key = f"{product_name}::{dose_mg}"
+        if cache_key in self._match_cache:
+            return self._match_cache[cache_key]
+        if len(self._match_cache) >= self._MATCH_CACHE_MAX_SIZE:
+            self._match_cache.clear()
         cleaned_name = self._strip_dose_from_name(product_name)
         query_names: list[str] = [product_name]
         if cleaned_name and cleaned_name.lower() != product_name.lower():
@@ -140,13 +148,16 @@ class PsychDrugService:
         for query_name in query_names:
             exact = await PsychDrug.filter(product_name__iexact=query_name).first()
             if exact:
+                self._match_cache[cache_key] = exact
                 return exact
 
             contains = await PsychDrug.filter(product_name__icontains=query_name).order_by("product_name").first()
             if contains:
+                self._match_cache[cache_key] = contains
                 return contains
 
         if dose_mg is None:
+            self._match_cache[cache_key] = None
             return None
 
         dose_str = self.format_dose(dose_mg)
@@ -157,5 +168,7 @@ class PsychDrugService:
                 .first()
             )
             if dose_contains:
+                self._match_cache[cache_key] = dose_contains
                 return dose_contains
+        self._match_cache[cache_key] = None
         return None

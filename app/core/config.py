@@ -87,6 +87,7 @@ class Config(BaseSettings):
     REDIS_SOCKET_TIMEOUT_SECONDS: float = 0.2
 
     COOKIE_DOMAIN: str = "localhost"
+    FRONTEND_ORIGIN: str = ""
 
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1

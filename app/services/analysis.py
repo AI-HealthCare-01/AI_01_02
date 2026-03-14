@@ -208,24 +208,40 @@ class AnalysisService:
 
             drug_allergies = basic_info.get("drug_allergies", [])
             if drug_allergies:
+                # Pre-resolve allergy ingredients once (avoid repeated DB lookups)
+                resolved_allergies: dict[str, tuple[str, set[str]]] = {}
+                for allergy in drug_allergies:
+                    allergy_text = str(allergy or "")
+                    if allergy_text and allergy_text not in resolved_allergies:
+                        resolved_allergies[allergy_text] = await _resolve_allergy_ingredient(
+                            allergy_text, psych_drug_service
+                        )
+
                 ocr_jobs = await OcrJob.filter(user_id=user.id, status=OcrJobStatus.SUCCEEDED).order_by(
                     "-created_at", "-id"
                 )
+                # Cache prescribed ingredient resolutions to avoid re-resolving the same drug
+                resolved_drugs: dict[str, tuple[str, set[str]]] = {}
+
                 for job in ocr_jobs:
                     if not job.structured_result:
                         continue
                     medications = _extract_medications_from_ocr_job(job)
                     for med in medications:
                         drug_name = str(med.get("drug_name", "") or "")
-                        matched_ingredient, medication_candidates = await _resolve_prescribed_ingredient(
-                            drug_name, psych_drug_service
-                        )
+                        if not drug_name:
+                            continue
+                        if drug_name not in resolved_drugs:
+                            resolved_drugs[drug_name] = await _resolve_prescribed_ingredient(
+                                drug_name, psych_drug_service
+                            )
+                        matched_ingredient, medication_candidates = resolved_drugs[drug_name]
                         if not medication_candidates:
                             continue
                         for allergy in drug_allergies:
                             allergy_text = str(allergy or "")
-                            resolved_allergy, allergy_candidates = await _resolve_allergy_ingredient(
-                                allergy_text, psych_drug_service
+                            resolved_allergy, allergy_candidates = resolved_allergies.get(
+                                allergy_text, ("", set())
                             )
                             if not allergy_candidates or allergy_candidates.isdisjoint(medication_candidates):
                                 continue
