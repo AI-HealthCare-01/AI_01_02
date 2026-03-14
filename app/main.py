@@ -9,13 +9,13 @@ from pathlib import Path
 import sentry_sdk
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from tortoise import Tortoise
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.apis.v1 import v1_routers
 from app.apis.v2 import v2_routers
