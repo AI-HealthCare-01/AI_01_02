@@ -208,57 +208,15 @@ class AnalysisService:
 
             drug_allergies = basic_info.get("drug_allergies", [])
             if drug_allergies:
-                ocr_jobs = await OcrJob.filter(user_id=user.id, status=OcrJobStatus.SUCCEEDED).order_by(
-                    "-created_at", "-id"
+                await self._check_allergy_conflicts(
+                    user=user,
+                    profile=profile,
+                    drug_allergies=drug_allergies,
+                    psych_drug_service=psych_drug_service,
+                    allergy_alerts=allergy_alerts,
+                    emergency_alerts=emergency_alerts,
+                    seen_emergency_keys=seen_emergency_keys,
                 )
-                for job in ocr_jobs:
-                    if not job.structured_result:
-                        continue
-                    medications = _extract_medications_from_ocr_job(job)
-                    for med in medications:
-                        drug_name = str(med.get("drug_name", "") or "")
-                        matched_ingredient, medication_candidates = await _resolve_prescribed_ingredient(
-                            drug_name, psych_drug_service
-                        )
-                        if not medication_candidates:
-                            continue
-                        for allergy in drug_allergies:
-                            allergy_text = str(allergy or "")
-                            resolved_allergy, allergy_candidates = await _resolve_allergy_ingredient(
-                                allergy_text, psych_drug_service
-                            )
-                            if not allergy_candidates or allergy_candidates.isdisjoint(medication_candidates):
-                                continue
-
-                            canonical_ingredient = resolved_allergy or matched_ingredient or allergy_text
-                            alert_key = f"ALLERGY::{canonical_ingredient}::{drug_name}"
-                            if alert_key in seen_emergency_keys:
-                                continue
-                            seen_emergency_keys.add(alert_key)
-                            guidance_message = await generate_allergy_medication_guidance(
-                                medication_name=drug_name,
-                                allergy_substance=canonical_ingredient,
-                            )
-                            allergy_alerts.append(
-                                {
-                                    "medication_name": drug_name,
-                                    "allergy_substance": canonical_ingredient,
-                                    "matched_ingredient": matched_ingredient or canonical_ingredient,
-                                    "severity": "HIGH",
-                                    "message": guidance_message,
-                                }
-                            )
-                            emergency_alerts.append(
-                                {
-                                    "alert_key": alert_key,
-                                    "type": "ALLERGY",
-                                    "severity": "HIGH",
-                                    "title": "알레르기 약물 충돌 가능성",
-                                    "message": guidance_message,
-                                    "source_ocr_job_id": job.id,
-                                    "profile_updated_at": profile.updated_at.isoformat() if profile.updated_at else "",
-                                }
-                            )
 
             if is_nutrition_guide_condition_1(basic_info=basic_info, nutrition_input=nutrition_input):
                 emergency_alerts.append(
@@ -298,3 +256,72 @@ class AnalysisService:
             "allergy_alerts": allergy_alerts,
             "emergency_alerts": emergency_alerts,
         }
+
+    async def _check_allergy_conflicts(
+        self,
+        *,
+        user: User,
+        profile: UserHealthProfile,
+        drug_allergies: list[str],
+        psych_drug_service: PsychDrugService,
+        allergy_alerts: list[dict[str, Any]],
+        emergency_alerts: list[dict[str, Any]],
+        seen_emergency_keys: set[str],
+    ) -> None:
+        resolved_allergies: dict[str, tuple[str, set[str]]] = {}
+        for allergy in drug_allergies:
+            allergy_text = str(allergy or "")
+            if allergy_text and allergy_text not in resolved_allergies:
+                resolved_allergies[allergy_text] = await _resolve_allergy_ingredient(allergy_text, psych_drug_service)
+
+        ocr_jobs = await OcrJob.filter(user_id=user.id, status=OcrJobStatus.SUCCEEDED).order_by("-created_at", "-id")
+        resolved_drugs: dict[str, tuple[str, set[str]]] = {}
+
+        for job in ocr_jobs:
+            if not job.structured_result:
+                continue
+            medications = _extract_medications_from_ocr_job(job)
+            for med in medications:
+                drug_name = str(med.get("drug_name", "") or "")
+                if not drug_name:
+                    continue
+                if drug_name not in resolved_drugs:
+                    resolved_drugs[drug_name] = await _resolve_prescribed_ingredient(drug_name, psych_drug_service)
+                matched_ingredient, medication_candidates = resolved_drugs[drug_name]
+                if not medication_candidates:
+                    continue
+                for allergy in drug_allergies:
+                    allergy_text = str(allergy or "")
+                    resolved_allergy, allergy_candidates = resolved_allergies.get(allergy_text, ("", set()))
+                    if not allergy_candidates or allergy_candidates.isdisjoint(medication_candidates):
+                        continue
+
+                    canonical_ingredient = resolved_allergy or matched_ingredient or allergy_text
+                    alert_key = f"ALLERGY::{canonical_ingredient}::{drug_name}"
+                    if alert_key in seen_emergency_keys:
+                        continue
+                    seen_emergency_keys.add(alert_key)
+                    guidance_message = await generate_allergy_medication_guidance(
+                        medication_name=drug_name,
+                        allergy_substance=canonical_ingredient,
+                    )
+                    allergy_alerts.append(
+                        {
+                            "medication_name": drug_name,
+                            "allergy_substance": canonical_ingredient,
+                            "matched_ingredient": matched_ingredient or canonical_ingredient,
+                            "severity": "HIGH",
+                            "message": guidance_message,
+                        }
+                    )
+                    emergency_alerts.append(
+                        {
+                            "alert_key": alert_key,
+                            "type": "ALLERGY",
+                            "severity": "HIGH",
+                            "title": "알레르기 약물 충돌 가능성",
+                            "message": guidance_message,
+                            "source_ocr_job_id": job.id,
+                            "profile_updated_at": profile.updated_at.isoformat() if profile.updated_at else "",
+                        }
+                    )

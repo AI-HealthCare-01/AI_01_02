@@ -9,6 +9,7 @@ from pathlib import Path
 import sentry_sdk
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
@@ -19,6 +20,7 @@ from tortoise import Tortoise
 from app.apis.v1 import v1_routers
 from app.apis.v2 import v2_routers
 from app.core import config
+from app.core.config import Env
 from app.core.exceptions import AppException, ErrorCode
 from app.core.logger import default_logger as logger
 from app.db.databases import initialize_tortoise
@@ -166,14 +168,23 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 
+_is_prod = config.ENV == Env.PROD
+
 app = FastAPI(
     lifespan=lifespan,
     default_response_class=ORJSONResponse,
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    docs_url=None if _is_prod else "/api/docs",
+    redoc_url=None if _is_prod else "/api/redoc",
+    openapi_url=None if _is_prod else "/api/openapi.json",
 )
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[config.FRONTEND_ORIGIN] if config.FRONTEND_ORIGIN else [],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 initialize_tortoise(app)
 
 app.include_router(v1_routers)
@@ -210,11 +221,20 @@ def _get_request_id(request: Request) -> str | None:
 
 @app.exception_handler(AppException)
 async def app_exception_handler(request: Request, exc: AppException) -> ORJSONResponse:
+    if _is_prod and exc.developer_message:
+        logger.warning(
+            "app_exception",
+            extra={
+                "code": exc.code,
+                "developer_message": exc.developer_message,
+                "request_id": _get_request_id(request),
+            },
+        )
     return _error_response(
         exc.http_status,
         exc.code,
         exc.user_message,
-        detail=exc.developer_message,
+        detail=None if _is_prod else exc.developer_message,
         action_hint=exc.action_hint,
         retryable=exc.retryable,
         request_id=_get_request_id(request),

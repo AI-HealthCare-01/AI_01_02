@@ -8,7 +8,7 @@ import {
   LogOut,
   UserX,
 } from "lucide-react";
-import { clearToken, userApi } from "@/lib/api";
+import { authApi, clearToken, userApi } from "@/lib/api";
 import { useState } from "react";
 
 const NAV_ITEMS = [
@@ -24,6 +24,7 @@ export default function AppLayout() {
   const [showWithdraw, setShowWithdraw] = useState(false);
 
   function handleLogout() {
+    authApi.logout();
     clearToken();
     navigate("/login");
   }

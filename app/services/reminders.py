@@ -116,6 +116,9 @@ class ReminderService:
         return sorted(result, key=lambda x: x.remaining_days)
 
     async def sync_from_ocr_medications(self, *, user: User, medications: list[dict[str, Any]]) -> None:
+        existing_reminders = await MedicationReminder.filter(user_id=user.id)
+        existing_by_name: dict[str, MedicationReminder] = {r.medication_name: r for r in existing_reminders}
+
         for med in medications:
             if not isinstance(med, dict):
                 continue
@@ -136,7 +139,7 @@ class ReminderService:
             dose_text = self._extract_dose_text(med)
             daily_intake_count = self._parse_int(med.get("frequency_per_day"))
 
-            existing = await MedicationReminder.filter(user_id=user.id, medication_name=medication_name).first()
+            existing = existing_by_name.get(medication_name)
             if existing:
                 existing.schedule_times = schedule_times
                 existing.dose_text = dose_text
@@ -157,7 +160,7 @@ class ReminderService:
                 )
                 continue
 
-            await MedicationReminder.create(
+            new_reminder = await MedicationReminder.create(
                 user_id=user.id,
                 medication_name=medication_name,
                 dose_text=dose_text,
@@ -167,6 +170,7 @@ class ReminderService:
                 daily_intake_count=daily_intake_count,
                 enabled=True,
             )
+            existing_by_name[medication_name] = new_reminder
 
     @classmethod
     def _extract_schedule_times(cls, med: dict[str, Any]) -> list[str]:

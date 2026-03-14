@@ -59,6 +59,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   const doFetch = (token: string | null) =>
     fetch(`${BASE}${path}`, {
       ...init,
+      credentials: "include",
       headers: {
         ...(init.body ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -80,6 +81,7 @@ async function requestForm<T>(path: string, body: FormData): Promise<T> {
   const doFetch = (token: string | null) =>
     fetch(`${BASE}${path}`, {
       method: "POST",
+      credentials: "include",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body,
     });
@@ -109,6 +111,11 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
+
+  logout: (): Promise<void> =>
+    fetch(`${BASE}/auth/logout`, { method: "POST", credentials: "include" })
+      .then(() => {})
+      .catch((err) => { console.warn("Logout server call failed:", err); }),
 };
 
 // ── Schedules ─────────────────────────────────────────
