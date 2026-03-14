@@ -1,26 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { Pill, ChevronDown, ChevronUp, AlertTriangle, Upload, Pencil, X, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { reminderApi, guideApi, Reminder, DdayReminder, GuideJobResult } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
+import { toDateStr, getMondayOfWeek } from "@/lib/dateUtils";
 
 // ── 주간 복약률 ─────────────────────────────────────────────────────────────
 
 const DOW_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
 const WEEKLY_RATE_STORAGE_PREFIX = "weekly_med_rate";
-
-function getMondayOfWeek(d: Date) {
-  const day = d.getDay(); // 0=Sun
-  const diff = day === 0 ? -6 : 1 - day;
-  const mon = new Date(d);
-  mon.setDate(d.getDate() + diff);
-  return mon;
-}
-
-function toDateStr(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 const TIME_OPTIONS = [
   { label: "아침 (08:00)", value: "08:00" },
@@ -127,18 +116,20 @@ export default function Medications() {
     }
   }
 
-  // 가이드 데이터를 drug_name 기준 맵으로 파싱
-  const guideMap: Record<string, MedGuideItem> = {};
-  if (guide) {
+  // 가이드 데이터를 drug_name 기준 맵으로 파싱 (useMemo로 매 렌더 파싱 방지)
+  const guideMap = useMemo(() => {
+    const map: Record<string, MedGuideItem> = {};
+    if (!guide) return map;
     try {
       const parsed = JSON.parse(guide.medication_guidance);
       if (Array.isArray(parsed)) {
         for (const item of parsed as MedGuideItem[]) {
-          if (item.drug_name) guideMap[item.drug_name] = item;
+          if (item.drug_name) map[item.drug_name] = item;
         }
       }
     } catch {}
-  }
+    return map;
+  }, [guide]);
 
   const active = reminders.filter((r) => r.enabled);
   const inactive = reminders.filter((r) => !r.enabled);

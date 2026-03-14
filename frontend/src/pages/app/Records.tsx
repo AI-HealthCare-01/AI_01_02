@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Edit2, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -12,15 +12,12 @@ import {
   HealthProfileUpsertRequest,
 } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
+import { toDateStr, getMondayOfWeek } from "@/lib/dateUtils";
 import MedicationScheduleCard from "@/components/medication/MedicationScheduleCard";
 
 const CAFFEINE_MG_PER_CUP = 150;
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
-
-function toDateStr(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 function isSameDay(a: Date, b: Date) {
   return (
@@ -28,14 +25,6 @@ function isSameDay(a: Date, b: Date) {
     && a.getMonth() === b.getMonth()
     && a.getDate() === b.getDate()
   );
-}
-
-function getMondayOfWeek(d: Date) {
-  const day = d.getDay(); // 0=Sun
-  const diff = day === 0 ? -6 : 1 - day;
-  const mon = new Date(d);
-  mon.setDate(d.getDate() + diff);
-  return mon;
 }
 
 const DOW_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
@@ -70,6 +59,7 @@ export default function Records() {
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
   const [dailyDiary, setDailyDiary] = useState("");
+  const weekCacheRef = useRef<Record<string, Awaited<ReturnType<typeof scheduleApi.getDaily>>[]>>({});
 
   async function loadSchedule(date: Date) {
     try {
@@ -91,15 +81,22 @@ export default function Records() {
     }
 
     const monday = getMondayOfWeek(date);
+    const mondayKey = toDateStr(monday);
     const weekDates = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
       return d;
     });
 
-    const dailySchedules = await Promise.all(
-      weekDates.map((d) => scheduleApi.getDaily(toDateStr(d)).catch(() => ({ date: toDateStr(d), items: [] }))),
-    );
+    let dailySchedules: Awaited<ReturnType<typeof scheduleApi.getDaily>>[];
+    if (weekCacheRef.current[mondayKey]) {
+      dailySchedules = weekCacheRef.current[mondayKey];
+    } else {
+      dailySchedules = await Promise.all(
+        weekDates.map((d) => scheduleApi.getDaily(toDateStr(d)).catch(() => ({ date: toDateStr(d), items: [] }))),
+      );
+      weekCacheRef.current[mondayKey] = dailySchedules;
+    }
 
     const computedRates = weekDates.map((d, i) => {
       const dateStr = toDateStr(d);
@@ -172,7 +169,7 @@ export default function Records() {
     }
   }
 
-  function handleDailyProgressChange(progress: number, totalCount: number) {
+  const handleDailyProgressChange = useCallback((progress: number, totalCount: number) => {
     if (totalCount === 0) return;
     const dayIndex = getWeekdayIndexMondayStart(selectedDate);
     setWeeklyRates((prev) => {
@@ -182,7 +179,7 @@ export default function Records() {
       localStorage.setItem(getWeeklyRateStorageKey(selectedDate), JSON.stringify(next));
       return next;
     });
-  }
+  }, [selectedDate]);
 
   async function load(date: Date) {
     setLoading(true);

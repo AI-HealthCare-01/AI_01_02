@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, RefreshCw, AlertTriangle, Sparkles } from "lucide-react";
 import { guideApi, GuideJobResult, GuideStatus, medicationApi, MedicationInfo } from "@/lib/api";
 
@@ -271,6 +271,11 @@ export default function AiGuide() {
     });
   }, [result?.medication_guidance]); // eslint-disable-line
 
+  const medicationGuidanceText = useMemo(
+    () => result?.medication_guidance ? formatMedicationGuidanceText(result.medication_guidance, medInfoByName) : "",
+    [result?.medication_guidance, medInfoByName],
+  );
+
   const updatedAt = result?.updated_at
     ? new Date(result.updated_at).toLocaleDateString("ko-KR", {
         year: "numeric",
@@ -353,9 +358,22 @@ export default function AiGuide() {
             </div>
           </div>
 
-          {result.medication_guidance && formatMedicationGuidanceText(result.medication_guidance, medInfoByName) && (
+          {/* 이행률 표시 (REQ-008) */}
+          {result.adherence_rate_percent != null && (
+            <div className="card-warm p-5 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-gray-700">일정 이행률</p>
+                <p className="text-xs text-gray-400 mt-0.5">최근 분석 기간 기준</p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-green-600">{result.adherence_rate_percent}%</p>
+              </div>
+            </div>
+          )}
+
+          {medicationGuidanceText && (
             <GuideSection title="복약 안내">
-              {formatMedicationGuidanceText(result.medication_guidance, medInfoByName)}
+              {medicationGuidanceText}
             </GuideSection>
           )}
           {result.lifestyle_guidance && (

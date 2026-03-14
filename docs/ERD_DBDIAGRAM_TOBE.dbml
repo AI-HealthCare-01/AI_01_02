@@ -59,12 +59,14 @@ Enum notification_type_enum {
   HEALTH_ALERT
   REPORT_READY
   GUIDE_READY
+  MEDICATION_DDAY
 }
 
 Enum schedule_item_category_enum {
   MEDICATION
   MEAL
   SLEEP
+  EXERCISE
 }
 
 Enum schedule_item_status_enum {

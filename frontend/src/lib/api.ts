@@ -33,17 +33,9 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
-export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const doFetch = (token: string | null) =>
-    fetch(`${BASE}${path}`, {
-      ...init,
-      headers: {
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(init.headers ?? {}),
-      },
-    });
-
+async function withAuthRefresh(
+  doFetch: (token: string | null) => Promise<Response>,
+): Promise<Response> {
   let res = await doFetch(getToken());
 
   if (res.status === 401) {
@@ -59,6 +51,22 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
       throw new Error("인증이 만료되었습니다. 다시 로그인해주세요.");
     }
   }
+
+  return res;
+}
+
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const doFetch = (token: string | null) =>
+    fetch(`${BASE}${path}`, {
+      ...init,
+      headers: {
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(init.headers ?? {}),
+      },
+    });
+
+  const res = await withAuthRefresh(doFetch);
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -76,21 +84,7 @@ async function requestForm<T>(path: string, body: FormData): Promise<T> {
       body,
     });
 
-  let res = await doFetch(getToken());
-
-  if (res.status === 401) {
-    if (!_refreshPromise) {
-      _refreshPromise = refreshAccessToken().finally(() => { _refreshPromise = null; });
-    }
-    const newToken = await _refreshPromise;
-    if (newToken) {
-      res = await doFetch(newToken);
-    } else {
-      clearToken();
-      window.location.href = "/login";
-      throw new Error("인증이 만료되었습니다. 다시 로그인해주세요.");
-    }
-  }
+  const res = await withAuthRefresh(doFetch);
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -191,15 +185,16 @@ export const chatApi = {
   },
 
   async *streamMessage(sessionId: string, message: string): AsyncGenerator<ChatStreamChunk> {
-    const token = getToken();
-    const res = await fetch(`${BASE}/chat/sessions/${sessionId}/stream`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ message }),
-    });
+    const doFetch = (token: string | null) =>
+      fetch(`${BASE}/chat/sessions/${sessionId}/stream`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ message }),
+      });
+    const res = await withAuthRefresh(doFetch);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     if (!res.body) throw new Error("스트리밍 응답을 받을 수 없습니다.");
     const reader = res.body.getReader();

@@ -56,7 +56,7 @@ export default function OcrScan() {
   }
 
   function handleNext() {
-    if (!file || !preview) return;
+    if (!file) return;
     navigate("/onboarding/scan-result", { state: { file, preview } });
   }
 
