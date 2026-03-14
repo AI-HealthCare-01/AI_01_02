@@ -1,7 +1,7 @@
 # AI Health Project API 명세서
 
-문서 버전: v1.37  
-작성일: 2026-03-13  
+문서 버전: v1.38
+작성일: 2026-03-14
 원본:
 - `docs/요구사항_정의서.xlsx`
 - `docs/API_명세서.xlsx`
@@ -10,6 +10,7 @@
 문서 목적: 객체 모델 명세와 API 계약 명세를 독립 문서로 관리한다.
 
 문서 변경 이력:
+- v1.38 (2026-03-14): 코드 실사 기반 동기화 — 11.3 건강 프로필 객체를 실제 구현(`health_profiles.py`) 기준으로 재정렬: lifestyle 평탄화, nutrition_status 필드명 반영, computed 메트릭 추가; 11.8 ScheduleItem category에 EXERCISE 추가
 - v1.37 (2026-03-13): 코드 실사 기반 동기화 — 11.6 `ChatSession` 객체에 `title` 필드 추가; 12.6 에러코드 표에 `AUTH_ACCOUNT_INACTIVE` 항목 추가
 - v1.36 (2026-03-13): 코드 실사 기반 동기화 — 12.3(OCR/가이드/분석/일정), 12.4(챗봇), 12.5(알림/리마인더) API 상태를 "대기중"에서 "개발완료"로 일괄 갱신; 12.8 동기화 목록과 실제 구현 상태 일치 확인
 - v1.35 (2026-03-03): 문서 정합성 점검 반영으로 변경 이력의 과거 REQ 번호 표기를 현행 번호와 함께 명시해 혼동을 줄이고 기준 문서 버전을 최신으로 갱신
@@ -109,23 +110,44 @@
 
 | 객체명 | 필드 | 타입 | 필수/선택 | 설명 |
 |---|---|---|---|---|
-| HealthProfileUpsertRequest | basic_info | object | 필수 | 신체 기초 정보 |
-| HealthProfileUpsertRequest | lifestyle_input | object | 선택 | 운동/디지털/기호품 |
-| HealthProfileUpsertRequest | sleep_input | object | 선택 | 수면 패턴 |
-| HealthProfileUpsertRequest | nutrition_input | object | 선택 | 영양/식사 정보 |
-| HealthProfile | id/user_id | string | 필수 | 건강 프로필 식별자 |
-| HealthProfile | basic_info/lifestyle_input/sleep_input/nutrition_input | object | 필수 | 저장된 프로필 입력 구조 |
-| HealthProfile | created_at/updated_at | string(datetime) | 필수 | 생성/수정 시각 |
-| basic_info | height_cm | float | 필수 | 키(cm) |
-| basic_info | weight_kg | float | 필수 | 체중(kg) |
-| basic_info | drug_allergies | string[] | 선택 | 약물 알러지 |
-| lifestyle_input.exercise_hours | low_intensity/moderate_intensity/high_intensity | int | 선택 | 주간 운동 시간 |
-| lifestyle_input.digital_usage | pc_hours_per_day/smartphone_hours_per_day | int | 선택 | 일 평균 사용 시간 |
-| lifestyle_input.substance_usage | caffeine_cups_per_day/smoking/alcohol_frequency_per_week | int | 선택 | 기호품 지표 |
-| sleep_input | bed_time/wake_time | string(`HH:MM`) | 선택 | 취침/기상 |
-| sleep_input | sleep_latency_minutes/night_awakenings_per_week/daytime_sleepiness_score | int | 선택 | 수면 품질 지표 |
-| nutrition_input | appetite_score | int(0~10) | 선택 | 식욕 지표 |
-| nutrition_input | is_meal_regular | bool | 선택 | 식사 규칙성 |
+| HealthProfileUpsertRequest | basic_info | BasicInfoInput | 필수 | 신체 기초 정보 |
+| HealthProfileUpsertRequest | lifestyle | LifestyleInput | 필수 | 운동/디지털/기호품(평탄 구조) |
+| HealthProfileUpsertRequest | sleep_input | SleepInput | 필수 | 수면 패턴 |
+| HealthProfileUpsertRequest | nutrition_status | NutritionStatusInput | 필수 | 영양/식사 정보 |
+| HealthProfileUpsertRequest | weekly_refresh_weekday | int \| null | 선택(nullable) | 주간 갱신 요일(0=월~6=일) |
+| HealthProfileUpsertRequest | weekly_refresh_time | string(`HH:MM`) \| null | 선택(nullable) | 주간 갱신 시각 |
+| HealthProfileUpsertRequest | weekly_adherence_rate | float(0~100) \| null | 선택(nullable) | 주간 이행률 |
+| HealthProfile | user_id | string | 필수 | 사용자 ID |
+| HealthProfile | basic_info | BasicInfoInput | 필수 | 신체 기초 정보 |
+| HealthProfile | lifestyle | LifestyleInput | 필수 | 운동/디지털/기호품(평탄 구조) |
+| HealthProfile | sleep_input | SleepInput | 필수 | 수면 패턴 |
+| HealthProfile | nutrition_status | NutritionStatusInput | 필수 | 영양/식사 정보 |
+| HealthProfile | computed | ComputedHealthMetrics | 필수 | 서버 계산 파생 지표 |
+| HealthProfile | weekly_refresh_weekday | int \| null | 선택(nullable) | 주간 갱신 요일(0=월~6=일) |
+| HealthProfile | weekly_refresh_time | string(`HH:MM`) \| null | 선택(nullable) | 주간 갱신 시각 |
+| HealthProfile | weekly_adherence_rate | float(0~100) \| null | 선택(nullable) | 주간 이행률 |
+| HealthProfile | onboarding_completed_at | string(datetime) | 필수 | 온보딩 완료 시각 |
+| HealthProfile | updated_at | string(datetime) | 필수 | 수정 시각 |
+| BasicInfoInput | height_cm | float | 필수 | 키(cm) |
+| BasicInfoInput | weight_kg | float | 필수 | 체중(kg) |
+| BasicInfoInput | drug_allergies | string[] | 선택 | 약물 알러지(기본 빈 배열) |
+| LifestyleInput | exercise_frequency_per_week | int(0~21) | 필수 | 주간 운동 빈도 |
+| LifestyleInput | pc_hours_per_day | int(0~24) | 필수 | PC 일 평균 사용 시간 |
+| LifestyleInput | smartphone_hours_per_day | int(0~24) | 필수 | 스마트폰 일 평균 사용 시간 |
+| LifestyleInput | caffeine_cups_per_day | int(0~20) | 필수 | 일 카페인 섭취 잔수 |
+| LifestyleInput | smoking | int(0~200) | 필수 | 흡연 지표 |
+| LifestyleInput | alcohol_frequency_per_week | int(0~21) | 필수 | 주간 음주 빈도 |
+| SleepInput | bed_time | string(`HH:MM`) | 필수 | 취침 시각 |
+| SleepInput | wake_time | string(`HH:MM`) | 필수 | 기상 시각 |
+| SleepInput | sleep_latency_minutes | int(0~720) | 필수 | 수면 잠복기(분) |
+| SleepInput | night_awakenings_per_week | int(0~70) | 필수 | 주간 야간 각성 횟수 |
+| SleepInput | daytime_sleepiness | int(0~10) | 필수 | 주간 졸림 지표 |
+| NutritionStatusInput | appetite_level | int(0~10) | 필수 | 식욕 지표 |
+| NutritionStatusInput | meal_regular | bool | 필수 | 식사 규칙성 |
+| ComputedHealthMetrics | bmi | float | 필수 | 체질량지수(서버 계산) |
+| ComputedHealthMetrics | sleep_time_hours | float | 필수 | 수면 시간(시)(서버 계산) |
+| ComputedHealthMetrics | caffeine_mg | int | 필수 | 일 카페인 섭취량(mg)(서버 계산) |
+| ComputedHealthMetrics | digital_time_hours | int | 필수 | 일 디지털 사용 시간(시)(서버 계산) |
 
 ### 11.4 OCR 객체
 
@@ -276,7 +298,7 @@
 | DailyScheduleResponse | date | string(date) | 필수 | 조회 기준일 |
 | DailyScheduleResponse | items | ScheduleItem[] | 필수 | 시계열 일정 목록 |
 | ScheduleItem | item_id | string | 필수 | 일정 항목 ID |
-| ScheduleItem | category | enum(`MEDICATION`,`MEAL`,`SLEEP`) | 필수 | 일정 분류 |
+| ScheduleItem | category | enum(`MEDICATION`,`MEAL`,`EXERCISE`,`SLEEP`) | 필수 | 일정 분류 |
 | ScheduleItem | title | string | 필수 | 일정 제목 |
 | ScheduleItem | scheduled_at | string(datetime) | 필수 | 예정 시각 |
 | ScheduleItem | status | enum(`PENDING`,`DONE`,`SKIPPED`) | 필수 | 이행 상태 |
@@ -318,6 +340,7 @@
 - JWT 인증/사용자 식별 규칙은 `REQ-028`, `REQ-107`, `REQ-108`을 따른다.
 - 회원 탈퇴 API(`DELETE /api/v1/users/me`)는 `REQ-027` 기준 계획 항목이며, 하드 삭제 대신 소프트 삭제(`is_active=false`)를 적용한다.
 - 탈퇴 완료 시 access/refresh token을 즉시 무효화하고, 탈퇴 계정의 보호 리소스 접근을 차단한다.
+- 프론트엔드는 `/api/v1/users/me/health-profile` 경로로 건강 프로필에 접근한다. 동일한 DTO(`HealthProfileUpsertRequest`/`HealthProfile`)를 사용하며, `/api/v1/profiles/health`와 동일하게 동작한다. 두 경로 모두 유효하다.
 
 ### 12.3 OCR/가이드 API
 
