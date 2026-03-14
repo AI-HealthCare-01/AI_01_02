@@ -46,11 +46,14 @@ def initialize(request: FixtureRequest) -> Generator[None]:
 
 @pytest.fixture(scope="session", autouse=True)
 def mock_redis_jti_check() -> Generator[None]:
-    """Redis가 없는 테스트 환경에서 is_jti_blacklisted를 mock (항상 False 반환)."""
-    mock = AsyncMock(return_value=False)
+    """Redis가 없는 테스트 환경에서 JTI 블랙리스트 관련 함수를 mock."""
+    mock_is_blacklisted = AsyncMock(return_value=False)
+    mock_blacklist = AsyncMock(return_value=None)
     with (
-        patch("app.services.auth.is_jti_blacklisted", mock),
-        patch("app.dependencies.security.is_jti_blacklisted", mock),
+        patch("app.services.auth.is_jti_blacklisted", mock_is_blacklisted),
+        patch("app.dependencies.security.is_jti_blacklisted", mock_is_blacklisted),
+        patch("app.services.auth.blacklist_jti", mock_blacklist),
+        patch("app.apis.v1.auth_routers.blacklist_jti", mock_blacklist),
     ):
         yield
 

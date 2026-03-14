@@ -262,10 +262,10 @@ class AnalysisService:
         *,
         user: User,
         profile: UserHealthProfile,
-        drug_allergies: list,
+        drug_allergies: list[str],
         psych_drug_service: PsychDrugService,
-        allergy_alerts: list,
-        emergency_alerts: list,
+        allergy_alerts: list[dict[str, Any]],
+        emergency_alerts: list[dict[str, Any]],
         seen_emergency_keys: set[str],
     ) -> None:
         resolved_allergies: dict[str, tuple[str, set[str]]] = {}

@@ -5,6 +5,7 @@ from tortoise.transactions import in_transaction
 
 from app.core import config
 from app.core.exceptions import AppException, ErrorCode
+from app.core.logger import default_logger as logger
 from app.models.notifications import Notification, NotificationType
 from app.models.users import User
 from app.repositories.notification_repository import NotificationRepository
@@ -63,10 +64,14 @@ class NotificationService:
 
     async def _sync_dynamic_notifications(self, *, user: User) -> None:
         await self.guide_automation_service.notify_weekly_refresh_if_due(user_id=user.id)
-        await asyncio.gather(
+        results = await asyncio.gather(
             self._sync_health_alert_notifications(user=user),
             self._sync_dday_notifications(user=user),
+            return_exceptions=True,
         )
+        for result in results:
+            if isinstance(result, Exception):
+                logger.warning("notification_sync_partial_failure", extra={"error": str(result)})
 
     async def _sync_dday_notifications(self, *, user: User) -> None:
         setting = await self.notification_setting_service.get_or_create(user=user)

@@ -7,6 +7,7 @@ from fastapi.responses import ORJSONResponse as Response
 from app.core import config
 from app.core.config import Env
 from app.core.exceptions import AppException, ErrorCode
+from app.core.logger import default_logger as logger
 from app.dtos.auth import LoginRequest, LoginResponse, SignUpRequest, TokenRefreshResponse
 from app.services.auth import AuthService, blacklist_jti
 from app.services.jwt import JwtService
@@ -86,8 +87,8 @@ async def logout(
             rt_jti = verified_rt.payload.get("jti", "")
             if rt_jti:
                 await blacklist_jti(rt_jti)
-        except AppException:
-            pass
+        except AppException as exc:
+            logger.debug("logout_token_error", extra={"code": exc.code})
     resp = Response(content={"detail": "로그아웃되었습니다."}, status_code=status.HTTP_200_OK)
     resp.delete_cookie(
         key="refresh_token",

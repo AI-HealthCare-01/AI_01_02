@@ -221,6 +221,15 @@ def _get_request_id(request: Request) -> str | None:
 
 @app.exception_handler(AppException)
 async def app_exception_handler(request: Request, exc: AppException) -> ORJSONResponse:
+    if _is_prod and exc.developer_message:
+        logger.warning(
+            "app_exception",
+            extra={
+                "code": exc.code,
+                "developer_message": exc.developer_message,
+                "request_id": _get_request_id(request),
+            },
+        )
     return _error_response(
         exc.http_status,
         exc.code,
