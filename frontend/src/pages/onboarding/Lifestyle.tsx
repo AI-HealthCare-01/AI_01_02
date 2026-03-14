@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import OnboardingShell from "./OnboardingShell";
 
+const CAFFEINE_MG_PER_CUP = 150;
+
 const EXERCISE_OPTIONS = [
-  { value: "low", label: "낮음", desc: "주 1회 미만" },
+  { value: "low", label: "낮음", desc: "주 1회 이하" },
   { value: "moderate", label: "보통", desc: "주 2~3회" },
   { value: "high", label: "높음", desc: "주 4회 이상" },
 ];
@@ -25,9 +27,10 @@ export default function Lifestyle() {
   const [exercise, setExercise] = useState("");
   const [pcHours, setPcHours] = useState("");
   const [phoneHours, setPhoneHours] = useState("");
-  const [caffeineCups, setCaffeineCups] = useState("1");
+  const [caffeineCups, setCaffeineCups] = useState("0");
   const [smoking, setSmoking] = useState("none");
   const [alcohol, setAlcohol] = useState("low");
+  const caffeineMg = (parseInt(caffeineCups, 10) || 0) * CAFFEINE_MG_PER_CUP;
 
   function handleNext() {
     const exerciseMap: Record<string, number> = {
@@ -51,7 +54,7 @@ export default function Lifestyle() {
         exercise_frequency_per_week: exerciseMap[exercise] ?? 0,
         pc_hours_per_day: parseFloat(pcHours) || 0,
         smartphone_hours_per_day: parseFloat(phoneHours) || 0,
-        caffeine_cups_per_day: parseInt(caffeineCups, 10) || 1,
+        caffeine_cups_per_day: parseInt(caffeineCups, 10) || 0,
         smoking: smokingMap[smoking] ?? 0,
         alcohol_frequency_per_week: alcoholMap[alcohol] ?? 1,
       }),
@@ -126,17 +129,22 @@ export default function Lifestyle() {
           <div className="space-y-4">
             <div>
               <label className="block text-xs text-gray-500 mb-1">커피</label>
-              <select
-                value={caffeineCups}
-                onChange={(e) => setCaffeineCups(e.target.value)}
-                className={inputCls}
-              >
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((cup) => (
-                  <option key={cup} value={cup}>
-                    {cup}잔
-                  </option>
-                ))}
-              </select>
+              <div className="grid grid-cols-[minmax(0,1fr)_132px] gap-2">
+                <select
+                  value={caffeineCups}
+                  onChange={(e) => setCaffeineCups(e.target.value)}
+                  className={inputCls}
+                >
+                  {Array.from({ length: 11 }, (_, i) => i).map((cup) => (
+                    <option key={cup} value={cup}>
+                      {cup}잔
+                    </option>
+                  ))}
+                </select>
+                <div className="flex items-center justify-center whitespace-nowrap text-xs font-medium tabular-nums text-gray-500">
+                  카페인 함량 {caffeineMg}mg
+                </div>
+              </div>
             </div>
 
             <div>
