@@ -355,6 +355,9 @@ export default function Chat() {
 
         {/* Input */}
         <div className="px-4 md:px-8 pb-6 pt-2 bg-white/80 backdrop-blur-sm border-t border-gray-200/40">
+          <p className="text-[11px] text-gray-400 text-center mb-2">
+            AI 챗봇의 응답은 참고용이며, 의료진의 전문적인 진단·처방을 대체하지 않습니다.
+          </p>
           <form
             onSubmit={(e) => {
               e.preventDefault();
