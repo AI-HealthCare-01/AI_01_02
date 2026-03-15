@@ -69,9 +69,7 @@ class OcrService:
         absolute_file_path = (media_root / temp_storage_key).resolve()
 
         if not str(absolute_file_path).startswith(str(media_root)):
-            default_logger.warning(
-                "path traversal attempt blocked (job_id=%s, key=%s)", job_id, temp_storage_key
-            )
+            default_logger.warning("path traversal attempt blocked (job_id=%s, key=%s)", job_id, temp_storage_key)
             return
 
         try:
@@ -81,9 +79,7 @@ class OcrService:
             else:
                 default_logger.debug("File already disposed or not found: %s", absolute_file_path)
         except Exception as e:
-            default_logger.warning(
-                "failed to dispose raw ocr file (job_id=%s, error=%s)", job_id, str(e)
-            )
+            default_logger.warning("failed to dispose raw ocr file (job_id=%s, error=%s)", job_id, str(e))
             return
 
         # REQ-126: 폐기 시각 기록

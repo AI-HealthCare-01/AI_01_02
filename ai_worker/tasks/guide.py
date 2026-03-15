@@ -486,7 +486,8 @@ async def _generate_lifestyle_guide_with_llm(
             return {key: str(value) for key, value in parsed.items()}
     except Exception:
         logging.getLogger(__name__).warning(
-            "lifestyle guide LLM generation failed, using static fallback", exc_info=True,
+            "lifestyle guide LLM generation failed, using static fallback",
+            exc_info=True,
         )
         return fallback
     return fallback

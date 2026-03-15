@@ -113,13 +113,15 @@ class NotificationService:
         if not items_to_generate:
             return
 
-        messages = await asyncio.gather(*(
-            generate_medication_dday_guidance(
-                medication_name=item.medication_name,
-                remaining_days=item.remaining_days,
+        messages = await asyncio.gather(
+            *(
+                generate_medication_dday_guidance(
+                    medication_name=item.medication_name,
+                    remaining_days=item.remaining_days,
+                )
+                for item in items_to_generate
             )
-            for item in items_to_generate
-        ))
+        )
         new_items = list(zip(items_to_generate, messages, strict=True))
 
         # Step 3: batch write inside transaction with dedup re-check
