@@ -259,11 +259,12 @@ export default function Records() {
   const smokingLabel = (() => {
     const v = profile?.lifestyle?.smoking ?? 0;
     if (v === 0) return "비흡연";
-    return "흡연";
+    if (v <= 1) return "하루 5개비 이하";
+    return "하루 6개비 이상";
   })();
   const alcoholLabel = (() => {
     const v = profile?.lifestyle?.alcohol_frequency_per_week ?? 0;
-    if (v <= 0) return "거의 없음";
+    if (v <= 0) return "월 1회 이하";
     if (v <= 2) return "주 1~2회";
     return "주 3회 이상";
   })();
@@ -542,7 +543,12 @@ function EditModal({
   const [phoneHours, setPhoneHours] = useState(String(ls?.smartphone_hours_per_day ?? 0));
   const [coffee, setCoffee] = useState(String(ls?.caffeine_cups_per_day ?? 0));
   const coffeeMg = (parseInt(coffee, 10) || 0) * CAFFEINE_MG_PER_CUP;
-  const [smoking, setSmoking] = useState(() => (ls?.smoking ?? 0) > 0 ? "light" : "none");
+  const [smoking, setSmoking] = useState(() => {
+    const v = ls?.smoking ?? 0;
+    if (v >= 2) return "heavy";
+    if (v >= 1) return "light";
+    return "none";
+  });
   const [alcohol, setAlcohol] = useState(() => {
     const freq = ls?.alcohol_frequency_per_week ?? 0;
     if (freq >= 3) return "high";
@@ -572,8 +578,8 @@ function EditModal({
     setLoading(true);
     try {
       const exerciseMap: Record<string, number> = { low: 1, moderate: 3, high: 5 };
-      const smokingMap: Record<string, number> = { none: 0, light: 1, heavy: 1 };
-      const alcoholMap: Record<string, number> = { low: 1, moderate: 2, high: 4 };
+      const smokingMap: Record<string, number> = { none: 0, light: 1, heavy: 2 };
+      const alcoholMap: Record<string, number> = { low: 0, moderate: 2, high: 4 };
       const normalizedAllergies = Array.from(
         new Set(allergies.map((item) => item.trim()).filter((item) => item.length > 0)),
       );
@@ -585,8 +591,8 @@ function EditModal({
         },
         lifestyle: {
           exercise_frequency_per_week: exerciseMap[exercise] ?? 0,
-          pc_hours_per_day: parseFloat(pcHours) || 0,
-          smartphone_hours_per_day: parseFloat(phoneHours) || 0,
+          pc_hours_per_day: parseInt(pcHours) || 0,
+          smartphone_hours_per_day: parseInt(phoneHours) || 0,
           caffeine_cups_per_day: parseInt(coffee, 10) || 0,
           smoking: smokingMap[smoking] ?? 0,
           alcohol_frequency_per_week: alcoholMap[alcohol] ?? 1,

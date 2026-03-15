@@ -47,10 +47,10 @@ export default function Lifestyle() {
     const smokingMap: Record<string, number> = {
       none: 0,
       light: 1,
-      heavy: 1,
+      heavy: 2,
     };
     const alcoholMap: Record<string, number> = {
-      low: 1,
+      low: 0,
       moderate: 2,
       high: 4,
     };
