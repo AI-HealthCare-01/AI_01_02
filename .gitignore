@@ -18,8 +18,26 @@ AGENTS.md
 CLAUDE.md
 .claude/
 docs/superpowers/
+
 # Media and Local DB
 app/media/
 *.sqlite3
 *-shm
 *-wal
+
+# OS files
+.DS_Store
+
+# Build cache
+.vite/
+*.tsbuildinfo
+
+# AI assistant configs
+.amazonq/
+
+# Backup files
+*.backup_*
+
+# Test artifacts (root level)
+heavy_test.pdf
+test_openapi.json
