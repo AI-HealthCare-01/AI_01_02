@@ -120,7 +120,7 @@ class NotificationService:
             )
             for item in items_to_generate
         ))
-        new_items = list(zip(items_to_generate, messages))
+        new_items = list(zip(items_to_generate, messages, strict=True))
 
         # Step 3: batch write inside transaction with dedup re-check
         async with in_transaction():
