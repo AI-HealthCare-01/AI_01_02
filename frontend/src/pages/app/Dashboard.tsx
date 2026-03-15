@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { RefreshCw, Pill, BookOpen, MessageCircle, NotebookPen, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -13,12 +13,9 @@ import {
   DdayReminder,
 } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
+import { toDateStr } from "@/lib/dateUtils";
 import NotificationsTab from "./reminders/NotificationsTab";
 import MedicationScheduleCard from "@/components/medication/MedicationScheduleCard";
-
-function formatDate(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 const QUICK_NAV = [
   { label: "내 약 정보", icon: Pill, to: "/medications", color: "text-green-600 bg-green-50" },
@@ -34,13 +31,13 @@ export default function Dashboard() {
   const [dday, setDday] = useState<DdayReminder[]>([]);
   const [ocrMeds, setOcrMeds] = useState<OcrMedication[]>([]);
   const [loading, setLoading] = useState(true);
-  const [todayKey, setTodayKey] = useState(() => formatDate(new Date()));
-  const today = new Date();
+  const [todayKey, setTodayKey] = useState(() => toDateStr(new Date()));
+  const today = useMemo(() => new Date(todayKey + "T00:00:00"), [todayKey]);
 
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        const newKey = formatDate(new Date());
+        const newKey = toDateStr(new Date());
         setTodayKey((prev) => {
           if (prev !== newKey) return newKey;
           return prev;

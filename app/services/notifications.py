@@ -98,38 +98,56 @@ class NotificationService:
             if medication_name and notification.created_at.astimezone(config.TIMEZONE).date() == today:
                 existing_daily_medication_keys.add(medication_name)
 
-        # Step 2: generate LLM messages outside transaction
-        new_items: list[tuple[object, str]] = []
+        # Step 2: filter new items and generate LLM messages in parallel
+        items_to_generate = []
         for item in dday_items:
             dedup_key = (item.medication_name, item.remaining_days)
             if dedup_key in existing_keys:
                 continue
             if item.medication_name in existing_daily_medication_keys:
                 continue
-            dday_message = await generate_medication_dday_guidance(
-                medication_name=item.medication_name,
-                remaining_days=item.remaining_days,
-            )
-            new_items.append((item, dday_message))
+            items_to_generate.append(item)
             existing_keys.add(dedup_key)
             existing_daily_medication_keys.add(item.medication_name)
 
-        # Step 3: batch write inside transaction
-        if new_items:
-            async with in_transaction():
-                for item, dday_message in new_items:
-                    await self.repo.create_notification(
-                        user_id=user.id,
-                        title="약 소진 알림",
-                        message=dday_message,
-                        notification_type=NotificationType.MEDICATION_DDAY,
-                        payload={
-                            "event": "medication_dday",
-                            "medication_name": item.medication_name,
-                            "remaining_days": item.remaining_days,
-                            "estimated_depletion_date": item.estimated_depletion_date.isoformat(),
-                        },
-                    )
+        if not items_to_generate:
+            return
+
+        messages = await asyncio.gather(*(
+            generate_medication_dday_guidance(
+                medication_name=item.medication_name,
+                remaining_days=item.remaining_days,
+            )
+            for item in items_to_generate
+        ))
+        new_items = list(zip(items_to_generate, messages))
+
+        # Step 3: batch write inside transaction with dedup re-check
+        async with in_transaction():
+            fresh_existing = await Notification.filter(
+                user_id=user.id,
+                type=NotificationType.MEDICATION_DDAY,
+            ).only("id", "payload")
+            fresh_keys: set[tuple[str, int]] = set()
+            for n in fresh_existing:
+                p = n.payload if isinstance(n.payload, dict) else {}
+                fresh_keys.add((str(p.get("medication_name") or ""), int(p.get("remaining_days") or -1)))
+
+            for item, dday_message in new_items:
+                if (item.medication_name, item.remaining_days) in fresh_keys:
+                    continue
+                await self.repo.create_notification(
+                    user_id=user.id,
+                    title="약 소진 알림",
+                    message=dday_message,
+                    notification_type=NotificationType.MEDICATION_DDAY,
+                    payload={
+                        "event": "medication_dday",
+                        "medication_name": item.medication_name,
+                        "remaining_days": item.remaining_days,
+                        "estimated_depletion_date": item.estimated_depletion_date.isoformat(),
+                    },
+                )
 
     async def _sync_health_alert_notifications(self, *, user: User) -> None:
         summary = await self.analysis_service.get_summary(user=user)

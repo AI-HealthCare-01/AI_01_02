@@ -125,10 +125,16 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     }),
 
-  logout: (): Promise<void> =>
-    fetch(`${BASE}/auth/logout`, { method: "POST", credentials: "include" })
+  logout: (): Promise<void> => {
+    const token = getToken();
+    return fetch(`${BASE}/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then(() => {})
-      .catch((err) => { console.warn("Logout server call failed:", err); }),
+      .catch((err) => { console.warn("Logout server call failed:", err); });
+  },
 };
 
 // ── Schedules ─────────────────────────────────────────

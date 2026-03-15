@@ -17,6 +17,7 @@ AGENT.md
 AGENTS.md
 CLAUDE.md
 .claude/
+docs/superpowers/
 # Media and Local DB
 app/media/
 *.sqlite3
