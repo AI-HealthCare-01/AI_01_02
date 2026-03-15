@@ -9,6 +9,19 @@ export function setToken(token: string) {
 export function clearToken() {
   localStorage.removeItem("access_token");
 }
+export function clearAllUserData() {
+  clearToken();
+  // 재계산 가능한 캐시만 삭제, 사용자 콘텐츠(ocr_job_id, guide_job_id, chat, diary)는 유지
+  // 다른 사용자 로그인 시 백엔드 권한 체크로 접근 차단됨
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith("weekly_med_rate:")) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach((k) => localStorage.removeItem(k));
+}
 
 let _refreshPromise: Promise<string | null> | null = null;
 
@@ -195,6 +208,7 @@ export const chatApi = {
     const doFetch = (token: string | null) =>
       fetch(`${BASE}/chat/sessions/${sessionId}/stream`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -237,7 +251,7 @@ export const chatApi = {
               references: (parsed.references ?? []) as ChatReference[],
             };
           }
-        } catch { /* malformed SSE JSON — skip */ }
+        } catch { console.warn("Malformed SSE chunk skipped:", data); }
       }
     }
   },

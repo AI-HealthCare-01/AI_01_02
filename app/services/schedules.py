@@ -3,6 +3,7 @@ from zoneinfo import ZoneInfo
 
 from app.core import config
 from app.core.exceptions import AppException, ErrorCode
+from app.core.logger import default_logger as logger
 from app.dtos.schedules import ScheduleItemStatusUpdateRequest
 from app.models.reminders import MedicationReminder, ScheduleItem, ScheduleItemCategory, ScheduleItemStatus
 from app.models.users import User
@@ -17,6 +18,7 @@ class ScheduleService:
         try:
             tz = ZoneInfo(timezone) if timezone else config.TIMEZONE
         except Exception:  # noqa: BLE001
+            logger.warning("invalid timezone '%s', falling back to default", timezone)
             tz = config.TIMEZONE
 
         day_start = datetime.combine(target_date, time.min).replace(tzinfo=tz)

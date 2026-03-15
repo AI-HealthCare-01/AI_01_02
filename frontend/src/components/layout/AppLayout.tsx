@@ -8,7 +8,7 @@ import {
   LogOut,
   UserX,
 } from "lucide-react";
-import { authApi, clearToken, userApi } from "@/lib/api";
+import { authApi, clearAllUserData, userApi } from "@/lib/api";
 import { useState } from "react";
 
 const NAV_ITEMS = [
@@ -25,7 +25,7 @@ export default function AppLayout() {
 
   function handleLogout() {
     authApi.logout();
-    clearToken();
+    clearAllUserData();
     navigate("/login");
   }
 
@@ -33,7 +33,7 @@ export default function AppLayout() {
     try {
       await userApi.deleteAccount();
     } catch {}
-    clearToken();
+    clearAllUserData();
     navigate("/login");
   }
 

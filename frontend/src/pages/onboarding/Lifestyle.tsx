@@ -62,7 +62,7 @@ export default function Lifestyle() {
         smartphone_hours_per_day: parseInt(phoneHours) || 0,
         caffeine_cups_per_day: parseInt(caffeineCups, 10) || 0,
         smoking: smokingMap[smoking] ?? 0,
-        alcohol_frequency_per_week: alcoholMap[alcohol] ?? 1,
+        alcohol_frequency_per_week: alcoholMap[alcohol] ?? 0,
       }),
     );
     navigate("/onboarding/sleep");

@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from app.core import config
+from app.core.logger import default_logger as logger
 from app.services.llm import chat_completion
 
 _ALLERGY_SYSTEM_PROMPT = """
@@ -207,6 +208,7 @@ async def _generate_message_with_llm(*, system_prompt: str, user_prompt: str, fa
         cleaned = content.strip()
         return cleaned or fallback
     except Exception:
+        logger.warning("LLM guidance generation failed, using static fallback", exc_info=True)
         return fallback
 
 

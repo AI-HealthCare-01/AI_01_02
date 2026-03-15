@@ -69,7 +69,7 @@ export default function Chat() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    chatApi.getPromptOptions().then((r) => setPromptOptions(r.items)).catch(() => {});
+    chatApi.getPromptOptions().then((r) => setPromptOptions(r.items)).catch((err) => console.warn("Failed to load prompt options:", err));
     const stored = loadSessions();
     if (stored.length === 0) {
       startNewSession();
@@ -119,17 +119,17 @@ export default function Chat() {
           })),
         );
       })
-      .catch(() => {
-        const next = loadSessions().filter((x) => x.id !== s.id);
-        saveSessions(next);
-        setSessions(next);
-        startNewSession();
+      .catch((err) => {
+        console.warn("Failed to load chat messages:", err);
+        toast.error("대화 기록을 불러오지 못했습니다. 다시 시도해 주세요.");
       });
   }
 
   async function deleteCurrentSession() {
     if (!activeSessionId) return;
-    await chatApi.deleteSession(activeSessionId).catch(() => {});
+    await chatApi.deleteSession(activeSessionId).catch((err) => {
+      console.warn("Failed to delete session:", err);
+    });
     const next = sessions.filter((s) => s.id !== activeSessionId);
     saveSessions(next);
     setSessions(next);
@@ -315,7 +315,7 @@ export default function Chat() {
                         <div key={ref.document_id} className="text-xs text-gray-500">
                           <span className="font-medium text-gray-700">{ref.title}</span>
                           <span className="ml-1">- {ref.source}</span>
-                          {ref.url && (
+                          {ref.url && (ref.url.startsWith("http://") || ref.url.startsWith("https://")) && (
                             <a
                               href={ref.url}
                               target="_blank"

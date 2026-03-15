@@ -34,8 +34,22 @@ export default function Dashboard() {
   const [dday, setDday] = useState<DdayReminder[]>([]);
   const [ocrMeds, setOcrMeds] = useState<OcrMedication[]>([]);
   const [loading, setLoading] = useState(true);
+  const [todayKey, setTodayKey] = useState(() => formatDate(new Date()));
   const today = new Date();
-  const todayKey = formatDate(today);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        const newKey = formatDate(new Date());
+        setTodayKey((prev) => {
+          if (prev !== newKey) return newKey;
+          return prev;
+        });
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
 
   async function loadOcrMedications() {
     const jobId = localStorage.getItem("ocr_job_id");
@@ -57,7 +71,7 @@ export default function Dashboard() {
     try {
       const [userData, scheduleData, ddayData] = await Promise.all([
         userApi.me(),
-        scheduleApi.getDaily(formatDate(today)),
+        scheduleApi.getDaily(todayKey),
         reminderApi.getDday(7),
       ]);
       setUser(userData);
@@ -71,7 +85,7 @@ export default function Dashboard() {
     await loadOcrMedications();
   }
 
-  useEffect(() => { load(); }, []); // eslint-disable-line
+  useEffect(() => { load(); }, [todayKey]); // eslint-disable-line
 
   async function updateMedicationStatus(itemId: string, status: "PENDING" | "DONE") {
     try {

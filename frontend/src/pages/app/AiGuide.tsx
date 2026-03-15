@@ -223,7 +223,8 @@ export default function AiGuide() {
           setError(s.error_message ?? "가이드 생성에 실패했습니다.");
           return;
         }
-      } catch {
+      } catch (err) {
+        console.warn("Guide polling error:", err);
         break;
       }
     }
@@ -256,7 +257,8 @@ export default function AiGuide() {
         try {
           const info = await medicationApi.getInfo(name);
           return [name, info] as const;
-        } catch {
+        } catch (err) {
+          console.warn(`Failed to load medication info for '${name}':`, err);
           return [name, undefined] as const;
         }
       }),

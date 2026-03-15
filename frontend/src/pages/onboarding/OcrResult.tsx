@@ -12,7 +12,8 @@ async function searchMedications(q: string): Promise<string[]> {
       `/medications/search?q=${encodeURIComponent(q)}&limit=8`,
     );
     return (data.items ?? []).map((i) => i.name);
-  } catch {
+  } catch (err) {
+    console.warn("Medication search failed:", err);
     return [];
   }
 }
@@ -199,6 +200,7 @@ export default function OcrResult() {
   const [hasLowConfidence, setHasLowConfidence] = useState(false);
   const [loadingResult, setLoadingResult] = useState(false);
   const ocrConfidences = useRef<number[]>([]);
+  const cancelledRef = useRef(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
 
   // 이미 분석된 결과가 있으면 바로 result 단계로
@@ -222,6 +224,7 @@ export default function OcrResult() {
         .catch((err) => toast.error(toUserMessage(err)))
         .finally(() => setLoadingResult(false));
     }
+    return () => { cancelledRef.current = true; };
   }, []); // eslint-disable-line
 
   async function handleAnalyze() {
@@ -234,6 +237,7 @@ export default function OcrResult() {
 
       for (let i = 0; i < 30; i++) {
         await new Promise((r) => setTimeout(r, 2000));
+        if (cancelledRef.current) return;
         const status = await ocrApi.getJobStatus(job_id);
         if (status.status === "SUCCEEDED" || status.status === "COMPLETED") {
           localStorage.setItem("ocr_job_id", job_id);

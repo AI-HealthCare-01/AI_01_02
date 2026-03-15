@@ -67,6 +67,8 @@ class UserRepository:
     async def update_instance(self, user: User, data: dict[str, Any]) -> None:
         update_fields = []
         for key, value in data.items():
+            if key not in ALLOWED_UPDATE_FIELDS:
+                continue
             if value is not None:
                 setattr(user, key, value)
                 update_fields.append(key)

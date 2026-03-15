@@ -5,8 +5,6 @@ services:
     container_name: redis
     networks:
       - ws
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -27,8 +25,6 @@ services:
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASSWORD}
       TZ: Asia/Seoul
-    ports:
-      - ${DB_EXPOSE_PORT}:${DB_PORT}
     networks:
       - ws
     volumes:

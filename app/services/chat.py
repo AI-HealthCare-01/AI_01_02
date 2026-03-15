@@ -640,6 +640,7 @@ async def _classify_intent(message: str) -> str:
         intent = result.get("intent", "medical")
         return intent if intent in ("emergency", "medical", "chitchat") else "medical"
     except Exception:
+        logger.warning("intent classification failed, defaulting to 'medical'", exc_info=True)
         return "medical"
 
 
@@ -1069,6 +1070,7 @@ class ChatService:
                 if assistant_msg.references_json:
                     yield "reference", {"references": assistant_msg.references_json}
             except Exception:
+                logger.exception("stream_chat_completion failed (session_id=%s)", session.id)
                 assistant_msg.status = ChatMessageStatus.FAILED
                 assistant_msg.content = "".join(collected)
             finally:

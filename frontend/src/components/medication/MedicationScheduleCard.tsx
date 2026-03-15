@@ -63,10 +63,12 @@ export default function MedicationScheduleCard({
     .filter((i) => i.category === "MEDICATION")
     .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
 
-  const completedMedicationCount = ocrMeds.reduce((acc, med, idx) => {
-    const scheduleItem = medicationItems[idx];
+  const completedMedicationCount = ocrMeds.reduce((acc, med) => {
+    const scheduleItem = medicationItems.find(
+      (si) => si.title.toLowerCase().includes(med.drug_name.toLowerCase()),
+    );
     if (scheduleItem) return acc + (scheduleItem.status === "DONE" ? 1 : 0);
-    const manualKey = `${med.drug_name}-${med.intake_time ?? ""}-${idx}`;
+    const manualKey = `${med.drug_name}-${med.intake_time ?? ""}`;
     return acc + (manualConfirmedMap[manualKey] ? 1 : 0);
   }, 0);
 
@@ -107,8 +109,10 @@ export default function MedicationScheduleCard({
             <span className="text-right">복약 여부</span>
           </div>
           {ocrMeds.map((med, idx) => {
-            const scheduleItem = medicationItems[idx];
-            const manualKey = `${med.drug_name}-${med.intake_time ?? ""}-${idx}`;
+            const scheduleItem = medicationItems.find(
+              (si) => si.title.toLowerCase().includes(med.drug_name.toLowerCase()),
+            );
+            const manualKey = `${med.drug_name}-${med.intake_time ?? ""}`;
             const isManualConfirmed = !!manualConfirmedMap[manualKey];
             const intakeLabel = med.intake_time
               ? (INTAKE_TIME_LABEL[med.intake_time] ?? med.intake_time)

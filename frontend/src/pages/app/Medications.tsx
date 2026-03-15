@@ -80,7 +80,7 @@ export default function Medications() {
             const r = await guideApi.getJobResult(jobId);
             setGuide(r);
           }
-        } catch {}
+        } catch (err) { console.warn("Failed to load medication guide:", err); }
       }
       loadWeeklyRates();
     }
@@ -127,7 +127,7 @@ export default function Medications() {
           if (item.drug_name) map[item.drug_name] = item;
         }
       }
-    } catch {}
+    } catch (err) { console.warn("Failed to parse medication guidance JSON:", err); }
     return map;
   }, [guide]);
 

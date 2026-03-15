@@ -1,4 +1,5 @@
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime
 from logging import Logger
@@ -484,6 +485,9 @@ async def _generate_lifestyle_guide_with_llm(
                 parsed.setdefault(key, value)
             return {key: str(value) for key, value in parsed.items()}
     except Exception:
+        logging.getLogger(__name__).warning(
+            "lifestyle guide LLM generation failed, using static fallback", exc_info=True,
+        )
         return fallback
     return fallback
 
