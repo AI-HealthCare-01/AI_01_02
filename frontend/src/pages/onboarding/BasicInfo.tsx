@@ -31,9 +31,15 @@ export default function BasicInfo() {
     navigate("/onboarding/lifestyle");
   }
 
+  const heightNum = parseFloat(height);
+  const weightNum = parseFloat(weight);
+  const heightValid = !height || (heightNum > 0 && heightNum <= 300);
+  const weightValid = !weight || (weightNum > 0 && weightNum <= 500);
+  const canSubmit = !!height && !!weight && heightValid && weightValid;
+
   const bmi =
-    height && weight
-      ? (parseFloat(weight) / (parseFloat(height) / 100) ** 2).toFixed(1)
+    height && weight && heightValid && weightValid
+      ? (weightNum / (heightNum / 100) ** 2).toFixed(1)
       : null;
 
   const inputCls =
@@ -123,9 +129,15 @@ export default function BasicInfo() {
         {(!height || !weight) && (
           <p className="text-xs text-red-500">* 키와 체중은 필수 입력 항목입니다.</p>
         )}
+        {height && !heightValid && (
+          <p className="text-xs text-red-500">키는 1~300cm 범위로 입력해주세요.</p>
+        )}
+        {weight && !weightValid && (
+          <p className="text-xs text-red-500">체중은 1~500kg 범위로 입력해주세요.</p>
+        )}
         <button
           onClick={handleNext}
-          disabled={!height || !weight}
+          disabled={!canSubmit}
           className="px-6 py-2.5 gradient-primary text-white text-sm font-bold rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none"
         >
           다음 단계
