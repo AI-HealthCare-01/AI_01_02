@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, status
 from fastapi.responses import ORJSONResponse as Response
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core import config
 from app.core.config import Env
@@ -79,8 +80,17 @@ async def token_refresh(
 @auth_router.post("/logout", status_code=status.HTTP_200_OK)
 async def logout(
     jwt_service: Annotated[JwtService, Depends(JwtService)],
+    credential: Annotated[HTTPAuthorizationCredentials | None, Depends(HTTPBearer(auto_error=False))] = None,
     refresh_token: Annotated[str | None, Cookie()] = None,
 ) -> Response:
+    if credential:
+        try:
+            verified_at = jwt_service.verify_jwt(token=credential.credentials, token_type="access")
+            at_jti = verified_at.payload.get("jti", "")
+            if at_jti:
+                await blacklist_jti(at_jti)
+        except AppException:
+            pass
     if refresh_token:
         try:
             verified_rt = jwt_service.verify_jwt(token=refresh_token, token_type="refresh")

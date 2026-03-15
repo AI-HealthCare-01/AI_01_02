@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { RefreshCw, Pill, BookOpen, MessageCircle, NotebookPen, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -13,12 +13,9 @@ import {
   DdayReminder,
 } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
+import { toDateStr } from "@/lib/dateUtils";
 import NotificationsTab from "./reminders/NotificationsTab";
 import MedicationScheduleCard from "@/components/medication/MedicationScheduleCard";
-
-function formatDate(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 const QUICK_NAV = [
   { label: "내 약 정보", icon: Pill, to: "/medications", color: "text-green-600 bg-green-50" },
@@ -34,8 +31,22 @@ export default function Dashboard() {
   const [dday, setDday] = useState<DdayReminder[]>([]);
   const [ocrMeds, setOcrMeds] = useState<OcrMedication[]>([]);
   const [loading, setLoading] = useState(true);
-  const today = new Date();
-  const todayKey = formatDate(today);
+  const [todayKey, setTodayKey] = useState(() => toDateStr(new Date()));
+  const today = useMemo(() => new Date(todayKey + "T00:00:00"), [todayKey]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        const newKey = toDateStr(new Date());
+        setTodayKey((prev) => {
+          if (prev !== newKey) return newKey;
+          return prev;
+        });
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
 
   async function loadOcrMedications() {
     const jobId = localStorage.getItem("ocr_job_id");
@@ -57,7 +68,7 @@ export default function Dashboard() {
     try {
       const [userData, scheduleData, ddayData] = await Promise.all([
         userApi.me(),
-        scheduleApi.getDaily(formatDate(today)),
+        scheduleApi.getDaily(todayKey),
         reminderApi.getDday(7),
       ]);
       setUser(userData);
@@ -71,7 +82,7 @@ export default function Dashboard() {
     await loadOcrMedications();
   }
 
-  useEffect(() => { load(); }, []); // eslint-disable-line
+  useEffect(() => { load(); }, [todayKey]); // eslint-disable-line
 
   async function updateMedicationStatus(itemId: string, status: "PENDING" | "DONE") {
     try {

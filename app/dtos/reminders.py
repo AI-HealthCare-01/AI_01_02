@@ -10,7 +10,7 @@ class MedicationReminderUpsertRequest(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     dispensed_date: date | None = None
-    total_days: int | None = None
+    total_days: int | None = Field(None, ge=1, le=365)
     daily_intake_count: float | None = None
     enabled: bool = True
 

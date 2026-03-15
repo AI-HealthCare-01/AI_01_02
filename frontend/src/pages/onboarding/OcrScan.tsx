@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Camera, CheckCircle, Upload, XCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -22,6 +22,12 @@ export default function OcrScan() {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
 
   function handleFile(f: File) {
     const allowedExtensions = ["jpg", "jpeg", "png", "pdf"];

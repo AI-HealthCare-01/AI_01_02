@@ -82,32 +82,62 @@ class NotificationService:
         if not dday_items:
             return
 
-        async with in_transaction():
-            existing_dday_notifications = await Notification.filter(
-                user_id=user.id,
-                type=NotificationType.MEDICATION_DDAY,
-            ).only("id", "payload", "created_at")
-            today = datetime.now(config.TIMEZONE).date()
-            existing_keys: set[tuple[str, int]] = set()
-            existing_daily_medication_keys: set[str] = set()
-            for notification in existing_dday_notifications:
-                payload = notification.payload if isinstance(notification.payload, dict) else {}
-                medication_name = str(payload.get("medication_name") or "")
-                remaining_days = int(payload.get("remaining_days") or -1)
-                existing_keys.add((medication_name, remaining_days))
-                if medication_name and notification.created_at.astimezone(config.TIMEZONE).date() == today:
-                    existing_daily_medication_keys.add(medication_name)
+        # Step 1: gather existing keys outside transaction
+        existing_dday_notifications = await Notification.filter(
+            user_id=user.id,
+            type=NotificationType.MEDICATION_DDAY,
+        ).only("id", "payload", "created_at")
+        today = datetime.now(config.TIMEZONE).date()
+        existing_keys: set[tuple[str, int]] = set()
+        existing_daily_medication_keys: set[str] = set()
+        for notification in existing_dday_notifications:
+            payload = notification.payload if isinstance(notification.payload, dict) else {}
+            medication_name = str(payload.get("medication_name") or "")
+            remaining_days = int(payload.get("remaining_days") or -1)
+            existing_keys.add((medication_name, remaining_days))
+            if medication_name and notification.created_at.astimezone(config.TIMEZONE).date() == today:
+                existing_daily_medication_keys.add(medication_name)
 
-            for item in dday_items:
-                dedup_key = (item.medication_name, item.remaining_days)
-                if dedup_key in existing_keys:
-                    continue
-                if item.medication_name in existing_daily_medication_keys:
-                    continue
-                dday_message = await generate_medication_dday_guidance(
+        # Step 2: filter new items and generate LLM messages in parallel
+        items_to_generate = []
+        for item in dday_items:
+            dedup_key = (item.medication_name, item.remaining_days)
+            if dedup_key in existing_keys:
+                continue
+            if item.medication_name in existing_daily_medication_keys:
+                continue
+            items_to_generate.append(item)
+            existing_keys.add(dedup_key)
+            existing_daily_medication_keys.add(item.medication_name)
+
+        if not items_to_generate:
+            return
+
+        messages = await asyncio.gather(
+            *(
+                generate_medication_dday_guidance(
                     medication_name=item.medication_name,
                     remaining_days=item.remaining_days,
                 )
+                for item in items_to_generate
+            )
+        )
+        new_items = list(zip(items_to_generate, messages, strict=True))
+
+        # Step 3: batch write inside transaction with dedup re-check
+        async with in_transaction():
+            fresh_existing = await Notification.filter(
+                user_id=user.id,
+                type=NotificationType.MEDICATION_DDAY,
+            ).only("id", "payload")
+            fresh_keys: set[tuple[str, int]] = set()
+            for n in fresh_existing:
+                p = n.payload if isinstance(n.payload, dict) else {}
+                fresh_keys.add((str(p.get("medication_name") or ""), int(p.get("remaining_days") or -1)))
+
+            for item, dday_message in new_items:
+                if (item.medication_name, item.remaining_days) in fresh_keys:
+                    continue
                 await self.repo.create_notification(
                     user_id=user.id,
                     title="약 소진 알림",
@@ -120,8 +150,6 @@ class NotificationService:
                         "estimated_depletion_date": item.estimated_depletion_date.isoformat(),
                     },
                 )
-                existing_keys.add(dedup_key)
-                existing_daily_medication_keys.add(item.medication_name)
 
     async def _sync_health_alert_notifications(self, *, user: User) -> None:
         summary = await self.analysis_service.get_summary(user=user)

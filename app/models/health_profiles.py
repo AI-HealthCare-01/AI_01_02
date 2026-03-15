@@ -44,7 +44,7 @@ class UserHealthProfile(models.Model):
     weekly_refresh_time = fields.CharField(max_length=5, null=True)
     weekly_adherence_rate = fields.FloatField(null=True)
 
-    onboarding_completed_at = fields.DatetimeField(auto_now=True)
+    onboarding_completed_at = fields.DatetimeField(null=True)
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
 

@@ -65,7 +65,8 @@ export default function Records() {
     try {
       const r = await scheduleApi.getDaily(toDateStr(date));
       setScheduleItems(r.items);
-    } catch {
+    } catch (err) {
+      console.warn("Failed to load schedule:", err);
       setScheduleItems([]);
     }
   }
@@ -115,10 +116,12 @@ export default function Records() {
         manualMap = {};
       }
 
-      const completed = meds.reduce((acc, med, idx) => {
-        const scheduleItem = medicationItems[idx];
+      const completed = meds.reduce((acc, med) => {
+        const scheduleItem = medicationItems.find(
+          (si) => si.title.toLowerCase().includes(med.drug_name.toLowerCase()),
+        );
         if (scheduleItem) return acc + (scheduleItem.status === "DONE" ? 1 : 0);
-        const manualKey = `${med.drug_name}-${med.intake_time ?? ""}-${idx}`;
+        const manualKey = `${med.drug_name}-${med.intake_time ?? ""}`;
         return acc + (manualMap[manualKey] ? 1 : 0);
       }, 0);
 
@@ -137,8 +140,8 @@ export default function Records() {
     try {
       const p = await profileApi.getHealth();
       setProfile(p);
-    } catch {
-      // no profile yet
+    } catch (err) {
+      console.warn("Failed to load profile:", err);
     }
   }
 
@@ -154,7 +157,8 @@ export default function Records() {
       const normalized = Array.isArray(meds) ? meds : [];
       setOcrMeds(normalized);
       return normalized;
-    } catch {
+    } catch (err) {
+      console.warn("Failed to load OCR medications:", err);
       setOcrMeds([]);
       return [] as OcrMedication[];
     }
@@ -595,7 +599,7 @@ function EditModal({
           smartphone_hours_per_day: parseInt(phoneHours) || 0,
           caffeine_cups_per_day: parseInt(coffee, 10) || 0,
           smoking: smokingMap[smoking] ?? 0,
-          alcohol_frequency_per_week: alcoholMap[alcohol] ?? 1,
+          alcohol_frequency_per_week: alcoholMap[alcohol] ?? 0,
         },
         sleep_input: {
           bed_time: bedTime,

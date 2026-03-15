@@ -3,6 +3,7 @@ import re
 import httpx
 
 from app.core import config
+from app.core.logger import default_logger as logger
 from app.models.medications import Medication
 from app.services.llm import json_completion
 from app.services.psych_drugs import PsychDrugService
@@ -82,6 +83,7 @@ class MedicationInfoService:
                     resp.raise_for_status()
                     payload = resp.json()
                 except httpx.HTTPError:
+                    logger.warning("easy drug info API failed for '%s'", query_name, exc_info=True)
                     payload = None
                     continue
                 body = payload.get("response", {}).get("body", {}) if isinstance(payload, dict) else {}
@@ -142,6 +144,7 @@ class MedicationInfoService:
                 temperature=0.2,
             )
         except Exception:  # noqa: BLE001
+            logger.warning("LLM medication info lookup failed for '%s'", name, exc_info=True)
             return None
 
         precautions = str(data.get("precautions") or "").strip() or None
