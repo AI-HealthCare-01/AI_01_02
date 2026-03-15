@@ -11,16 +11,17 @@ export function clearToken() {
 }
 export function clearAllUserData() {
   clearToken();
-  // 재계산 가능한 캐시만 삭제, 사용자 콘텐츠(ocr_job_id, guide_job_id, chat, diary)는 유지
-  // 다른 사용자 로그인 시 백엔드 권한 체크로 접근 차단됨
-  const keysToRemove: string[] = [];
+  const USER_KEYS = ["ocr_job_id", "guide_job_id", "logly_chat_sessions"];
+  const USER_PREFIXES = ["weekly_med_rate:", "daily_med_confirmed:"];
+  USER_KEYS.forEach((k) => localStorage.removeItem(k));
+  const prefixed: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && key.startsWith("weekly_med_rate:")) {
-      keysToRemove.push(key);
+    if (key && USER_PREFIXES.some((p) => key.startsWith(p))) {
+      prefixed.push(key);
     }
   }
-  keysToRemove.forEach((k) => localStorage.removeItem(k));
+  prefixed.forEach((k) => localStorage.removeItem(k));
 }
 
 let _refreshPromise: Promise<string | null> | null = null;
