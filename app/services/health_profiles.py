@@ -95,6 +95,8 @@ class HealthProfileService:
         return await self.repo.get_by_user_id(user_id=user.id)
 
     def is_onboarding_expired(self, profile: UserHealthProfile) -> bool:
+        if profile.onboarding_completed_at is None:
+            return False
         now = datetime.now(config.TIMEZONE)
         return profile.onboarding_completed_at + timedelta(days=7) <= now
 

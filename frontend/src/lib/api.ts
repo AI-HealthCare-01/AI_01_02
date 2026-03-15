@@ -461,7 +461,7 @@ export interface HealthProfile {
   weekly_refresh_weekday: number | null;
   weekly_refresh_time: string | null;
   weekly_adherence_rate: number | null;
-  onboarding_completed_at: string;
+  onboarding_completed_at: string | null;
   updated_at: string;
 }
 
