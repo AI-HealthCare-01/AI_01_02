@@ -6,7 +6,7 @@ from pydantic import EmailStr
 from app.core import config
 from app.models.users import Gender, User
 
-ALLOWED_UPDATE_FIELDS = ["name", "phone_number", "gender", "birthday"]
+ALLOWED_UPDATE_FIELDS = frozenset({"name", "phone_number", "gender", "birthday"})
 UPDATED_AT_FIELD = "updated_at"
 
 
