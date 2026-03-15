@@ -12,7 +12,6 @@ from app.dtos.ocr import OcrResultConfirmRequest
 from app.models.ocr import Document, DocumentType, OcrFailureCode, OcrJob, OcrJobStatus
 from app.models.users import User
 from app.repositories.ocr_repository import OcrRepository
-from app.services.guide_automation import GuideAutomationService
 from app.services.ocr_queue import OcrQueuePublisher
 from app.services.reminders import ReminderService
 
@@ -21,7 +20,6 @@ class OcrService:
     def __init__(self) -> None:
         self.repo = OcrRepository()
         self.queue_publisher = OcrQueuePublisher()
-        self.guide_automation_service = GuideAutomationService()
         self.reminder_service = ReminderService()
 
     async def upload_document(self, *, user: User, document_type: DocumentType, file: UploadFile) -> Document:
@@ -181,11 +179,6 @@ class OcrService:
             if isinstance(meds, list):
                 await self.reminder_service.sync_from_ocr_medications(user=user, medications=meds)
 
-            await self.guide_automation_service.trigger_refresh_for_ocr_job(
-                user_id=user.id,
-                ocr_job_id=updated_job.id,
-                reason="ocr_review_corrected",
-            )
         return updated_job
 
     async def confirm_ocr_result(self, *, user: User, job_id: int, request: OcrResultConfirmRequest) -> OcrJob:
@@ -220,9 +213,4 @@ class OcrService:
         if isinstance(meds, list):
             await self.reminder_service.sync_from_ocr_medications(user=user, medications=meds)
 
-        await self.guide_automation_service.trigger_refresh_for_ocr_job(
-            user_id=user.id,
-            ocr_job_id=updated_job.id,
-            reason="ocr_result_confirmed",
-        )
         return updated_job
