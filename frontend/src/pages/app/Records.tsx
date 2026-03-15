@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Edit2, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Edit2, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import {
   scheduleApi,
@@ -312,26 +312,45 @@ export default function Records() {
                 />
                 <div className="absolute left-1/2 top-full z-20 mt-3 w-[320px] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl">
                   <div className="mb-3 flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear() - 1, prev.getMonth(), 1))}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200"
+                      >
+                        <ChevronsLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                    </div>
                     <p className="text-sm font-bold text-gray-800">{calendarMonthLabel}</p>
-                    <button
-                      type="button"
-                      onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                      disabled={
-                        calendarMonth.getFullYear() > today.getFullYear()
-                        || (calendarMonth.getFullYear() === today.getFullYear()
-                            && calendarMonth.getMonth() >= today.getMonth())
-                      }
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                        disabled={
+                          calendarMonth.getFullYear() > today.getFullYear()
+                          || (calendarMonth.getFullYear() === today.getFullYear()
+                              && calendarMonth.getMonth() >= today.getMonth())
+                        }
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear() + 1, prev.getMonth(), 1))}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                        disabled={calendarMonth.getFullYear() >= today.getFullYear()}
+                      >
+                        <ChevronsRight className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                   <div className="mb-2 grid grid-cols-7 gap-1">
                     {DOW_LABELS.map((label) => (
