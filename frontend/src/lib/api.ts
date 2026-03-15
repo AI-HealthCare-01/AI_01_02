@@ -11,17 +11,34 @@ export function clearToken() {
 }
 export function clearAllUserData() {
   clearToken();
-  const USER_KEYS = ["ocr_job_id", "guide_job_id", "logly_chat_sessions"];
-  const USER_PREFIXES = ["weekly_med_rate:", "daily_med_confirmed:"];
-  USER_KEYS.forEach((k) => localStorage.removeItem(k));
+  const CACHE_PREFIXES = ["weekly_med_rate:"];
   const prefixed: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && USER_PREFIXES.some((p) => key.startsWith(p))) {
+    if (key && CACHE_PREFIXES.some((p) => key.startsWith(p))) {
       prefixed.push(key);
     }
   }
   prefixed.forEach((k) => localStorage.removeItem(k));
+}
+
+/** 다른 사용자 로그인 시 이전 사용자의 localStorage 데이터 정리 */
+export function clearPreviousUserData(currentEmail: string) {
+  const prev = localStorage.getItem("logly_last_user");
+  if (prev && prev !== currentEmail) {
+    const USER_KEYS = ["ocr_job_id", "guide_job_id", "logly_chat_sessions"];
+    const USER_PREFIXES = ["daily_med_confirmed:"];
+    USER_KEYS.forEach((k) => localStorage.removeItem(k));
+    const prefixed: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && USER_PREFIXES.some((p) => key.startsWith(p))) {
+        prefixed.push(key);
+      }
+    }
+    prefixed.forEach((k) => localStorage.removeItem(k));
+  }
+  localStorage.setItem("logly_last_user", currentEmail);
 }
 
 let _refreshPromise: Promise<string | null> | null = null;
