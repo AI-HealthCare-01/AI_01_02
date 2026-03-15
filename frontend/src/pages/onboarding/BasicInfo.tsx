@@ -44,7 +44,7 @@ export default function BasicInfo() {
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">키 (cm)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">키 (cm) <span className="text-red-500">*</span></label>
             <input
               type="number"
               value={height}
@@ -56,7 +56,7 @@ export default function BasicInfo() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">체중 (kg)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">체중 (kg) <span className="text-red-500">*</span></label>
             <input
               type="number"
               value={weight}
@@ -119,10 +119,14 @@ export default function BasicInfo() {
         </div>
       </div>
 
-      <div className="mt-8 flex justify-end">
+      <div className="mt-8 flex flex-col items-end gap-1.5">
+        {(!height || !weight) && (
+          <p className="text-xs text-red-500">* 키와 체중은 필수 입력 항목입니다.</p>
+        )}
         <button
           onClick={handleNext}
-          className="px-6 py-2.5 gradient-primary text-white text-sm font-bold rounded-xl hover:shadow-lg transition-all duration-200"
+          disabled={!height || !weight}
+          className="px-6 py-2.5 gradient-primary text-white text-sm font-bold rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none"
         >
           다음 단계
         </button>
