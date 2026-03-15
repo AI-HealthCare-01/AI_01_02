@@ -32,7 +32,9 @@ export default function AppLayout() {
   async function handleWithdraw() {
     try {
       await userApi.deleteAccount();
-    } catch {}
+    } catch (err) {
+      console.warn("Account deletion request failed:", err);
+    }
     clearAllUserData();
     navigate("/login");
   }
