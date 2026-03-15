@@ -129,14 +129,20 @@ class NotificationService:
             fresh_existing = await Notification.filter(
                 user_id=user.id,
                 type=NotificationType.MEDICATION_DDAY,
-            ).only("id", "payload")
+            ).only("id", "payload", "created_at")
             fresh_keys: set[tuple[str, int]] = set()
+            fresh_daily_keys: set[str] = set()
             for n in fresh_existing:
                 p = n.payload if isinstance(n.payload, dict) else {}
-                fresh_keys.add((str(p.get("medication_name") or ""), int(p.get("remaining_days") or -1)))
+                med_name = str(p.get("medication_name") or "")
+                fresh_keys.add((med_name, int(p.get("remaining_days") or -1)))
+                if med_name and n.created_at.astimezone(config.TIMEZONE).date() == today:
+                    fresh_daily_keys.add(med_name)
 
             for item, dday_message in new_items:
                 if (item.medication_name, item.remaining_days) in fresh_keys:
+                    continue
+                if item.medication_name in fresh_daily_keys:
                     continue
                 await self.repo.create_notification(
                     user_id=user.id,

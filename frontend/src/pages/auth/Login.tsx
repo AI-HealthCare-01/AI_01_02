@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { authApi, profileApi, setToken } from "@/lib/api";
+import { authApi, profileApi, setToken, clearPreviousUserData } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
 import { toast } from "sonner";
 
@@ -16,6 +16,7 @@ export default function Login() {
     try {
       const { access_token } = await authApi.login(email, password);
       setToken(access_token);
+      clearPreviousUserData(email);
       try {
         await profileApi.getHealth();
         navigate("/");

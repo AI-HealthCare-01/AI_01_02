@@ -61,5 +61,5 @@ class HealthProfileResponse(BaseSerializerModel):
     weekly_refresh_weekday: int | None
     weekly_refresh_time: str | None
     weekly_adherence_rate: float | None
-    onboarding_completed_at: datetime
+    onboarding_completed_at: datetime | None
     updated_at: datetime

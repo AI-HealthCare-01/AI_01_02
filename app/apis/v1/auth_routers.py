@@ -89,8 +89,8 @@ async def logout(
             at_jti = verified_at.payload.get("jti", "")
             if at_jti:
                 await blacklist_jti(at_jti)
-        except AppException:
-            pass
+        except AppException as exc:
+            logger.debug("logout_access_token_error", extra={"code": exc.code})
     if refresh_token:
         try:
             verified_rt = jwt_service.verify_jwt(token=refresh_token, token_type="refresh")
