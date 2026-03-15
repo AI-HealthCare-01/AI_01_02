@@ -14,6 +14,12 @@ export default function Sleep() {
   const [daytimeSleepiness, setDaytimeSleepiness] = useState(3);
   const [loading, setLoading] = useState(false);
 
+  const latencyNum = sleepLatency ? parseInt(sleepLatency) : 0;
+  const awakeningsNum = nightAwakenings ? parseInt(nightAwakenings) : 0;
+  const latencyValid = !sleepLatency || (latencyNum >= 0 && latencyNum <= 720);
+  const awakeningsValid = !nightAwakenings || (awakeningsNum >= 0 && awakeningsNum <= 70);
+  const canSubmit = latencyValid && awakeningsValid && !loading;
+
   async function handleSubmit() {
     setLoading(true);
     try {
@@ -89,6 +95,7 @@ export default function Sleep() {
               onChange={(e) => setSleepLatency(e.target.value)}
               placeholder="30"
               min="0"
+              max="720"
               className={inputCls}
             />
           </div>
@@ -102,6 +109,7 @@ export default function Sleep() {
               onChange={(e) => setNightAwakenings(e.target.value)}
               placeholder="0"
               min="0"
+              max="70"
               className={inputCls}
             />
           </div>
@@ -127,21 +135,29 @@ export default function Sleep() {
         </div>
       </div>
 
-      <div className="mt-8 flex justify-between">
-        <button
-          type="button"
-          onClick={() => navigate("/onboarding/lifestyle")}
-          className="px-5 py-2.5 text-sm text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          이전
-        </button>
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          className="px-6 py-2.5 gradient-primary text-white text-sm font-bold rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-60"
-        >
-          {loading ? "저장 중..." : "다음 단계 →"}
-        </button>
+      <div className="mt-8 flex flex-col items-end gap-1.5">
+        {!latencyValid && (
+          <p className="text-xs text-red-500">잠들기까지 걸리는 시간은 0~720분 범위로 입력해주세요.</p>
+        )}
+        {!awakeningsValid && (
+          <p className="text-xs text-red-500">밤새 깨는 횟수는 0~70회 범위로 입력해주세요.</p>
+        )}
+        <div className="w-full flex justify-between">
+          <button
+            type="button"
+            onClick={() => navigate("/onboarding/lifestyle")}
+            className="px-5 py-2.5 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            이전
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className="px-6 py-2.5 gradient-primary text-white text-sm font-bold rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none"
+          >
+            {loading ? "저장 중..." : "다음 단계 →"}
+          </button>
+        </div>
       </div>
     </OnboardingShell>
   );

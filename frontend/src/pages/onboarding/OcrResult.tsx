@@ -198,6 +198,7 @@ export default function OcrResult() {
   const [editable, setEditable] = useState(false);
   const [hasLowConfidence, setHasLowConfidence] = useState(false);
   const [loadingResult, setLoadingResult] = useState(false);
+  const ocrConfidences = useRef<number[]>([]);
   const [showReminderModal, setShowReminderModal] = useState(false);
 
   // 이미 분석된 결과가 있으면 바로 result 단계로
@@ -213,6 +214,7 @@ export default function OcrResult() {
       ocrApi.getJobResult(savedJobId)
         .then((res) => {
           const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
+          ocrConfidences.current = meds.map((m) => m.confidence ?? 0);
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
@@ -237,6 +239,7 @@ export default function OcrResult() {
           localStorage.setItem("ocr_job_id", job_id);
           const res = await ocrApi.getJobResult(job_id);
           const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
+          ocrConfidences.current = meds.map((m) => m.confidence ?? 0);
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
@@ -254,7 +257,14 @@ export default function OcrResult() {
   }
 
   function updateField(index: number, field: keyof OcrMedication, value: string | number | null) {
-    setMedications((prev) => prev.map((m, i) => (i === index ? { ...m, [field]: value, confidence: 1.0 } : m)));
+    setMedications((prev) => prev.map((m, i) => {
+      if (i !== index) return m;
+      const updated = { ...m, [field]: value };
+      const allFilled = (["drug_name", "dose", "intake_time", "dosage_per_once",
+        "frequency_per_day", "total_days", "dispensed_date"] as (keyof OcrMedication)[])
+        .every((k) => { const v = updated[k]; return v !== null && v !== undefined && v !== ""; });
+      return { ...updated, confidence: allFilled ? 1.0 : ocrConfidences.current[index] ?? m.confidence };
+    }));
   }
 
   async function handleConfirm() {

@@ -181,7 +181,7 @@ export default function OcrScan() {
         {file && (
           <div className="flex gap-3 mt-4">
             <button
-              onClick={() => { setFile(null); setPreview(null); }}
+              onClick={() => { setFile(null); setPreview(null); if (inputRef.current) inputRef.current.value = ""; if (cameraRef.current) cameraRef.current.value = ""; }}
               className="flex-1 py-3 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-all duration-200"
             >
               다시 선택

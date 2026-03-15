@@ -122,7 +122,7 @@ export default function NotificationsTab() {
                   : "border-gray-200 text-gray-500 hover:border-gray-300"
               }`}
             >
-              읽지않은 알람 {unread.length}개
+              읽지 않은 알림 {unread.length}개
             </button>
           </div>
 

@@ -32,6 +32,12 @@ export default function Lifestyle() {
   const [alcohol, setAlcohol] = useState("low");
   const caffeineMg = (parseInt(caffeineCups, 10) || 0) * CAFFEINE_MG_PER_CUP;
 
+  const pcNum = pcHours ? parseInt(pcHours) : 0;
+  const phoneNum = phoneHours ? parseInt(phoneHours) : 0;
+  const pcValid = !pcHours || (pcNum >= 0 && pcNum <= 24);
+  const phoneValid = !phoneHours || (phoneNum >= 0 && phoneNum <= 24);
+  const canSubmit = pcValid && phoneValid;
+
   function handleNext() {
     const exerciseMap: Record<string, number> = {
       low: 1,
@@ -41,10 +47,10 @@ export default function Lifestyle() {
     const smokingMap: Record<string, number> = {
       none: 0,
       light: 1,
-      heavy: 1,
+      heavy: 2,
     };
     const alcoholMap: Record<string, number> = {
-      low: 1,
+      low: 0,
       moderate: 2,
       high: 4,
     };
@@ -52,8 +58,8 @@ export default function Lifestyle() {
       "onboarding_lifestyle",
       JSON.stringify({
         exercise_frequency_per_week: exerciseMap[exercise] ?? 0,
-        pc_hours_per_day: parseFloat(pcHours) || 0,
-        smartphone_hours_per_day: parseFloat(phoneHours) || 0,
+        pc_hours_per_day: parseInt(pcHours) || 0,
+        smartphone_hours_per_day: parseInt(phoneHours) || 0,
         caffeine_cups_per_day: parseInt(caffeineCups, 10) || 0,
         smoking: smokingMap[smoking] ?? 0,
         alcohol_frequency_per_week: alcoholMap[alcohol] ?? 1,
@@ -190,20 +196,29 @@ export default function Lifestyle() {
         </div>
       </div>
 
-      <div className="mt-8 flex justify-between">
-        <button
-          type="button"
-          onClick={() => navigate("/onboarding")}
-          className="px-5 py-2.5 text-sm text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          이전
-        </button>
-        <button
-          onClick={handleNext}
-          className="px-6 py-2.5 gradient-primary text-white text-sm font-bold rounded-xl hover:shadow-lg transition-all duration-200"
-        >
-          다음 단계
-        </button>
+      <div className="mt-8 flex flex-col items-end gap-1.5">
+        {!pcValid && (
+          <p className="text-xs text-red-500">PC/노트북 사용 시간은 0~24시간 범위로 입력해주세요.</p>
+        )}
+        {!phoneValid && (
+          <p className="text-xs text-red-500">스마트폰 사용 시간은 0~24시간 범위로 입력해주세요.</p>
+        )}
+        <div className="w-full flex justify-between">
+          <button
+            type="button"
+            onClick={() => navigate("/onboarding")}
+            className="px-5 py-2.5 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            이전
+          </button>
+          <button
+            onClick={handleNext}
+            disabled={!canSubmit}
+            className="px-6 py-2.5 gradient-primary text-white text-sm font-bold rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none"
+          >
+            다음 단계
+          </button>
+        </div>
       </div>
     </OnboardingShell>
   );

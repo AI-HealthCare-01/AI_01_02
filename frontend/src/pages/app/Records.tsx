@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Edit2, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Edit2, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import {
   scheduleApi,
@@ -259,11 +259,12 @@ export default function Records() {
   const smokingLabel = (() => {
     const v = profile?.lifestyle?.smoking ?? 0;
     if (v === 0) return "비흡연";
-    return "흡연";
+    if (v <= 1) return "하루 5개비 이하";
+    return "하루 6개비 이상";
   })();
   const alcoholLabel = (() => {
     const v = profile?.lifestyle?.alcohol_frequency_per_week ?? 0;
-    if (v <= 0) return "거의 없음";
+    if (v <= 0) return "월 1회 이하";
     if (v <= 2) return "주 1~2회";
     return "주 3회 이상";
   })();
@@ -312,26 +313,45 @@ export default function Records() {
                 />
                 <div className="absolute left-1/2 top-full z-20 mt-3 w-[320px] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl">
                   <div className="mb-3 flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear() - 1, prev.getMonth(), 1))}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200"
+                      >
+                        <ChevronsLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                    </div>
                     <p className="text-sm font-bold text-gray-800">{calendarMonthLabel}</p>
-                    <button
-                      type="button"
-                      onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                      disabled={
-                        calendarMonth.getFullYear() > today.getFullYear()
-                        || (calendarMonth.getFullYear() === today.getFullYear()
-                            && calendarMonth.getMonth() >= today.getMonth())
-                      }
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                        disabled={
+                          calendarMonth.getFullYear() > today.getFullYear()
+                          || (calendarMonth.getFullYear() === today.getFullYear()
+                              && calendarMonth.getMonth() >= today.getMonth())
+                        }
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear() + 1, prev.getMonth(), 1))}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                        disabled={calendarMonth.getFullYear() >= today.getFullYear()}
+                      >
+                        <ChevronsRight className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                   <div className="mb-2 grid grid-cols-7 gap-1">
                     {DOW_LABELS.map((label) => (
@@ -523,7 +543,12 @@ function EditModal({
   const [phoneHours, setPhoneHours] = useState(String(ls?.smartphone_hours_per_day ?? 0));
   const [coffee, setCoffee] = useState(String(ls?.caffeine_cups_per_day ?? 0));
   const coffeeMg = (parseInt(coffee, 10) || 0) * CAFFEINE_MG_PER_CUP;
-  const [smoking, setSmoking] = useState(() => (ls?.smoking ?? 0) > 0 ? "light" : "none");
+  const [smoking, setSmoking] = useState(() => {
+    const v = ls?.smoking ?? 0;
+    if (v >= 2) return "heavy";
+    if (v >= 1) return "light";
+    return "none";
+  });
   const [alcohol, setAlcohol] = useState(() => {
     const freq = ls?.alcohol_frequency_per_week ?? 0;
     if (freq >= 3) return "high";
@@ -553,8 +578,8 @@ function EditModal({
     setLoading(true);
     try {
       const exerciseMap: Record<string, number> = { low: 1, moderate: 3, high: 5 };
-      const smokingMap: Record<string, number> = { none: 0, light: 1, heavy: 1 };
-      const alcoholMap: Record<string, number> = { low: 1, moderate: 2, high: 4 };
+      const smokingMap: Record<string, number> = { none: 0, light: 1, heavy: 2 };
+      const alcoholMap: Record<string, number> = { low: 0, moderate: 2, high: 4 };
       const normalizedAllergies = Array.from(
         new Set(allergies.map((item) => item.trim()).filter((item) => item.length > 0)),
       );
@@ -566,8 +591,8 @@ function EditModal({
         },
         lifestyle: {
           exercise_frequency_per_week: exerciseMap[exercise] ?? 0,
-          pc_hours_per_day: parseFloat(pcHours) || 0,
-          smartphone_hours_per_day: parseFloat(phoneHours) || 0,
+          pc_hours_per_day: parseInt(pcHours) || 0,
+          smartphone_hours_per_day: parseInt(phoneHours) || 0,
           caffeine_cups_per_day: parseInt(coffee, 10) || 0,
           smoking: smokingMap[smoking] ?? 0,
           alcohol_frequency_per_week: alcoholMap[alcohol] ?? 1,

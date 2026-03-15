@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { Pill, ChevronDown, ChevronUp, AlertTriangle, Upload, Pencil, X, Trash2 } from "lucide-react";
+import { Pill, ChevronDown, ChevronUp, AlertTriangle, Upload, Pencil, X, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { reminderApi, guideApi, Reminder, DdayReminder, GuideJobResult } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
@@ -310,6 +310,8 @@ function MedicationAccordion({
     enabled: r.enabled,
   });
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showCustomTime, setShowCustomTime] = useState(false);
+  const [customTimeValue, setCustomTimeValue] = useState("12:00");
 
   // editing 모드 진입 시 폼 초기화
   useEffect(() => {
@@ -498,6 +500,66 @@ function MedicationAccordion({
                   </button>
                 ))}
               </div>
+              {/* 직접 입력한 커스텀 시간 표시 */}
+              {form.schedule_times.filter((t) => !TIME_OPTIONS.some((o) => o.value === t)).length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {form.schedule_times
+                    .filter((t) => !TIME_OPTIONS.some((o) => o.value === t))
+                    .map((t) => (
+                      <span
+                        key={t}
+                        className="text-xs px-3 py-1.5 rounded-full font-medium bg-green-500 text-white flex items-center gap-1"
+                      >
+                        {t}
+                        <button type="button" onClick={() => toggleTime(t)} className="hover:text-green-200">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                </div>
+              )}
+              {/* 커스텀 시간 추가 */}
+              {showCustomTime ? (
+                <div className="flex items-center gap-2 mt-2">
+                  <input
+                    type="time"
+                    value={customTimeValue}
+                    onChange={(e) => setCustomTimeValue(e.target.value)}
+                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (customTimeValue && !form.schedule_times.includes(customTimeValue)) {
+                        setForm((f) => ({
+                          ...f,
+                          schedule_times: [...f.schedule_times, customTimeValue].sort(),
+                        }));
+                      }
+                      setShowCustomTime(false);
+                    }}
+                    className="text-xs px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                  >
+                    추가
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomTime(false)}
+                    className="text-xs px-3 py-1.5 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                  >
+                    취소
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowCustomTime(true)}
+                  className="mt-2 flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-700 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  직접 입력
+                </button>
+              )}
             </div>
 
             {/* 조제일 */}
