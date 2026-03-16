@@ -38,8 +38,8 @@ class NotificationService:
         is_read: bool | None = None,
     ) -> tuple[list[Notification], int]:
         now = time.monotonic()
-        last_sync = _sync_cache.get(user.id, 0.0)
-        if now - last_sync >= _SYNC_TTL_SECONDS:
+        last_sync = _sync_cache.get(user.id)
+        if last_sync is None or now - last_sync >= _SYNC_TTL_SECONDS:
             await self._sync_dynamic_notifications(user=user)
             if len(_sync_cache) >= _SYNC_CACHE_MAX_SIZE:
                 _sync_cache.clear()
