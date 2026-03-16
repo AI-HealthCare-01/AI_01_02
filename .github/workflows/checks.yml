@@ -47,7 +47,7 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: pw1234
+          MYSQL_ROOT_PASSWORD: ${{ secrets.CI_DB_PASSWORD || 'ci_test_P@ssw0rd_2026!' }}
           MYSQL_DATABASE: ai_health
         ports:
           - 3306:3306

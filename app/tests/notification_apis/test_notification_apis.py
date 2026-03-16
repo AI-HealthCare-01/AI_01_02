@@ -13,9 +13,14 @@ from app.models.ocr import Document, DocumentType, OcrJob, OcrJobStatus
 from app.models.psych_drugs import PsychDrug
 from app.models.reminders import MedicationReminder
 from app.models.users import User
+from app.services.notifications import _sync_cache
 
 
 class TestNotificationApis(TestCase):
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        _sync_cache.clear()
+
     async def _signup_and_login(self, client: AsyncClient, *, email: str, phone_number: str) -> str:
         await client.post(
             "/api/v1/auth/signup",
@@ -197,6 +202,8 @@ class TestNotificationApis(TestCase):
             assert first.status_code == status.HTTP_200_OK
 
             await self._create_prescription_ocr(user=user, file_name="ocr2.png", drug_name="메디키넷리타드캡슐")
+            # TTL 캐시 리셋 — 두 번째 요청에서도 동적 알림 동기화가 실행되도록
+            _sync_cache.pop(user.id, None)
             second = await client.get("/api/v1/notifications", headers=headers)
             assert second.status_code == status.HTTP_200_OK
 
@@ -232,6 +239,7 @@ class TestNotificationApis(TestCase):
             await UserHealthProfile.filter(id=profile.id).update(
                 updated_at=datetime.now(config.TIMEZONE) + timedelta(minutes=1)
             )
+            _sync_cache.pop(user.id, None)
             second = await client.get("/api/v1/notifications", headers=headers)
             assert second.status_code == status.HTTP_200_OK
 
@@ -256,6 +264,7 @@ class TestNotificationApis(TestCase):
                 daytime_sleepiness=9,
                 updated_at=datetime.now(config.TIMEZONE) + timedelta(minutes=1),
             )
+            _sync_cache.pop(user.id, None)
             second = await client.get("/api/v1/notifications", headers=headers)
             assert second.status_code == status.HTTP_200_OK
 

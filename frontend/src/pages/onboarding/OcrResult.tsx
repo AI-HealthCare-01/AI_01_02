@@ -202,6 +202,7 @@ export default function OcrResult() {
   const ocrConfidences = useRef<number[]>([]);
   const cancelledRef = useRef(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
+  const [analyzeElapsed, setAnalyzeElapsed] = useState(0);
 
   // 이미 분석된 결과가 있으면 바로 result 단계로
   useEffect(() => {
@@ -230,6 +231,7 @@ export default function OcrResult() {
   async function handleAnalyze() {
     if (!file) return;
     setPhase("analyzing");
+    setAnalyzeElapsed(0);
     try {
       const { id: documentId } = await ocrApi.uploadDocument(file);
       const { job_id } = await ocrApi.createJob(documentId);
@@ -237,6 +239,7 @@ export default function OcrResult() {
 
       for (let i = 0; i < 30; i++) {
         await new Promise((r) => setTimeout(r, 2000));
+        setAnalyzeElapsed((i + 1) * 2);
         if (cancelledRef.current) return;
         const status = await ocrApi.getJobStatus(job_id);
         if (status.status === "SUCCEEDED" || status.status === "COMPLETED") {
@@ -343,7 +346,7 @@ export default function OcrResult() {
                 }`}
             >
               {phase === "analyzing" && <Loader2 className="w-4 h-4 animate-spin" />}
-              {analyzeBtnLabel}
+              {phase === "analyzing" ? `분석중 (${analyzeElapsed}초)` : analyzeBtnLabel}
             </button>
           </div>
         </div>}

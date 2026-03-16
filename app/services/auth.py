@@ -52,7 +52,13 @@ async def is_jti_blacklisted(jti: str) -> bool:
         result = await cast(Awaitable, client.exists(f"{TOKEN_BLACKLIST_PREFIX}{jti}"))
         return bool(result)
     except RedisError:
-        logger.warning("failed to check jti blacklist — treating as blacklisted (fail-closed)", exc_info=True)
+        # Fail-closed: Redis 장애 시 모든 토큰을 블랙리스트 처리하여 보안 유지.
+        # 이로 인해 Redis 장애 동안 모든 인증 요청이 거부됨.
+        logger.warning(
+            "redis_jti_check_failed — fail-closed: all tokens treated as blacklisted",
+            extra={"jti": jti},
+            exc_info=True,
+        )
         return True
 
 

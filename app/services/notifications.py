@@ -1,4 +1,5 @@
 import asyncio
+import time
 from datetime import datetime
 
 from tortoise.transactions import in_transaction
@@ -14,6 +15,10 @@ from app.services.emergency_guidance import generate_medication_dday_guidance
 from app.services.guide_automation import GuideAutomationService
 from app.services.notification_settings import NotificationSettingService
 from app.services.reminders import ReminderService
+
+_SYNC_TTL_SECONDS = 300  # 5분
+_SYNC_CACHE_MAX_SIZE = 10_000
+_sync_cache: dict[int, float] = {}
 
 
 class NotificationService:
@@ -32,7 +37,13 @@ class NotificationService:
         offset: int,
         is_read: bool | None = None,
     ) -> tuple[list[Notification], int]:
-        await self._sync_dynamic_notifications(user=user)
+        now = time.monotonic()
+        last_sync = _sync_cache.get(user.id)
+        if last_sync is None or now - last_sync >= _SYNC_TTL_SECONDS:
+            await self._sync_dynamic_notifications(user=user)
+            if len(_sync_cache) >= _SYNC_CACHE_MAX_SIZE:
+                _sync_cache.clear()
+            _sync_cache[user.id] = now
         notifications = await self.repo.list_notifications(
             user_id=user.id,
             limit=limit,
