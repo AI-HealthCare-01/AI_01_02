@@ -96,8 +96,8 @@ async def _depletion_auto_disable_loop() -> None:
 
 async def _guide_weekly_refresh_loop() -> None:
     service = GuideAutomationService()
-    await asyncio.sleep(config.GUIDE_WEEKLY_REFRESH_CHECK_INTERVAL_SECONDS)
     while True:
+        await asyncio.sleep(config.GUIDE_WEEKLY_REFRESH_CHECK_INTERVAL_SECONDS)
         try:
             processed = await service.process_weekly_refresh_due_users(
                 batch_size=config.GUIDE_WEEKLY_REFRESH_CHECK_BATCH_SIZE
@@ -106,7 +106,6 @@ async def _guide_weekly_refresh_loop() -> None:
                 logger.info("weekly_guide_refresh_due_notified", extra={"user_count": processed})
         except Exception as exc:  # noqa: BLE001
             logger.warning("weekly_guide_refresh_loop_error", extra={"error": str(exc)})
-        await asyncio.sleep(config.GUIDE_WEEKLY_REFRESH_CHECK_INTERVAL_SECONDS)
 
 
 @asynccontextmanager

@@ -90,12 +90,11 @@ async function withAuthRefresh(
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
-  const signal = init.signal ?? controller.signal;
 
   const doFetch = (token: string | null) =>
     fetch(`${BASE}${path}`, {
       ...init,
-      signal,
+      signal: controller.signal,
       credentials: "include",
       headers: {
         ...(init.body ? { "Content-Type": "application/json" } : {}),
@@ -113,14 +112,21 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
     }
     if (res.status === 204) return undefined as T;
     return res.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("요청 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
+    }
+    throw err;
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
+const UPLOAD_TIMEOUT_MS = 120_000;
+
 async function requestForm<T>(path: string, body: FormData): Promise<T> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
 
   const doFetch = (token: string | null) =>
     fetch(`${BASE}${path}`, {
@@ -139,6 +145,11 @@ async function requestForm<T>(path: string, body: FormData): Promise<T> {
       throw new Error(extractErrorMessage(err, res.status));
     }
     return res.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("업로드 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
+    }
+    throw err;
   } finally {
     clearTimeout(timeoutId);
   }
