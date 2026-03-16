@@ -103,8 +103,9 @@ export default function Lifestyle() {
           <label className="block text-sm font-medium text-gray-700 mb-2">디지털 기기 사용 (일 평균)</label>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">PC/노트북 (시간)</label>
+              <label htmlFor="pcHours" className="block text-xs text-gray-500 mb-1">PC/노트북 (시간)</label>
               <input
+                id="pcHours"
                 type="number"
                 value={pcHours}
                 onChange={(e) => setPcHours(e.target.value)}
@@ -115,8 +116,9 @@ export default function Lifestyle() {
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">스마트폰 (시간)</label>
+              <label htmlFor="phoneHours" className="block text-xs text-gray-500 mb-1">스마트폰 (시간)</label>
               <input
+                id="phoneHours"
                 type="number"
                 value={phoneHours}
                 onChange={(e) => setPhoneHours(e.target.value)}
@@ -134,9 +136,10 @@ export default function Lifestyle() {
           <label className="block text-sm font-medium text-gray-700 mb-2">물질 사용 여부</label>
           <div className="space-y-4">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">커피</label>
+              <label htmlFor="caffeineCups" className="block text-xs text-gray-500 mb-1">커피</label>
               <div className="grid grid-cols-[minmax(0,1fr)_132px] gap-2">
                 <select
+                  id="caffeineCups"
                   value={caffeineCups}
                   onChange={(e) => setCaffeineCups(e.target.value)}
                   className={inputCls}

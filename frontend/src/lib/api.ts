@@ -1,4 +1,5 @@
 const BASE = "/api/v1";
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 export function getToken() {
   return localStorage.getItem("access_token");
@@ -87,9 +88,14 @@ async function withAuthRefresh(
 }
 
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+  const signal = init.signal ?? controller.signal;
+
   const doFetch = (token: string | null) =>
     fetch(`${BASE}${path}`, {
       ...init,
+      signal,
       credentials: "include",
       headers: {
         ...(init.body ? { "Content-Type": "application/json" } : {}),
@@ -98,32 +104,44 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
       },
     });
 
-  const res = await withAuthRefresh(doFetch);
+  try {
+    const res = await withAuthRefresh(doFetch);
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(extractErrorMessage(err, res.status));
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, res.status));
+    }
+    if (res.status === 204) return undefined as T;
+    return res.json();
+  } finally {
+    clearTimeout(timeoutId);
   }
-  if (res.status === 204) return undefined as T;
-  return res.json();
 }
 
 async function requestForm<T>(path: string, body: FormData): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
   const doFetch = (token: string | null) =>
     fetch(`${BASE}${path}`, {
       method: "POST",
       credentials: "include",
+      signal: controller.signal,
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body,
     });
 
-  const res = await withAuthRefresh(doFetch);
+  try {
+    const res = await withAuthRefresh(doFetch);
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(extractErrorMessage(err, res.status));
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, res.status));
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return res.json();
 }
 
 // ── Auth ──────────────────────────────────────────────

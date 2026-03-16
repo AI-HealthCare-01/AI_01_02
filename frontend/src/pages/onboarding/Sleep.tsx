@@ -65,8 +65,9 @@ export default function Sleep() {
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">평균 취침 시간</label>
+            <label htmlFor="bedTime" className="block text-sm font-medium text-gray-700 mb-1.5">평균 취침 시간</label>
             <input
+              id="bedTime"
               type="time"
               value={bedTime}
               onChange={(e) => setBedTime(e.target.value)}
@@ -74,8 +75,9 @@ export default function Sleep() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">평균 기상 시간</label>
+            <label htmlFor="wakeTime" className="block text-sm font-medium text-gray-700 mb-1.5">평균 기상 시간</label>
             <input
+              id="wakeTime"
               type="time"
               value={wakeTime}
               onChange={(e) => setWakeTime(e.target.value)}
@@ -86,10 +88,11 @@ export default function Sleep() {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label htmlFor="sleepLatency" className="block text-sm font-medium text-gray-700 mb-1.5">
               잠들기까지 걸리는 시간 (분)
             </label>
             <input
+              id="sleepLatency"
               type="number"
               value={sleepLatency}
               onChange={(e) => setSleepLatency(e.target.value)}
@@ -100,10 +103,11 @@ export default function Sleep() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label htmlFor="nightAwakenings" className="block text-sm font-medium text-gray-700 mb-1.5">
               밤새 깨는 횟수 (회/주)
             </label>
             <input
+              id="nightAwakenings"
               type="number"
               value={nightAwakenings}
               onChange={(e) => setNightAwakenings(e.target.value)}
@@ -117,10 +121,11 @@ export default function Sleep() {
 
         <div>
           <div className="flex justify-between mb-2">
-            <label className="text-sm font-medium text-gray-700">낮 졸림 정도</label>
+            <label htmlFor="daytimeSleepiness" className="text-sm font-medium text-gray-700">낮 졸림 정도</label>
             <span className="text-sm font-bold text-green-600">{daytimeSleepiness} / 10</span>
           </div>
           <input
+            id="daytimeSleepiness"
             type="range"
             min="1"
             max="10"

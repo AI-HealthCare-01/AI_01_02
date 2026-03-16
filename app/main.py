@@ -96,6 +96,7 @@ async def _depletion_auto_disable_loop() -> None:
 
 async def _guide_weekly_refresh_loop() -> None:
     service = GuideAutomationService()
+    await asyncio.sleep(config.GUIDE_WEEKLY_REFRESH_CHECK_INTERVAL_SECONDS)
     while True:
         try:
             processed = await service.process_weekly_refresh_due_users(
