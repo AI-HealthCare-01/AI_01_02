@@ -10,7 +10,6 @@ from app.core.exceptions import AppException, ErrorCode
 from app.core.logger import default_logger as logger
 from app.models.chat import ChatMessage, ChatMessageStatus, ChatRole, ChatSession, ChatSessionStatus
 from app.models.health_profiles import UserHealthProfile
-from app.models.profiles import HealthProfile
 from app.models.reminders import MedicationReminder
 from app.models.users import User
 from app.services.llm import chat_completion, json_completion, stream_chat_completion
@@ -186,26 +185,15 @@ _ADHD_RISK_CAFFEINE_KEYWORDS = ("커피", "카페인", "에너지음료", "에�
 _ADHD_RISK_SLEEP_KEYWORDS = ("밤새", "밤샘", "안 자고", "한숨도 안 자", "2시간만 자", "두 시간만 자", "수면 없이")
 
 
-def _build_profile_context(
-    profile: HealthProfile | None,
-    user_health_profile: UserHealthProfile | None = None,
-) -> str:
+def _build_profile_context(user_health_profile: UserHealthProfile | None) -> str:
     """REQ-032: 사용자 프로필/약 정보를 시스템 프롬프트에 주입"""
+    if not user_health_profile:
+        return ""
     parts = []
-    basic = profile.basic_info if profile and isinstance(profile.basic_info, dict) else {}
-
-    height_cm = user_health_profile.height_cm if user_health_profile else basic.get("height_cm")
-    weight_kg = user_health_profile.weight_kg if user_health_profile else basic.get("weight_kg")
-    drug_allergies = (
-        user_health_profile.drug_allergies
-        if user_health_profile and user_health_profile.drug_allergies
-        else basic.get("drug_allergies")
-    )
-
-    if height_cm and weight_kg:
-        parts.append(f"키 {height_cm}cm, 체중 {weight_kg}kg")
-    if drug_allergies:
-        parts.append(f"약물 알러지: {', '.join(drug_allergies)}")
+    if user_health_profile.height_cm and user_health_profile.weight_kg:
+        parts.append(f"키 {user_health_profile.height_cm}cm, 체중 {user_health_profile.weight_kg}kg")
+    if user_health_profile.drug_allergies:
+        parts.append(f"약물 알러지: {', '.join(user_health_profile.drug_allergies)}")
     if not parts:
         return ""
     return "\n\n[사용자 건강 정보]\n" + "\n".join(parts)
@@ -228,79 +216,19 @@ def _format_metric(value: float) -> str:
     return str(int(value)) if value.is_integer() else str(round(value, 2)).rstrip("0").rstrip(".")
 
 
-def _compute_sleep_hours_from_input(sleep_input: dict[str, Any]) -> float | None:
-    raw_hours = _to_float(sleep_input.get("sleep_hours"))
-    if raw_hours is not None:
-        return round(raw_hours, 2)
-
-    bed_time = str(sleep_input.get("bed_time") or "").strip()
-    wake_time = str(sleep_input.get("wake_time") or "").strip()
-    if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", bed_time):
-        return None
-    if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", wake_time):
-        return None
-
-    bed_hours, bed_minutes = map(int, bed_time.split(":"))
-    wake_hours, wake_minutes = map(int, wake_time.split(":"))
-    bed_total = bed_hours * 60 + bed_minutes
-    wake_total = wake_hours * 60 + wake_minutes
-    duration_minutes = (wake_total - bed_total) % (24 * 60)
-    return round(duration_minutes / 60, 2)
-
-
-def _build_lifestyle_context(  # noqa: C901
-    profile: HealthProfile | None,
-    user_health_profile: UserHealthProfile | None = None,
+def _build_lifestyle_context(
+    user_health_profile: UserHealthProfile | None,
     *,
     intent: str,
 ) -> str:
-    if intent != "medical":
+    if intent != "medical" or not user_health_profile:
         return ""
 
-    lifestyle = profile.lifestyle_input if profile and isinstance(profile.lifestyle_input, dict) else {}
-    sleep_input = profile.sleep_input if profile and isinstance(profile.sleep_input, dict) else {}
-
-    exercise_frequency = _to_float(user_health_profile.exercise_frequency_per_week) if user_health_profile else None
-    smartphone_hours = _to_float(user_health_profile.smartphone_hours_per_day) if user_health_profile else None
-    caffeine_cups = _to_float(user_health_profile.caffeine_cups_per_day) if user_health_profile else None
-    alcohol_frequency = _to_float(user_health_profile.alcohol_frequency_per_week) if user_health_profile else None
-    sleep_hours = _to_float(user_health_profile.sleep_time_hours) if user_health_profile else None
-
-    exercise_section = lifestyle.get("exercise_hours", {})
-    digital_section = lifestyle.get("digital_usage", {})
-    substance_section = lifestyle.get("substance_usage", {})
-
-    exercise_hours = None
-    if isinstance(exercise_section, dict):
-        exercise_hours = sum(
-            value
-            for value in (
-                _to_float(exercise_section.get("low_intensity")),
-                _to_float(exercise_section.get("moderate_intensity")),
-                _to_float(exercise_section.get("high_intensity")),
-            )
-            if value is not None
-        )
-    if exercise_frequency is None:
-        exercise_frequency = _to_float(lifestyle.get("exercise_frequency_per_week"))
-
-    if smartphone_hours is None:
-        smartphone_hours = _to_float(lifestyle.get("smartphone_hours_per_day"))
-    if smartphone_hours is None and isinstance(digital_section, dict):
-        smartphone_hours = _to_float(digital_section.get("smartphone_hours_per_day"))
-
-    if caffeine_cups is None:
-        caffeine_cups = _to_float(lifestyle.get("caffeine_cups_per_day"))
-    if caffeine_cups is None and isinstance(substance_section, dict):
-        caffeine_cups = _to_float(substance_section.get("caffeine_cups_per_day"))
-
-    if alcohol_frequency is None:
-        alcohol_frequency = _to_float(lifestyle.get("alcohol_frequency_per_week"))
-    if alcohol_frequency is None and isinstance(substance_section, dict):
-        alcohol_frequency = _to_float(substance_section.get("alcohol_frequency_per_week"))
-
-    if sleep_hours is None and isinstance(sleep_input, dict):
-        sleep_hours = _compute_sleep_hours_from_input(sleep_input)
+    sleep_hours = _to_float(user_health_profile.sleep_time_hours)
+    caffeine_cups = _to_float(user_health_profile.caffeine_cups_per_day)
+    exercise_frequency = _to_float(user_health_profile.exercise_frequency_per_week)
+    smartphone_hours = _to_float(user_health_profile.smartphone_hours_per_day)
+    alcohol_frequency = _to_float(user_health_profile.alcohol_frequency_per_week)
 
     parts = [
         "\n\n[사용자 생활습관 정보]",
@@ -311,9 +239,7 @@ def _build_lifestyle_context(  # noqa: C901
         parts.append(f"• 예상 수면 시간 {_format_metric(sleep_hours)}시간")
     if caffeine_cups is not None:
         parts.append(f"• 카페인 섭취 하루 {_format_metric(caffeine_cups)}잔")
-    if exercise_hours is not None and exercise_hours > 0:
-        parts.append(f"• 주간 운동 시간 약 {_format_metric(exercise_hours)}시간")
-    elif exercise_frequency is not None:
+    if exercise_frequency is not None:
         parts.append(f"• 주간 운동 빈도 {_format_metric(exercise_frequency)}회")
     if smartphone_hours is not None:
         parts.append(f"• 스마트폰 사용 하루 {_format_metric(smartphone_hours)}시간")
@@ -709,7 +635,7 @@ class ChatService:
 
     async def _prepare_rag_context(
         self, *, user: User, intent: str, message: str
-    ) -> tuple[HealthProfile | None, UserHealthProfile | None, list, bool, list[str]]:
+    ) -> tuple[UserHealthProfile | None, list, bool, list[str]]:
         """프로필 조회 + RAG 검색을 동시 실행."""
         rag_docs: list = []
         needs_clarification = False
@@ -717,30 +643,18 @@ class ChatService:
 
         if intent == "medical":
             try:
-                (profile, user_health_profile), (rag_docs, _rag_needs_clarification) = await asyncio.gather(
-                    asyncio.gather(
-                        HealthProfile.get_or_none(user_id=user.id),
-                        UserHealthProfile.get_or_none(user_id=user.id),
-                    ),
+                user_health_profile, (rag_docs, _rag_needs_clarification) = await asyncio.gather(
+                    UserHealthProfile.get_or_none(user_id=user.id),
                     hybrid_search(message),
                 )
                 retrieved_doc_ids = [d.doc_id for d in rag_docs]
-                # NOTE: needs_clarification 비활성화 — RAG 지식베이스가 ADHD 전용이라
-                # 일반 약물/건강 질문의 유사도가 낮아 오탐이 빈번함.
-                # 지식베이스 확장 후 재활성화 필요.
             except Exception:
                 logger.warning("RAG hybrid_search failed (user_id=%s)", user.id, exc_info=True)
-                profile, user_health_profile = await asyncio.gather(
-                    HealthProfile.get_or_none(user_id=user.id),
-                    UserHealthProfile.get_or_none(user_id=user.id),
-                )
+                user_health_profile = await UserHealthProfile.get_or_none(user_id=user.id)
         else:
-            profile, user_health_profile = await asyncio.gather(
-                HealthProfile.get_or_none(user_id=user.id),
-                UserHealthProfile.get_or_none(user_id=user.id),
-            )
+            user_health_profile = await UserHealthProfile.get_or_none(user_id=user.id)
 
-        return profile, user_health_profile, rag_docs, needs_clarification, retrieved_doc_ids
+        return user_health_profile, rag_docs, needs_clarification, retrieved_doc_ids
 
     async def send_message(self, *, user: User, session_id: int, message: str) -> ChatMessage:
         session = await self._get_active_session(user=user, session_id=session_id)
@@ -765,7 +679,6 @@ class ChatService:
             return risk_msg
 
         (
-            profile,
             user_health_profile,
             rag_docs,
             needs_clarification,
@@ -778,7 +691,7 @@ class ChatService:
             message=message,
             reminders=reminders,
         )
-        lifestyle_ctx = _build_lifestyle_context(profile, user_health_profile, intent=intent)
+        lifestyle_ctx = _build_lifestyle_context(user_health_profile, intent=intent)
 
         # REQ-042: 저유사도 재질문 유도
         clarification_msg = await self._check_clarification(
@@ -788,7 +701,7 @@ class ChatService:
             return clarification_msg
 
         # REQ-036: RAG 컨텍스트 + 프로필 컨텍스트로 시스템 프롬프트 구성
-        profile_ctx = _build_profile_context(profile, user_health_profile)
+        profile_ctx = _build_profile_context(user_health_profile)
         rag_ctx = _build_rag_context(rag_docs)
         prompt_guidance = ""
         if lifestyle_ctx:
@@ -987,7 +900,6 @@ class ChatService:
             return self._single_token_stream(risk_msg.content)
 
         (
-            profile,
             user_health_profile,
             rag_docs,
             needs_clarification,
@@ -1000,7 +912,7 @@ class ChatService:
             message=message,
             reminders=reminders,
         )
-        lifestyle_ctx = _build_lifestyle_context(profile, user_health_profile, intent=intent)
+        lifestyle_ctx = _build_lifestyle_context(user_health_profile, intent=intent)
 
         clarification_msg = await self._check_clarification(
             session=session, message=message, intent=intent, needs_clarification=needs_clarification
@@ -1008,7 +920,7 @@ class ChatService:
         if clarification_msg is not None:
             return self._single_token_stream(clarification_msg.content)
 
-        profile_ctx = _build_profile_context(profile, user_health_profile)
+        profile_ctx = _build_profile_context(user_health_profile)
         rag_ctx = _build_rag_context(rag_docs)
         prompt_guidance = ""
         if lifestyle_ctx:
