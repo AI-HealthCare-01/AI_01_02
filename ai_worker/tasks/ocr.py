@@ -118,7 +118,280 @@ async def _parse_medications_with_llm(extracted_text: str, raw_blocks: list[dict
 
     parsed["raw_blocks"] = raw_blocks
     parsed["processor"] = f"clova-ocr+openai-{config.OPENAI_CHAT_MODEL}"
+
+    # Compute value-area bboxes for missing fields and attach them
+    parsed["missing_field_bboxes"] = _compute_missing_field_bboxes(
+        medications=parsed.get("medications", []),
+        raw_blocks=raw_blocks,
+    )
     return parsed
+
+
+# ── Field classification ──────────────────────────────────────────────────────
+
+# Fields whose values appear to the RIGHT of the label (general/non-table)
+_GENERAL_FIELDS: set[str] = {"dispensed_date", "intake_time"}
+
+# Fields that live inside the drug-list TABLE.
+# For these we use (column-header X, drug-name row Y) intersection.
+_TABLE_FIELDS: set[str] = {"dose", "frequency_per_day", "dosage_per_once", "total_days"}
+
+# Label keywords for general fields — listed from MOST specific to LEAST specific.
+# _find_block_strict() tries them in order and prefers highest-similarity hits.
+_GENERAL_LABEL_KEYWORDS: dict[str, list[str]] = {
+    "dispensed_date": ["조제연월일", "조제 일자", "처방일자", "조제일자", "조제일"],
+    "intake_time":    ["복용방법", "복용시간", "복용법", "용법"],
+}
+
+# Texts that must NOT be used as label anchors even if they contain a keyword.
+# Key = field name, Value = list of excluded substrings.
+_LABEL_EXCLUDES: dict[str, list[str]] = {
+    "dispensed_date": ["원내 조제", "원외 조제", "원내조제", "원외조제", "조제실", "조제료"],
+    "intake_time":    [],
+}
+
+# Column-header keywords for table fields (used to find the column X position)
+_TABLE_COLUMN_KEYWORDS: dict[str, list[str]] = {
+    "dose":             ["함량", "용량"],
+    "frequency_per_day": ["1일", "투여횟수", "횟수"],
+    "dosage_per_once":  ["1회", "투약량"],
+    "total_days":       ["투약일수", "처방일수", "일수", "총일수"],
+}
+
+# box_width for each field (px on the original image)
+_FIELD_BOX_WIDTH: dict[str, int] = {
+    "dispensed_date":    150,
+    "intake_time":       150,
+    "dose":               40,
+    "frequency_per_day":  40,
+    "dosage_per_once":    40,
+    "total_days":         40,
+}
+
+# Tolerance in px for "same row" height matching
+_ROW_Y_TOLERANCE = 20
+
+
+def _find_block_strict(
+    raw_blocks: list[dict],
+    keywords: list[str],
+    excludes: list[str] | None = None,
+) -> tuple[dict | None, str]:
+    """
+    Find the best-matching raw_block for a label.
+
+    Strategy:
+    1. Reject any block whose text contains an excluded substring.
+    2. For each keyword (ordered most-specific first), collect all blocks
+       that contain it.
+    3. Score each candidate as  len(keyword) / len(block_text)  — closer to
+       1.0 means the block text IS mostly the keyword (exact/near-exact match).
+    4. Return the highest-scoring candidate and the keyword that matched it.
+    """
+    excludes = excludes or []
+    best_block: dict | None = None
+    best_kw: str = ""
+    best_score: float = -1.0
+
+    for kw in keywords:
+        for block in raw_blocks:
+            btext: str = block.get("text", "")
+            # 1. Exact keyword must be present
+            if kw not in btext:
+                continue
+            # 2. Reject false positives
+            if any(exc in btext for exc in excludes):
+                continue
+            # 3. Similarity score: keyword coverage of block text
+            score = len(kw) / max(len(btext), 1)
+            if score > best_score:
+                best_score = score
+                best_block = block
+                best_kw = kw
+
+    return best_block, best_kw
+
+
+# Keep the original name as an alias used by table-field logic (no exclusions needed there)
+_find_block = _find_block_strict
+
+
+def _compute_missing_field_bboxes(
+    medications: list[dict],
+    raw_blocks: list[dict],
+) -> list[dict]:
+    """
+    Compute value-area bounding boxes for missing OCR fields.
+
+    • General fields (dispensed_date, intake_time):
+        Box placed to the RIGHT of the label block. ← label-right logic
+
+    • Table fields (dose, frequency_per_day, dosage_per_once, total_days):
+        Box placed at the INTERSECTION of:
+          X = column header block's x1  (correct column)
+          Y = the missing drug name's y1 in raw_blocks  (correct row)
+
+    raw_blocks bbox: [x1, y1, x2, y2] absolute px.
+    Returns: list of { field, label_text, bbox: [x, y, w, h], normalized: {...} }
+    """
+    if not raw_blocks:
+        return []
+
+    all_x2 = [b["bbox"][2] for b in raw_blocks if len(b.get("bbox", [])) == 4]
+    all_y2 = [b["bbox"][3] for b in raw_blocks if len(b.get("bbox", [])) == 4]
+    image_w = max(all_x2) if all_x2 else 1
+    image_h = max(all_y2) if all_y2 else 1
+
+    results: list[dict] = []
+    added_fields: set[str] = set()
+
+    # ── 1. General fields ─────────────────────────────────────────────────────
+    for med in medications:
+        for field in _GENERAL_FIELDS:
+            if field in added_fields:
+                continue
+            val = med.get(field)
+            if val is not None and val != "" and val != 0:
+                continue  # value present, no box needed
+
+            label_block, matched_kw = _find_block_strict(
+                raw_blocks,
+                _GENERAL_LABEL_KEYWORDS[field],
+                excludes=_LABEL_EXCLUDES.get(field, []),
+            )
+            if not label_block:
+                continue
+
+            lx1, ly1, lx2, ly2 = label_block["bbox"]
+            label_h = ly2 - ly1
+            box_w = _FIELD_BOX_WIDTH.get(field, 120)
+
+            vx1 = lx2 + 10
+            vy1 = ly1
+            vx2 = min(vx1 + box_w, image_w)
+            vy2 = ly2
+
+            # Fallback: below the label if right edge is out of bounds
+            if vx1 >= image_w or vx2 <= vx1:
+                vx1 = max(0, lx1)
+                vy1 = ly2 + 2
+                vx2 = min(lx1 + box_w, image_w)
+                vy2 = min(vy1 + label_h + 4, image_h)
+
+            vx1 = max(0, vx1)
+            vy1 = max(0, vy1)
+            vx2 = min(image_w, vx2)
+            vy2 = min(image_h, vy2)
+            if vx2 <= vx1 or vy2 <= vy1:
+                continue
+
+            results.append(_make_bbox_entry(field, matched_kw, vx1, vy1, vx2, vy2, image_w, image_h))
+            added_fields.add(field)
+
+    # ── 2. Table fields: strict crosshair logic ───────────────────────────────
+    # For each (medication × field) pair that is missing a value:
+    #   box_x  = column-header block's x1          (→ correct column)
+    #   box_y  = drug-name block's y1              (→ correct row)
+    #   box_w  = fixed 40 px
+    #   box_h  = drug-name block height
+    # Fallback when header is NOT found in OCR output:
+    #   box_x  = drug_x2 + 100                    (offset to the right)
+    for med in medications:
+        drug_name: str = med.get("drug_name", "") or ""
+
+        # ── Find this drug's row block (best coverage match) ──
+        drug_block: dict | None = None
+        if drug_name:
+            best_drug_score = -1.0
+            # Try matching substrings of drug_name against block texts.
+            # We use multi-length windows: full name, each individual character
+            # cluster, so both "타이레놀" and "Ibuprofen 400mg" are matched.
+            candidates = [drug_name]
+            # Add each token ≥ 2 chars
+            candidates += [t for t in drug_name.split() if len(t) >= 2]
+            # Deduplicate
+            seen = set()
+            candidates = [c for c in candidates if not (c in seen or seen.add(c))]  # type: ignore[func-returns-value]
+
+            for block in raw_blocks:
+                btext: str = block.get("text", "")
+                if not btext:
+                    continue
+                for cand in candidates:
+                    if cand in btext:
+                        score = len(cand) / max(len(btext), 1)
+                        if score > best_drug_score:
+                            best_drug_score = score
+                            drug_block = block
+                        break  # found a candidate in this block; move to next block
+
+        # If we can't locate this drug at all, skip — boxes would be meaningless
+        if not drug_block:
+            continue
+
+        dr_x1, dr_y1, dr_x2, dr_y2 = drug_block["bbox"]
+        drug_h = max(dr_y2 - dr_y1, 12)  # at least 12 px tall
+
+        for field in _TABLE_FIELDS:
+            val = med.get(field)
+            if val is not None and val != "" and val != 0:
+                continue  # value present, skip
+
+            box_w = _FIELD_BOX_WIDTH.get(field, 40)
+
+            # ── Find column-header block → gives X ──
+            col_block, matched_kw = _find_block(raw_blocks, _TABLE_COLUMN_KEYWORDS[field])
+
+            if col_block:
+                # Crosshair: column-header X  ×  drug-name row Y
+                vx1 = col_block["bbox"][0]
+                vy1 = dr_y1
+                vx2 = min(vx1 + box_w, image_w)
+                vy2 = min(dr_y1 + drug_h, image_h)
+            else:
+                # Fallback: offset to the right of the drug name block
+                matched_kw = _TABLE_COLUMN_KEYWORDS[field][0]
+                vx1 = min(dr_x2 + 100, image_w - box_w)
+                vy1 = dr_y1
+                vx2 = min(vx1 + box_w, image_w)
+                vy2 = min(dr_y1 + drug_h, image_h)
+
+            # Safety clamp
+            vx1 = max(0, vx1)
+            vy1 = max(0, vy1)
+            vx2 = min(image_w, vx2)
+            vy2 = min(image_h, vy2)
+            if vx2 <= vx1 or vy2 <= vy1:
+                continue
+
+            entry_key = f"{field}::{drug_name}"
+            if entry_key in added_fields:
+                continue
+
+            results.append(_make_bbox_entry(field, matched_kw, vx1, vy1, vx2, vy2, image_w, image_h))
+            added_fields.add(entry_key)
+
+    return results
+
+
+def _make_bbox_entry(
+    field: str,
+    label_text: str,
+    vx1: int, vy1: int, vx2: int, vy2: int,
+    image_w: int, image_h: int,
+) -> dict:
+    return {
+        "field": field,
+        "label_text": label_text,
+        "bbox": [vx1, vy1, vx2 - vx1, vy2 - vy1],
+        "normalized": {
+            "x": round(vx1 / image_w, 4),
+            "y": round(vy1 / image_h, 4),
+            "w": round((vx2 - vx1) / image_w, 4),
+            "h": round((vy2 - vy1) / image_h, 4),
+        },
+    }
+
 
 
 ALLOWED_STATUS_TRANSITIONS: dict[OcrJobStatus, set[OcrJobStatus]] = {

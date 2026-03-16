@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { Loader2, AlertTriangle, Search, Bell, X, FileText } from "lucide-react";
 import { toast } from "sonner";
-import { ocrApi, guideApi, OcrMedication, request } from "@/lib/api";
+import { ocrApi, guideApi, OcrMedication, MissingFieldBbox, request } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
 
 async function searchMedications(q: string): Promise<string[]> {
@@ -84,14 +84,8 @@ function MedRow({
 
   return (
     <div className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50">
-      <div className="flex items-center justify-between">
+      <div>
         <span className="text-xs font-semibold text-gray-500">약물 {index + 1}</span>
-        {med.confidence !== null && med.confidence !== undefined && (
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isLowConfidence(med.confidence) ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"
-            }`}>
-            신뢰도 {Math.round(med.confidence * 100)}%
-          </span>
-        )}
       </div>
 
       {/* 약품명 */}
@@ -202,6 +196,7 @@ export default function OcrResult() {
   const ocrConfidences = useRef<number[]>([]);
   const cancelledRef = useRef(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
+  const [missingBboxes, setMissingBboxes] = useState<MissingFieldBbox[]>([]);
 
   // 이미 분석된 결과가 있으면 바로 result 단계로
   useEffect(() => {
@@ -219,6 +214,7 @@ export default function OcrResult() {
           ocrConfidences.current = meds.map((m) => m.confidence ?? 0);
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
+          setMissingBboxes(res.structured_data?.missing_field_bboxes ?? []);
           setPhase("result");
         })
         .catch((err) => toast.error(toUserMessage(err)))
@@ -246,6 +242,7 @@ export default function OcrResult() {
           ocrConfidences.current = meds.map((m) => m.confidence ?? 0);
           setMedications(meds);
           setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
+          setMissingBboxes(res.structured_data?.missing_field_bboxes ?? []);
           setPhase("result");
           return;
         }
@@ -315,7 +312,43 @@ export default function OcrResult() {
         {phase !== "summary" && <div className="bg-white/85 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden">
           <p className="text-xs font-semibold text-gray-500 px-4 pt-4 mb-2">처방전 스캔</p>
           {preview ? (
-            <img src={preview} alt="처방전" className="w-full object-contain" />
+            <div className="relative w-full">
+              <img src={preview} alt="처방전" className="w-full object-contain block" />
+              {/* Missing-field bounding box overlay — only shown during result/confirming phase */}
+              {(phase === "result" || phase === "confirming") && missingBboxes.map((box, i) => (
+                <div
+                  key={`bbox-${i}`}
+                  title={`입력 필요: ${box.field} (${box.label_text})`}
+                  style={{
+                    position: "absolute",
+                    left: `${box.normalized.x * 100}%`,
+                    top: `${box.normalized.y * 100}%`,
+                    width: `${box.normalized.w * 100}%`,
+                    height: `${box.normalized.h * 100}%`,
+                    border: "2px solid #ef4444",
+                    backgroundColor: "rgba(239,68,68,0.12)",
+                    borderRadius: "2px",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "-1.1rem",
+                      left: 0,
+                      fontSize: "0.6rem",
+                      background: "#ef4444",
+                      color: "#fff",
+                      borderRadius: "3px",
+                      padding: "0 3px",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    ⚠ {box.label_text}
+                  </span>
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="h-48 flex flex-col items-center justify-center text-gray-400">
               <FileText className="w-10 h-10 text-gray-300 mb-2" />
@@ -400,15 +433,7 @@ export default function OcrResult() {
         {(phase === "result" || phase === "confirming") && (
           <div className="card-warm p-5">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <p className="text-sm font-semibold text-gray-700">스캔된 약 정보</p>
-                {hasLowConfidence && (
-                  <div className="flex items-center gap-1 text-amber-600">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span className="text-xs">신뢰도 낮은 항목 있음</span>
-                  </div>
-                )}
-              </div>
+              <p className="text-sm font-semibold text-gray-700">스캔된 약 정보</p>
             </div>
 
             {medications.length === 0 ? (

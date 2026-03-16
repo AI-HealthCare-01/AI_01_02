@@ -150,7 +150,7 @@ export const authApi = {
       credentials: "include",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-      .then(() => {})
+      .then(() => { })
       .catch((err) => { console.warn("Logout server call failed:", err); });
   },
 };
@@ -328,11 +328,26 @@ export interface OcrJobStatusResponse {
   completed_at: string | null;
 }
 
+export interface NormalizedBbox {
+  x: number; // 0.0 - 1.0 relative to image width
+  y: number; // 0.0 - 1.0 relative to image height
+  w: number;
+  h: number;
+}
+
+export interface MissingFieldBbox {
+  field: string;        // e.g. "dispensed_date"
+  label_text: string;   // e.g. "조제연월일" (matched label keyword)
+  bbox: [number, number, number, number]; // [x, y, w, h] absolute px
+  normalized: NormalizedBbox;             // percentage-based for CSS rendering
+}
+
 export interface OcrStructuredData {
   needs_user_review?: boolean;
   extracted_medications?: OcrMedication[];
   medications?: OcrMedication[];
-  [key: string]: unknown; // Keep index signature if other arbitrary data can be present
+  missing_field_bboxes?: MissingFieldBbox[];
+  [key: string]: unknown;
 }
 
 export interface OcrJobResult {
