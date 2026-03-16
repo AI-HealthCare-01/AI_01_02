@@ -8,6 +8,7 @@ from fastapi.responses import ORJSONResponse as Response
 
 from app.core import config
 from app.core.exceptions import AppException, ErrorCode
+from app.core.logger import default_logger as logger
 from app.dependencies.security import get_request_user
 from app.dtos.ocr import (
     DocumentUploadResponse,
@@ -33,9 +34,6 @@ medication_router = APIRouter(prefix="/medications", tags=["medications"])
 
 def delete_file_securely(file_path: str):
     """보안을 위한 원본 파일 즉시 삭제 (BackgroundTasks 호출용)"""
-    import logging  # noqa: PLC0415
-
-    logger = logging.getLogger(__name__)
     try:
         os.remove(file_path)
         logger.info("원본 파일 삭제 완료: %s", file_path)

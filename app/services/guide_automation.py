@@ -11,6 +11,23 @@ from app.models.notifications import Notification, NotificationType
 from app.models.ocr import OcrJob, OcrJobStatus
 from app.services.guide_queue import GuideQueuePublisher
 
+_redis_client: Redis | None = None
+
+
+def _get_redis_client() -> Redis:
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = Redis(
+            host=config.REDIS_HOST,
+            port=config.REDIS_PORT,
+            db=config.REDIS_DB,
+            password=config.REDIS_PASSWORD,
+            decode_responses=True,
+            socket_connect_timeout=config.REDIS_SOCKET_TIMEOUT_SECONDS,
+            socket_timeout=config.REDIS_SOCKET_TIMEOUT_SECONDS,
+        )
+    return _redis_client
+
 
 class GuideAutomationService:
     def __init__(self) -> None:
@@ -142,16 +159,7 @@ class GuideAutomationService:
         lock_key = "guide:weekly_refresh_lock"
         lock_ttl = config.GUIDE_WEEKLY_REFRESH_CHECK_INTERVAL_SECONDS
         try:
-            client = Redis(
-                host=config.REDIS_HOST,
-                port=config.REDIS_PORT,
-                db=config.REDIS_DB,
-                password=config.REDIS_PASSWORD,
-                decode_responses=True,
-                socket_connect_timeout=config.REDIS_SOCKET_TIMEOUT_SECONDS,
-                socket_timeout=config.REDIS_SOCKET_TIMEOUT_SECONDS,
-            )
-            acquired = await cast(Awaitable, client.set(lock_key, "1", nx=True, ex=lock_ttl))
+            acquired = await cast(Awaitable, _get_redis_client().set(lock_key, "1", nx=True, ex=lock_ttl))
             if not acquired:
                 return 0
         except RedisError:

@@ -328,7 +328,7 @@ export default function AiGuide() {
             </p>
           </div>
           <button
-            onClick={() => { cancelledRef.current = true; setStatus("IDLE"); }}
+            onClick={() => { cancelledRef.current = true; setStatus("IDLE"); setPollElapsed(0); }}
             className="text-sm text-green-100 hover:text-white underline"
           >
             취소

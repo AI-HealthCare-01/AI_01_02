@@ -231,6 +231,7 @@ export default function OcrResult() {
   async function handleAnalyze() {
     if (!file) return;
     setPhase("analyzing");
+    setAnalyzeElapsed(0);
     try {
       const { id: documentId } = await ocrApi.uploadDocument(file);
       const { job_id } = await ocrApi.createJob(documentId);
