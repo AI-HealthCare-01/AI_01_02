@@ -35,19 +35,19 @@ class TestJWTTokenRefreshAPI(TestCase):
 
             # 토큰 갱신 시도
             client.cookies["refresh_token"] = refresh_token
-            response = await client.get("/api/v1/auth/token/refresh")
+            response = await client.post("/api/v1/auth/token/refresh")
         assert response.status_code == status.HTTP_200_OK
         assert "access_token" in response.json()
 
     async def test_token_refresh_missing_token(self):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.get("/api/v1/auth/token/refresh")
+            response = await client.post("/api/v1/auth/token/refresh")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.json()["message"] == "인증 정보가 유효하지 않습니다. 다시 로그인해주세요."
 
     async def test_token_refresh_invalid_token(self):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             client.cookies["refresh_token"] = "invalid-token"
-            response = await client.get("/api/v1/auth/token/refresh")
+            response = await client.post("/api/v1/auth/token/refresh")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.json()["message"] == "인증 정보가 유효하지 않습니다. 다시 로그인해주세요."
