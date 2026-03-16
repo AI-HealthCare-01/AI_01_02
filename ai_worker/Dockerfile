@@ -21,8 +21,9 @@ RUN uv sync --group ai --group app --no-dev --frozen
 COPY ./ai_worker ./ai_worker
 COPY ./app ./app
 
-# 5. non-root user 생성
-RUN adduser --disabled-password --gecos "" --uid 1001 appuser \
+# 5. non-root user 생성 + media 디렉토리 사전 생성
+RUN mkdir -p /app/app/media \
+    && adduser --disabled-password --gecos "" --uid 1001 appuser \
     && chown -R appuser:appuser /app
 USER appuser
 
