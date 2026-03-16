@@ -1,8 +1,7 @@
-from collections.abc import Awaitable
 from datetime import datetime, timedelta
-from typing import cast
 
-from redis import Redis, RedisError
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 from app.core import config, default_logger
 from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus
@@ -159,7 +158,7 @@ class GuideAutomationService:
         lock_key = "guide:weekly_refresh_lock"
         lock_ttl = config.GUIDE_WEEKLY_REFRESH_CHECK_INTERVAL_SECONDS
         try:
-            acquired = await cast(Awaitable, _get_redis_client().set(lock_key, "1", nx=True, ex=lock_ttl))
+            acquired = await _get_redis_client().set(lock_key, "1", nx=True, ex=lock_ttl)
             if not acquired:
                 return 0
         except RedisError:
