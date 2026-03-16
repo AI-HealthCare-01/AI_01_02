@@ -54,7 +54,7 @@ async def is_jti_blacklisted(jti: str) -> bool:
     except RedisError:
         # Fail-closed: Redis 장애 시 모든 토큰을 블랙리스트 처리하여 보안 유지.
         # 이로 인해 Redis 장애 동안 모든 인증 요청이 거부됨.
-        logger.warning(
+        logger.error(
             "redis_jti_check_failed — fail-closed: all tokens treated as blacklisted",
             extra={"jti": jti},
             exc_info=True,

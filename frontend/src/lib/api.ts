@@ -1,4 +1,5 @@
 const BASE = "/api/v1";
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 export function getToken() {
   return localStorage.getItem("access_token");
@@ -87,9 +88,13 @@ async function withAuthRefresh(
 }
 
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
   const doFetch = (token: string | null) =>
     fetch(`${BASE}${path}`, {
       ...init,
+      signal: controller.signal,
       credentials: "include",
       headers: {
         ...(init.body ? { "Content-Type": "application/json" } : {}),
@@ -98,32 +103,56 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
       },
     });
 
-  const res = await withAuthRefresh(doFetch);
+  try {
+    const res = await withAuthRefresh(doFetch);
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(extractErrorMessage(err, res.status));
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, res.status));
+    }
+    if (res.status === 204) return undefined as T;
+    return res.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("요청 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  if (res.status === 204) return undefined as T;
-  return res.json();
 }
 
+const UPLOAD_TIMEOUT_MS = 120_000;
+
 async function requestForm<T>(path: string, body: FormData): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+
   const doFetch = (token: string | null) =>
     fetch(`${BASE}${path}`, {
       method: "POST",
       credentials: "include",
+      signal: controller.signal,
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body,
     });
 
-  const res = await withAuthRefresh(doFetch);
+  try {
+    const res = await withAuthRefresh(doFetch);
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(extractErrorMessage(err, res.status));
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, res.status));
+    }
+    return res.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("업로드 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return res.json();
 }
 
 // ── Auth ──────────────────────────────────────────────
