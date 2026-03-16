@@ -33,12 +33,16 @@ medication_router = APIRouter(prefix="/medications", tags=["medications"])
 
 def delete_file_securely(file_path: str):
     """보안을 위한 원본 파일 즉시 삭제 (BackgroundTasks 호출용)"""
+    import logging  # noqa: PLC0415
+
+    logger = logging.getLogger(__name__)
     try:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            print(f"🔒 보안을 위해 원본 파일이 즉시 삭제되었습니다: {file_path}")
-    except Exception as e:
-        print(f"⚠️ 임시 파일 삭제 실패: {e}")
+        os.remove(file_path)
+        logger.info("원본 파일 삭제 완료: %s", file_path)
+    except FileNotFoundError:
+        logger.debug("파일이 이미 삭제됨: %s", file_path)
+    except OSError as e:
+        logger.warning("임시 파일 삭제 실패: %s", e)
 
 
 @ocr_router.post("/documents/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)

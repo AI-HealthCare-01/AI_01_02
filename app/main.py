@@ -191,6 +191,11 @@ app.include_router(v1_routers)
 app.include_router(v2_routers)
 
 
+@app.get("/health", include_in_schema=False)
+async def health_check() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 def _error_response(
     status_code: int,
     code: str,

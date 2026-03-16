@@ -46,12 +46,12 @@ let _refreshPromise: Promise<string | null> | null = null;
 function extractErrorMessage(err: Record<string, unknown>, status: number): string {
   const detail = err?.detail;
   const detailMsg = Array.isArray(detail) ? detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join(", ") : (detail as { message?: string })?.message;
-  return (err?.code as string) ?? detailMsg ?? (err?.message as string) ?? `HTTP ${status}`;
+  return (err?.message as string) ?? detailMsg ?? (err?.code as string) ?? `HTTP ${status}`;
 }
 
 async function refreshAccessToken(): Promise<string | null> {
   try {
-    const res = await fetch(`${BASE}/auth/token/refresh`, { credentials: "include" });
+    const res = await fetch(`${BASE}/auth/token/refresh`, { method: "POST", credentials: "include" });
     if (!res.ok) return null;
     const data = await res.json();
     if (data.access_token) {

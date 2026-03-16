@@ -1,4 +1,8 @@
+from collections.abc import Awaitable
 from datetime import datetime, timedelta
+from typing import cast
+
+from redis import Redis, RedisError
 
 from app.core import config, default_logger
 from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus
@@ -135,6 +139,25 @@ class GuideAutomationService:
             return False
 
     async def process_weekly_refresh_due_users(self, *, batch_size: int) -> int:
+        lock_key = "guide:weekly_refresh_lock"
+        lock_ttl = config.GUIDE_WEEKLY_REFRESH_CHECK_INTERVAL_SECONDS
+        try:
+            client = Redis(
+                host=config.REDIS_HOST,
+                port=config.REDIS_PORT,
+                db=config.REDIS_DB,
+                password=config.REDIS_PASSWORD,
+                decode_responses=True,
+                socket_connect_timeout=config.REDIS_SOCKET_TIMEOUT_SECONDS,
+                socket_timeout=config.REDIS_SOCKET_TIMEOUT_SECONDS,
+            )
+            acquired = await cast(Awaitable, client.set(lock_key, "1", nx=True, ex=lock_ttl))
+            if not acquired:
+                return 0
+        except RedisError:
+            default_logger.warning("weekly_refresh_lock_redis_error — skipping this cycle", exc_info=True)
+            return 0
+
         cutoff = datetime.now(config.TIMEZONE) - timedelta(days=7)
         user_ids = (
             await GuideJob.filter(status=GuideJobStatus.SUCCEEDED, completed_at__lte=cutoff)

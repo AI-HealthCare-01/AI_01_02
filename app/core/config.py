@@ -35,7 +35,7 @@ def get_default_media_dir() -> str:
 
 
 class Config(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     ENV: Env = Env.LOCAL
     SECRET_KEY: str

@@ -68,7 +68,9 @@ class OcrService:
         media_root = Path(config.MEDIA_DIR).resolve()
         absolute_file_path = (media_root / temp_storage_key).resolve()
 
-        if not str(absolute_file_path).startswith(str(media_root)):
+        try:
+            absolute_file_path.relative_to(media_root)
+        except ValueError:
             default_logger.warning("path traversal attempt blocked (job_id=%s, key=%s)", job_id, temp_storage_key)
             return
 

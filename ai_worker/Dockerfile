@@ -21,6 +21,11 @@ RUN uv sync --group ai --group app --no-dev --frozen
 COPY ./ai_worker ./ai_worker
 COPY ./app ./app
 
-# 5. 해당 이미지를 활용하여 도커컨테이너 실행시 실행되는 명령어입니다.
+# 5. non-root user 생성
+RUN adduser --disabled-password --gecos "" --uid 1001 appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
+# 6. 해당 이미지를 활용하여 도커컨테이너 실행시 실행되는 명령어입니다.
 # AI worker 엔트리포인트를 실행합니다.
 CMD ["uv", "run", "--no-sync", "python", "-m", "ai_worker.main"]
