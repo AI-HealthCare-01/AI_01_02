@@ -12,7 +12,6 @@ TORTOISE_APP_MODELS = [
     "app.models.notifications",
     "app.models.notification_settings",
     "app.models.users",
-    "app.models.profiles",
     "app.models.medications",
     "app.models.psych_drugs",
     "app.models.reminders",

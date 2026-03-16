@@ -6,7 +6,6 @@ from tortoise.contrib.test import TestCase
 
 from app.main import app
 from app.models.health_profiles import UserHealthProfile
-from app.models.profiles import HealthProfile
 from app.models.reminders import MedicationReminder
 from app.models.users import User
 from app.services.rag import RagResult
@@ -197,18 +196,28 @@ class TestChatApis(TestCase):
             t = await self._login(c, email, "01095001012")
             h = {"Authorization": f"Bearer {t}"}
             user = await User.get(email=email)
-            await HealthProfile.create(
-                user_id=user.id,
-                lifestyle_input={
-                    "caffeine_cups_per_day": 3,
-                    "smartphone_hours_per_day": 5,
-                    "exercise_hours": {
-                        "low_intensity": 1,
-                        "moderate_intensity": 1,
-                        "high_intensity": 0,
-                    },
-                },
-                sleep_input={"sleep_hours": 5.5},
+            await UserHealthProfile.create(
+                user=user,
+                height_cm=170.0,
+                weight_kg=65.0,
+                drug_allergies=[],
+                exercise_frequency_per_week=3,
+                pc_hours_per_day=4,
+                smartphone_hours_per_day=5,
+                caffeine_cups_per_day=3,
+                smoking=0,
+                alcohol_frequency_per_week=0,
+                bed_time="01:00",
+                wake_time="06:30",
+                sleep_latency_minutes=15,
+                night_awakenings_per_week=0,
+                daytime_sleepiness=3,
+                appetite_level=5,
+                meal_regular=True,
+                bmi=22.49,
+                sleep_time_hours=5.5,
+                caffeine_mg=300,
+                digital_time_hours=9,
             )
             sid = (await c.post("/api/v1/chat/sessions", json={}, headers=h)).json()["id"]
             r = await c.post(
