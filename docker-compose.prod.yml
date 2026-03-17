@@ -3,7 +3,7 @@ services:
   redis:
     image: redis:alpine
     container_name: redis
-    mem_limit: 512M
+    mem_limit: 256M
     networks:
       - backend
     healthcheck:
@@ -18,7 +18,7 @@ services:
     image: mysql:8.0
     container_name: mysql
     restart: always
-    mem_limit: 2G
+    mem_limit: 768M
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME}
@@ -47,7 +47,7 @@ services:
       dockerfile: app/Dockerfile
     image: ${DOCKER_USER}/${DOCKER_REPOSITORY}:app-${APP_VERSION}
     env_file: .env
-    mem_limit: 1G
+    mem_limit: 512M
     volumes:
       - static_volume:/app/templates
       - media_volume:/app/app/media
@@ -80,7 +80,7 @@ services:
     image: ${DOCKER_USER}/${DOCKER_REPOSITORY}:ai-${AI_WORKER_VERSION}
     env_file: .env
     restart: always
-    mem_limit: 4G
+    mem_limit: 1G
     volumes:
       - media_volume:/app/app/media
     networks:
@@ -95,24 +95,39 @@ services:
   nginx:
     container_name: nginx
     image: nginx:1.27-alpine
-    mem_limit: 256M
+    mem_limit: 128M
     volumes:
-      - ./nginx/prod_http.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/prod_https.conf:/etc/nginx/conf.d/default.conf
       - static_volume:/vol/web/static
       - ./frontend/dist:/usr/share/nginx/html:ro
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
     ports:
       - "80:80"
+      - "443:443"
     networks:
       - frontend
     depends_on:
       - fastapi
+
+  # 7. Certbot (SSL 인증서 자동 갱신)
+  certbot:
+    image: certbot/certbot
+    container_name: auto-certbot
+    mem_limit: 64M
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 48h & wait $${!}; done;'"
+    volumes:
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    depends_on:
+      - nginx
 
   # 6. ChromaDB (벡터 DB)
   chromadb:
     image: chromadb/chroma:0.6.3
     container_name: chromadb
     restart: always
-    mem_limit: 1G
+    mem_limit: 512M
     environment:
       - IS_PERSISTENT=TRUE
       - ANONYMIZED_TELEMETRY=FALSE
@@ -130,6 +145,10 @@ volumes:
     name: media_volume
   chroma_data:
     name: chroma_data
+  certbot-conf:
+    name: certbot-conf
+  certbot-www:
+    name: certbot-www
 
 networks:
   frontend:
