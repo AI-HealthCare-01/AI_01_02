@@ -616,3 +616,20 @@ export const notificationApi = {
   deleteRead: () =>
     request<{ updated_count: number }>("/notifications/read", { method: "DELETE" }),
 };
+
+// ── Diaries ──────────────────────────────────────────
+export interface DiaryResponse {
+  date: string;
+  content: string;
+  updated_at: string;
+}
+
+export const diaryApi = {
+  upsert: (date: string, content: string) =>
+    request<DiaryResponse>(`/diaries/${date}`, {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    }),
+
+  getByDate: (date: string) => request<DiaryResponse>(`/diaries/${date}`),
+};
