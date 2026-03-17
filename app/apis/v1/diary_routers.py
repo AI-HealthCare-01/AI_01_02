@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query, status
 from fastapi.responses import ORJSONResponse as Response
 
+from app.core.exceptions import AppException, ErrorCode
 from app.dependencies.security import get_request_user
 from app.dtos.diaries import DiaryListResponse, DiaryResponse, DiaryUpsertRequest
 from app.models.users import User
@@ -36,7 +37,7 @@ async def get_diary(
     diary = await service.get_by_date(user=user, diary_date=diary_date)
     if diary is None:
         return Response(
-            DiaryResponse(date=diary_date, content="", updated_at=diary_date).model_dump(),
+            DiaryResponse(date=diary_date, content="").model_dump(),
             status_code=status.HTTP_200_OK,
         )
     return Response(_serialize(diary).model_dump(), status_code=status.HTTP_200_OK)
@@ -49,6 +50,8 @@ async def list_diaries(
     start: Annotated[date, Query()],
     end: Annotated[date, Query()],
 ) -> Response:
+    if start > end:
+        raise AppException(ErrorCode.VALIDATION_ERROR, developer_message="start must be <= end")
     diaries = await service.list_range(user=user, start=start, end=end)
     return Response(
         DiaryListResponse(items=[_serialize(d) for d in diaries]).model_dump(),

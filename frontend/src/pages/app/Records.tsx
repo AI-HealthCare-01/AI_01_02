@@ -193,15 +193,19 @@ export default function Records() {
   useEffect(() => {
     diaryApi.getByDate(toDateStr(selectedDate))
       .then((r) => setDailyDiary(r.content))
-      .catch(() => setDailyDiary(""));
+      .catch((err) => {
+        console.warn("Failed to load diary:", err);
+        toast.error(toUserMessage(err));
+        setDailyDiary("");
+      });
   }, [selectedDate]);
 
   async function saveDailyDiary() {
     try {
       await diaryApi.upsert(toDateStr(selectedDate), dailyDiary.trim());
       toast.success("오늘의 일기를 저장했습니다.");
-    } catch {
-      toast.error("일기 저장에 실패했습니다.");
+    } catch (err) {
+      toast.error(toUserMessage(err));
     }
   }
 

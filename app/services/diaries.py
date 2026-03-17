@@ -6,14 +6,11 @@ from app.models.users import User
 
 class DiaryService:
     async def upsert(self, user: User, diary_date: date, content: str) -> DailyDiary:
-        diary, _ = await DailyDiary.get_or_create(
+        diary, _ = await DailyDiary.update_or_create(
             user=user,
             date=diary_date,
             defaults={"content": content},
         )
-        if diary.content != content:
-            diary.content = content
-            await diary.save(update_fields=["content", "updated_at"])
         return diary
 
     async def get_by_date(self, user: User, diary_date: date) -> DailyDiary | None:

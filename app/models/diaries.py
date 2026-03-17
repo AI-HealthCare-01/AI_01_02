@@ -10,7 +10,8 @@ if TYPE_CHECKING:
 
 
 class DailyDiary(models.Model):
-    id = fields.BigIntField(pk=True)
+    id = fields.BigIntField(primary_key=True)
+    user_id: int
     user: ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User",
         related_name="diaries",
@@ -23,5 +24,4 @@ class DailyDiary(models.Model):
 
     class Meta:
         table = "daily_diaries"
-        unique_together = (("user", "date"),)
-        indexes = (("user", "date"),)
+        unique_together = (("user_id", "date"),)

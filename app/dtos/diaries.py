@@ -10,7 +10,7 @@ class DiaryUpsertRequest(BaseModel):
 class DiaryResponse(BaseModel):
     date: date
     content: str
-    updated_at: datetime
+    updated_at: datetime | None = None
 
 
 class DiaryListResponse(BaseModel):
