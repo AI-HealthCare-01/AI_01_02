@@ -6,6 +6,7 @@ import {
   profileApi,
   ocrApi,
   guideApi,
+  diaryApi,
   HealthProfile,
   ScheduleItem,
   OcrMedication,
@@ -29,7 +30,6 @@ function isSameDay(a: Date, b: Date) {
 
 const DOW_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
 const WEEKLY_RATE_STORAGE_PREFIX = "weekly_med_rate";
-const DAILY_DIARY_STORAGE_PREFIX = "daily_diary";
 
 function getWeekdayIndexMondayStart(d: Date) {
   const day = d.getDay(); // 0=Sun
@@ -38,10 +38,6 @@ function getWeekdayIndexMondayStart(d: Date) {
 
 function getDailyConfirmStorageKey(date: string) {
   return `daily_med_confirmed:${date}`;
-}
-
-function getDailyDiaryStorageKey(date: string, userId: string | number | null | undefined) {
-  return `${DAILY_DIARY_STORAGE_PREFIX}:${String(userId ?? "unknown")}:${date}`;
 }
 
 // ─── main component ───────────────────────────────────────────────────────────
@@ -195,19 +191,14 @@ export default function Records() {
   useEffect(() => { load(selectedDate); }, []); // eslint-disable-line
 
   useEffect(() => {
-    const key = getDailyDiaryStorageKey(toDateStr(selectedDate), profile?.user_id);
-    try {
-      const saved = localStorage.getItem(key);
-      setDailyDiary(saved ?? "");
-    } catch {
-      setDailyDiary("");
-    }
-  }, [selectedDate, profile?.user_id]);
+    diaryApi.getByDate(toDateStr(selectedDate))
+      .then((r) => setDailyDiary(r.content))
+      .catch(() => setDailyDiary(""));
+  }, [selectedDate]);
 
-  function saveDailyDiary() {
-    const key = getDailyDiaryStorageKey(toDateStr(selectedDate), profile?.user_id);
+  async function saveDailyDiary() {
     try {
-      localStorage.setItem(key, dailyDiary.trim());
+      await diaryApi.upsert(toDateStr(selectedDate), dailyDiary.trim());
       toast.success("오늘의 일기를 저장했습니다.");
     } catch {
       toast.error("일기 저장에 실패했습니다.");
