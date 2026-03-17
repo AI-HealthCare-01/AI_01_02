@@ -12,7 +12,9 @@ if TYPE_CHECKING:
 class DailyDiary(models.Model):
     id = fields.BigIntField(pk=True)
     user: ForeignKeyRelation[User] = fields.ForeignKeyField(
-        "models.User", related_name="diaries", on_delete=fields.CASCADE,
+        "models.User",
+        related_name="diaries",
+        on_delete=fields.CASCADE,
     )
     date = fields.DateField()
     content = fields.TextField(default="")

@@ -20,8 +20,13 @@ class DiaryService:
         return await DailyDiary.get_or_none(user=user, date=diary_date)
 
     async def list_range(
-        self, user: User, start: date, end: date,
+        self,
+        user: User,
+        start: date,
+        end: date,
     ) -> list[DailyDiary]:
         return await DailyDiary.filter(
-            user=user, date__gte=start, date__lte=end,
+            user=user,
+            date__gte=start,
+            date__lte=end,
         ).order_by("date")
