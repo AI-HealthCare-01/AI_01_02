@@ -256,7 +256,9 @@ class TestGuideApis(TestCase):
 
             first_ocr_job_id = await self._create_ocr_job(client, access_token=access_token)
             await self._mark_ocr_succeeded(ocr_job_id=first_ocr_job_id)
-            first_response = await client.post("/api/v1/guides/jobs", headers=headers, json={"ocr_job_id": first_ocr_job_id})
+            first_response = await client.post(
+                "/api/v1/guides/jobs", headers=headers, json={"ocr_job_id": first_ocr_job_id}
+            )
             assert first_response.status_code == status.HTTP_202_ACCEPTED
 
             second_ocr_job_id = await self._create_ocr_job(client, access_token=access_token)
