@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { RefreshCw, Pill, BookOpen, MessageCircle, NotebookPen, Upload } from "lucide-react";
+import { Pill, BookOpen, MessageCircle, NotebookPen, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   scheduleApi,
@@ -110,12 +110,6 @@ export default function Dashboard() {
           </h1>
           <p className="text-sm text-gray-400 mt-0.5 font-medium">{dateLabel}</p>
         </div>
-        <button
-          onClick={load}
-          className="p-2.5 rounded-xl hover:bg-white text-gray-400 hover:text-gray-600 hover:shadow-sm transition-all duration-200"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
       </div>
 
       {/* D-day alert banner */}
