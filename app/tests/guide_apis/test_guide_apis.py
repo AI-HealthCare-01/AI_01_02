@@ -245,3 +245,44 @@ class TestGuideApis(TestCase):
         assert body["lifestyle_guidance"] == "생활습관 가이드"
         assert body["risk_level"] == "LOW"
         assert body["safety_notice"] == "본 가이드는 의료진 진료를 대체할 수 없습니다."
+
+    async def test_get_latest_guide_job_status_success(self):
+        email = "guide_latest_status@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01083008307")
+            headers = {"Authorization": f"Bearer {access_token}"}
+            user = await User.get(email=email)
+            await self._create_health_profile(user)
+
+            first_ocr_job_id = await self._create_ocr_job(client, access_token=access_token)
+            await self._mark_ocr_succeeded(ocr_job_id=first_ocr_job_id)
+            first_response = await client.post("/api/v1/guides/jobs", headers=headers, json={"ocr_job_id": first_ocr_job_id})
+            assert first_response.status_code == status.HTTP_202_ACCEPTED
+
+            second_ocr_job_id = await self._create_ocr_job(client, access_token=access_token)
+            await self._mark_ocr_succeeded(ocr_job_id=second_ocr_job_id)
+            second_response = await client.post(
+                "/api/v1/guides/jobs",
+                headers=headers,
+                json={"ocr_job_id": second_ocr_job_id},
+            )
+            assert second_response.status_code == status.HTTP_202_ACCEPTED
+
+            latest_response = await client.get("/api/v1/guides/jobs/latest", headers=headers)
+
+        assert latest_response.status_code == status.HTTP_200_OK
+        latest_body = latest_response.json()
+        assert latest_body["job_id"] == second_response.json()["job_id"]
+        assert latest_body["ocr_job_id"] == second_ocr_job_id
+        assert latest_body["status"] == "QUEUED"
+
+    async def test_get_latest_guide_job_status_not_found(self):
+        email = "guide_latest_missing@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01083008308")
+            headers = {"Authorization": f"Bearer {access_token}"}
+
+            response = await client.get("/api/v1/guides/jobs/latest", headers=headers)
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json()["code"] == "RESOURCE_NOT_FOUND"

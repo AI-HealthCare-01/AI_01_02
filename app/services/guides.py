@@ -70,6 +70,12 @@ class GuideService:
             raise AppException(ErrorCode.RESOURCE_NOT_FOUND, developer_message="가이드 작업을 찾을 수 없습니다.")
         return job
 
+    async def get_latest_guide_job(self, *, user: User) -> GuideJob:
+        job = await self.repo.get_latest_user_job(user_id=user.id)
+        if not job:
+            raise AppException(ErrorCode.RESOURCE_NOT_FOUND, developer_message="가이드 작업을 찾을 수 없습니다.")
+        return job
+
     async def refresh_guide_job(self, *, user: User, job_id: int) -> GuideJob:
         required, _ = await self.guide_automation_service.is_profile_refresh_required_for_guide_generation(
             user_id=user.id

@@ -21,6 +21,40 @@ function formatSafetySourceLabel(source: string | null | undefined): string {
   return "미확인";
 }
 
+function buildMedicationGuidanceLines(
+  med: MedicationGuideItem,
+  medInfoByName: Record<string, MedicationInfo | undefined>,
+): string[] {
+  const drugName = med.drug_name ?? "약물";
+  const medInfo = drugName ? medInfoByName[drugName] : undefined;
+  const doseText = med.dose != null ? `${med.dose}mg` : "용량 정보 없음";
+  const frequency = med.frequency_per_day != null ? med.frequency_per_day : "-";
+  const dosage = med.dosage_per_once != null ? med.dosage_per_once : "-";
+  const intakeTimes = Array.isArray(med.intake_time) ? med.intake_time : [];
+  const intakeLine = intakeTimes.length > 0 ? `복용 시간: ${intakeTimes.join(", ")}` : "";
+  const sideEffectLine = med.side_effect ? `⚠️ 주의: ${med.side_effect} 현상이 있을 수 있습니다.` : "";
+  const precautionsText = med.precautions ?? medInfo?.precautions ?? medInfo?.warnings;
+  const precautionsLine = precautionsText ? `주의사항: ${precautionsText}` : "";
+  const sideEffectsText = med.side_effects ?? medInfo?.side_effects;
+  const sideEffectsFromApi = sideEffectsText ? `부작용: ${sideEffectsText}` : "";
+  const hasApiInfo = Boolean(precautionsText || sideEffectsText);
+  const sourceLine = `출처: ${formatSafetySourceLabel(med.safety_source ?? medInfo?.source)}`;
+  const fallbackSafetyLine = !hasApiInfo
+    ? "주의사항/부작용 정보가 없습니다. 복용 중 이상 반응이 있으면 의료진과 상담하세요."
+    : "";
+
+  return [
+    `${drugName} (${doseText})`,
+    `하루에 ${frequency}번, 한 번에 ${dosage}알씩 드시면 됩니다.`,
+    intakeLine,
+    sideEffectLine,
+    precautionsLine,
+    sideEffectsFromApi,
+    fallbackSafetyLine,
+    sourceLine,
+  ].filter(Boolean);
+}
+
 const LIFESTYLE_GUIDE_LABEL_MAP: Record<string, string> = {
   nutrition_guide: "식사",
   exercise_guide: "운동",
@@ -32,55 +66,45 @@ const LIFESTYLE_GUIDE_LABEL_MAP: Record<string, string> = {
   general_health_guide: "건강 습관 지속",
 };
 
-function formatMedicationGuidanceText(raw: string, medInfoByName: Record<string, MedicationInfo | undefined>): string {
+function renderMedicationGuidanceContent(
+  raw: string,
+  medInfoByName: Record<string, MedicationInfo | undefined>,
+): React.ReactNode {
   try {
     const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return raw;
+    if (!Array.isArray(parsed)) {
+      return <p>{raw}</p>;
+    }
 
-    if (parsed.length === 0) return "";
+    if (parsed.length === 0) return null;
 
-    const lines = parsed
+    const items = parsed
       .filter((item): item is MedicationGuideItem => typeof item === "object" && item !== null)
-      .map((med) => {
-        const drugName = med.drug_name ?? "약물";
-        const medInfo = drugName ? medInfoByName[drugName] : undefined;
-        const doseText = med.dose != null ? `${med.dose}mg` : "용량 정보 없음";
-        const frequency = med.frequency_per_day != null ? med.frequency_per_day : "-";
-        const dosage = med.dosage_per_once != null ? med.dosage_per_once : "-";
-        const intakeTimes = Array.isArray(med.intake_time) ? med.intake_time : [];
-        const intakeLine = intakeTimes.length > 0 ? `복용 시간: ${intakeTimes.join(", ")}` : "";
-        const sideEffectLine = med.side_effect ? `⚠️ 주의: ${med.side_effect} 현상이 있을 수 있습니다.` : "";
-        const precautionsText = med.precautions ?? medInfo?.precautions ?? medInfo?.warnings;
-        const precautionsLine = precautionsText
-          ? `주의사항: ${precautionsText}`
-          : "";
-        const sideEffectsText = med.side_effects ?? medInfo?.side_effects;
-        const sideEffectsFromApi = sideEffectsText
-          ? `부작용: ${sideEffectsText}`
-          : "";
-        const hasApiInfo = Boolean(precautionsText || sideEffectsText);
-        const sourceLine = `출처: ${formatSafetySourceLabel(med.safety_source ?? medInfo?.source)}`;
-        const fallbackSafetyLine = !hasApiInfo
-          ? "주의사항/부작용 정보가 없습니다. 복용 중 이상 반응이 있으면 의료진과 상담하세요."
-          : "";
+      .map((med) => buildMedicationGuidanceLines(med, medInfoByName));
 
-        return [
-          `${drugName} (${doseText}) 안내입니다.`,
-          `하루에 ${frequency}번, 한 번에 ${dosage}알씩 드시면 됩니다.`,
-          intakeLine,
-          sideEffectLine,
-          precautionsLine,
-          sideEffectsFromApi,
-          fallbackSafetyLine,
-          sourceLine,
-        ]
-          .filter(Boolean)
-          .join("\n");
-      });
+    if (items.length === 0) {
+      return <p>{raw}</p>;
+    }
 
-    return lines.length > 0 ? lines.join("\n\n") : raw;
+    return (
+      <div className="space-y-5">
+        {items.map((lines, index) => {
+          const [title, ...rest] = lines;
+          return (
+            <div key={`${title}-${index}`} className="space-y-2">
+              <p className="text-base font-extrabold text-green-900/85">{title}</p>
+              {rest.map((line) => (
+                <p key={line} className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+                  {line}
+                </p>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    );
   } catch {
-    return raw;
+    return <p>{raw}</p>;
   }
 }
 
@@ -180,16 +204,23 @@ export default function AiGuide() {
   const cancelledRef = useRef(false);
 
   async function loadGuide() {
-    const jobId = localStorage.getItem("guide_job_id");
-    if (!jobId) {
-      setStatus("IDLE");
-      return;
-    }
     setError("");
     try {
-      const s = await guideApi.getJobStatus(jobId);
+      let s;
+      try {
+        s = await guideApi.getLatestJobStatus();
+        localStorage.setItem("guide_job_id", s.job_id);
+      } catch {
+        const fallbackJobId = localStorage.getItem("guide_job_id");
+        if (!fallbackJobId) {
+          setStatus("IDLE");
+          return;
+        }
+        s = await guideApi.getJobStatus(fallbackJobId);
+      }
+
       if (s.status === "SUCCEEDED") {
-        const r = await guideApi.getJobResult(jobId);
+        const r = await guideApi.getJobResult(s.job_id);
         setResult(r);
         setStatus("SUCCEEDED");
       } else if (s.status === "FAILED") {
@@ -197,7 +228,7 @@ export default function AiGuide() {
         setError(s.error_message ?? "가이드 생성에 실패했습니다.");
       } else {
         setStatus(s.status);
-        pollStatus(jobId);
+        pollStatus(s.job_id);
       }
     } catch {
       setStatus("FAILED");
@@ -214,6 +245,7 @@ export default function AiGuide() {
         if (s.status === "SUCCEEDED") {
           const r = await guideApi.getJobResult(jobId);
           if (cancelledRef.current) return;
+          localStorage.setItem("guide_job_id", jobId);
           setResult(r);
           setStatus("SUCCEEDED");
           return;
@@ -273,8 +305,8 @@ export default function AiGuide() {
     });
   }, [result?.medication_guidance]); // eslint-disable-line
 
-  const medicationGuidanceText = useMemo(
-    () => result?.medication_guidance ? formatMedicationGuidanceText(result.medication_guidance, medInfoByName) : "",
+  const medicationGuidanceContent = useMemo(
+    () => result?.medication_guidance ? renderMedicationGuidanceContent(result.medication_guidance, medInfoByName) : null,
     [result?.medication_guidance, medInfoByName],
   );
 
@@ -373,9 +405,9 @@ export default function AiGuide() {
             </div>
           )}
 
-          {medicationGuidanceText && (
+          {medicationGuidanceContent && (
             <GuideSection title="복약 안내">
-              {medicationGuidanceText}
+              {medicationGuidanceContent}
             </GuideSection>
           )}
           {result.lifestyle_guidance && (

@@ -58,6 +58,29 @@ async def confirm_snapshot_and_create_guide_job(
     )
 
 
+@guide_router.get("/jobs/latest", response_model=GuideJobStatusResponse, status_code=status.HTTP_200_OK)
+async def get_latest_guide_job_status(
+    user: Annotated[User, Depends(get_request_user)],
+    guide_service: Annotated[GuideService, Depends(GuideService)],
+) -> Response:
+    job = await guide_service.get_latest_guide_job(user=user)
+    return Response(
+        GuideJobStatusResponse(
+            job_id=str(job.id),
+            ocr_job_id=str(job.ocr_job_id),
+            status=job.status,
+            retry_count=job.retry_count,
+            max_retries=job.max_retries,
+            failure_code=job.failure_code,
+            error_message=job.error_message,
+            queued_at=job.queued_at,
+            started_at=job.started_at,
+            completed_at=job.completed_at,
+        ).model_dump(),
+        status_code=status.HTTP_200_OK,
+    )
+
+
 @guide_router.get("/jobs/{job_id}", response_model=GuideJobStatusResponse, status_code=status.HTTP_200_OK)
 async def get_guide_job_status(
     job_id: Annotated[str, Path(pattern=r"^\d+$")],
