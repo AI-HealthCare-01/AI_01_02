@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, RefreshCw, AlertTriangle, Sparkles } from "lucide-react";
+import { Bell, AlertTriangle, Sparkles } from "lucide-react";
 import { guideApi, GuideJobResult, GuideStatus, medicationApi, MedicationInfo } from "@/lib/api";
 
 interface MedicationGuideItem {
@@ -328,12 +328,6 @@ export default function AiGuide() {
           <h1 className="text-2xl font-bold text-gray-800">AI 가이드</h1>
           <p className="text-sm text-gray-400 mt-0.5 font-medium">복약 및 생활습관 맞춤 가이드</p>
         </div>
-        <button
-          onClick={loadGuide}
-          className="p-2.5 rounded-xl hover:bg-white text-gray-400 hover:text-gray-600 hover:shadow-sm transition-all duration-200"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
       </div>
 
       {/* IDLE */}
