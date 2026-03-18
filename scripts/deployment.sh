@@ -52,8 +52,9 @@ echo ""
 
 # ---------- Docker Login ----------
 echo "${COLOR_BLUE}Docker login${COLOR_NC}"
-if ! docker login -u ${docker_user} -p ${docker_pw} ; then
+if ! echo "$docker_pw" | docker login -u "$docker_user" --password-stdin ; then
   echo "${COLOR_RED}도커 로그인에 실패했습니다. 도커 유저네임과 비밀번호를 확인해주세요.${COLOR_NC}"
+  exit 1
 fi
 echo "${COLOR_GREEN}도커 로그인 성공!${COLOR_NC}"
 echo ""
@@ -137,18 +138,16 @@ fi
 echo "${COLOR_BLUE}EC2 인스턴스에 SSH 접속을 시도합니다.${COLOR_NC}"
 chmod 400 ~/.ssh/${ssh_key_file}
 ssh -i ~/.ssh/${ssh_key_file} ubuntu@${ec2_ip} \
-  "DOCKER_USERNAME=${docker_user} \
-   DOCKER_PAT=${docker_pw} \
-   DEPLOY_SERVICES='${DEPLOY_SERVICES[*]}' \
-   bash -s" << 'EOF'
+  "DEPLOY_SERVICES='${DEPLOY_SERVICES[*]}' \
+   bash -s" << EOF
   set -e
   cd project
 
   echo "Docker login"
-  docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PAT"
+  echo '${docker_pw}' | docker login -u '${docker_user}' --password-stdin
 
-  echo "Deploying services: $DEPLOY_SERVICES"
-  docker compose up -d --pull always --no-deps $DEPLOY_SERVICES
+  echo "Deploying services: \$DEPLOY_SERVICES"
+  docker compose up -d --pull always --no-deps \$DEPLOY_SERVICES
 
   docker image prune -af
 EOF

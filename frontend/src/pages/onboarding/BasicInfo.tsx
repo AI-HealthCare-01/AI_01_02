@@ -50,8 +50,9 @@ export default function BasicInfo() {
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">키 (cm) <span className="text-red-500">*</span></label>
+            <label htmlFor="height" className="block text-sm font-medium text-gray-700 mb-1.5">키 (cm) <span className="text-red-500">*</span></label>
             <input
+              id="height"
               type="number"
               value={height}
               onChange={(e) => setHeight(e.target.value)}
@@ -62,8 +63,9 @@ export default function BasicInfo() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">체중 (kg) <span className="text-red-500">*</span></label>
+            <label htmlFor="weight" className="block text-sm font-medium text-gray-700 mb-1.5">체중 (kg) <span className="text-red-500">*</span></label>
             <input
+              id="weight"
               type="number"
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
@@ -83,11 +85,12 @@ export default function BasicInfo() {
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          <label htmlFor="allergy" className="block text-sm font-medium text-gray-700 mb-1.5">
             약물 알레르기 <span className="text-gray-400 font-normal">(선택)</span>
           </label>
           <div className="flex gap-2">
             <input
+              id="allergy"
               type="text"
               value={allergyInput}
               onChange={(e) => setAllergyInput(e.target.value)}

@@ -16,6 +16,7 @@ TORTOISE_APP_MODELS = [
     "app.models.psych_drugs",
     "app.models.reminders",
     "app.models.chat",
+    "app.models.diaries",
 ]
 
 TORTOISE_ORM = {

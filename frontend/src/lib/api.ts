@@ -1,4 +1,5 @@
 const BASE = "/api/v1";
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 export function getToken() {
   return localStorage.getItem("access_token");
@@ -46,12 +47,12 @@ let _refreshPromise: Promise<string | null> | null = null;
 function extractErrorMessage(err: Record<string, unknown>, status: number): string {
   const detail = err?.detail;
   const detailMsg = Array.isArray(detail) ? detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join(", ") : (detail as { message?: string })?.message;
-  return (err?.code as string) ?? detailMsg ?? (err?.message as string) ?? `HTTP ${status}`;
+  return (err?.message as string) ?? detailMsg ?? (err?.code as string) ?? `HTTP ${status}`;
 }
 
 async function refreshAccessToken(): Promise<string | null> {
   try {
-    const res = await fetch(`${BASE}/auth/token/refresh`, { credentials: "include" });
+    const res = await fetch(`${BASE}/auth/token/refresh`, { method: "POST", credentials: "include" });
     if (!res.ok) return null;
     const data = await res.json();
     if (data.access_token) {
@@ -87,9 +88,13 @@ async function withAuthRefresh(
 }
 
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
   const doFetch = (token: string | null) =>
     fetch(`${BASE}${path}`, {
       ...init,
+      signal: controller.signal,
       credentials: "include",
       headers: {
         ...(init.body ? { "Content-Type": "application/json" } : {}),
@@ -98,32 +103,56 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
       },
     });
 
-  const res = await withAuthRefresh(doFetch);
+  try {
+    const res = await withAuthRefresh(doFetch);
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(extractErrorMessage(err, res.status));
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, res.status));
+    }
+    if (res.status === 204) return undefined as T;
+    return res.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("요청 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  if (res.status === 204) return undefined as T;
-  return res.json();
 }
 
+const UPLOAD_TIMEOUT_MS = 120_000;
+
 async function requestForm<T>(path: string, body: FormData): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+
   const doFetch = (token: string | null) =>
     fetch(`${BASE}${path}`, {
       method: "POST",
       credentials: "include",
+      signal: controller.signal,
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body,
     });
 
-  const res = await withAuthRefresh(doFetch);
+  try {
+    const res = await withAuthRefresh(doFetch);
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(extractErrorMessage(err, res.status));
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, res.status));
+    }
+    return res.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("업로드 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return res.json();
 }
 
 // ── Auth ──────────────────────────────────────────────
@@ -591,4 +620,21 @@ export const notificationApi = {
 
   deleteRead: () =>
     request<{ updated_count: number }>("/notifications/read", { method: "DELETE" }),
+};
+
+// ── Diaries ──────────────────────────────────────────
+export interface DiaryResponse {
+  date: string;
+  content: string;
+  updated_at: string;
+}
+
+export const diaryApi = {
+  upsert: (date: string, content: string) =>
+    request<DiaryResponse>(`/diaries/${date}`, {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    }),
+
+  getByDate: (date: string) => request<DiaryResponse>(`/diaries/${date}`),
 };

@@ -3,8 +3,9 @@ services:
   redis:
     image: redis:alpine
     container_name: redis
+    mem_limit: 512M
     networks:
-      - ws
+      - backend
     ports:
       - "6379:6379"
     healthcheck:
@@ -19,6 +20,7 @@ services:
     image: mysql:8.0
     container_name: mysql
     restart: always
+    mem_limit: 2G
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME}
@@ -28,7 +30,7 @@ services:
     ports:
       - ${DB_EXPOSE_PORT}:${DB_PORT}
     networks:
-      - ws
+      - backend
     volumes:
       - mysql_data:/var/lib/mysql
     command:
@@ -52,6 +54,7 @@ services:
         - linux/arm64
     image: ${DOCKER_USER}/${DOCKER_REPOSITORY}:app-${APP_VERSION}
     env_file: .env
+    mem_limit: 1G
     command: |
       sh -c "uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
@@ -62,7 +65,8 @@ services:
     ports:
       - "8000:8000"
     networks:
-      - ws
+      - frontend
+      - backend
     depends_on:
       mysql:
         condition: service_healthy
@@ -87,7 +91,7 @@ services:
     volumes:
       - media_volume:/app/app/media
     networks:
-      - ws
+      - backend
     depends_on:
       mysql:
         condition: service_healthy
@@ -96,15 +100,16 @@ services:
 
   # 5. ChromaDB (벡터 DB - RAG 파이프라인)
   chromadb:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:0.6.3
     container_name: chromadb
+    mem_limit: 1G
     environment:
       - IS_PERSISTENT=TRUE
       - ANONYMIZED_TELEMETRY=FALSE
     volumes:
       - chroma_data:/chroma/chroma
     networks:
-      - ws
+      - backend
     healthcheck:
       test: ["CMD-SHELL", "true"]
       interval: 10s
@@ -115,7 +120,8 @@ services:
   # 6. Nginx (웹 서버 - 요청 리버스 프록시로 전달)
   nginx:
     container_name: nginx
-    image: nginx:latest
+    image: nginx:1.27-alpine
+    mem_limit: 256M
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
       - static_volume:/vol/web/static
@@ -123,7 +129,7 @@ services:
     ports:
       - "80:80"
     networks:
-      - ws
+      - frontend
     depends_on:
       - fastapi
 
@@ -134,5 +140,7 @@ volumes:
   chroma_data:
 
 networks:
-  ws:
+  frontend:
+    driver: bridge
+  backend:
     driver: bridge

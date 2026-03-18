@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 from openai import APITimeoutError, AsyncOpenAI
 
 from app.core import config
+from app.core.exceptions import AppException, ErrorCode
 from app.core.logger import default_logger as logger
 
 _LLM_TIMEOUT_SECONDS = 30.0
@@ -28,7 +29,7 @@ async def chat_completion(*, model: str, messages: list[dict], temperature: floa
         )
     except APITimeoutError:
         logger.warning("openai chat_completion timeout (model=%s)", model)
-        raise
+        raise AppException(ErrorCode.EXTERNAL_SERVICE_TIMEOUT, developer_message="OpenAI API timeout") from None
     return response.choices[0].message.content or ""
 
 
@@ -44,7 +45,7 @@ async def stream_chat_completion(*, model: str, messages: list[dict], temperatur
         )  # type: ignore[call-overload]
     except APITimeoutError:
         logger.warning("openai stream_chat_completion timeout (model=%s)", model)
-        raise
+        raise AppException(ErrorCode.EXTERNAL_SERVICE_TIMEOUT, developer_message="OpenAI API timeout") from None
     async for chunk in stream:  # type: ignore[union-attr]
         token = chunk.choices[0].delta.content
         if token:
@@ -65,6 +66,6 @@ async def json_completion(*, model: str, messages: list[dict], temperature: floa
         )
     except APITimeoutError:
         logger.warning("openai json_completion timeout (model=%s)", model)
-        raise
+        raise AppException(ErrorCode.EXTERNAL_SERVICE_TIMEOUT, developer_message="OpenAI API timeout") from None
     raw = response.choices[0].message.content or "{}"
     return json.loads(raw)

@@ -36,11 +36,13 @@ class ReminderService:
             enabled=data.enabled,
         )
 
-    async def list_reminders(self, *, user: User, enabled: bool | None) -> list[MedicationReminder]:
+    async def list_reminders(
+        self, *, user: User, enabled: bool | None, limit: int = 50, offset: int = 0
+    ) -> list[MedicationReminder]:
         qs = MedicationReminder.filter(user_id=user.id)
         if enabled is not None:
             qs = qs.filter(enabled=enabled)
-        return await qs.order_by("-created_at")
+        return await qs.order_by("-created_at").offset(offset).limit(limit)
 
     async def _get_user_reminder(self, *, user: User, reminder_id: int) -> MedicationReminder:
         reminder = await MedicationReminder.get_or_none(id=reminder_id, user_id=user.id)

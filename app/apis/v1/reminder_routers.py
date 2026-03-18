@@ -48,8 +48,10 @@ async def list_reminders(
     user: Annotated[User, Depends(get_request_user)],
     service: Annotated[ReminderService, Depends(ReminderService)],
     enabled: Annotated[bool | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> Response:
-    reminders = await service.list_reminders(user=user, enabled=enabled)
+    reminders = await service.list_reminders(user=user, enabled=enabled, limit=limit, offset=offset)
     return Response(
         ReminderListResponse(items=[_serialize(r) for r in reminders]).model_dump(),
         status_code=status.HTTP_200_OK,

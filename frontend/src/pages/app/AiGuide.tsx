@@ -201,6 +201,7 @@ export default function AiGuide() {
   const [result, setResult] = useState<GuideJobResult | null>(null);
   const [error, setError] = useState("");
   const [medInfoByName, setMedInfoByName] = useState<Record<string, MedicationInfo | undefined>>({});
+  const [pollElapsed, setPollElapsed] = useState(0);
   const cancelledRef = useRef(false);
 
   async function loadGuide() {
@@ -237,8 +238,10 @@ export default function AiGuide() {
   }
 
   async function pollStatus(jobId: string) {
+    setPollElapsed(0);
     for (let i = 0; i < 90; i++) {
       await new Promise((r) => setTimeout(r, 3000));
+      setPollElapsed((i + 1) * 3);
       if (cancelledRef.current) return;
       try {
         const s = await guideApi.getJobStatus(jobId);
@@ -350,10 +353,18 @@ export default function AiGuide() {
           <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
             <Sparkles className="w-5 h-5 animate-pulse" />
           </div>
-          <div>
+          <div className="flex-1">
             <p className="font-bold">AI 가이드 생성중</p>
-            <p className="text-sm text-green-100 mt-0.5">잠시만 기다려주세요...</p>
+            <p className="text-sm text-green-100 mt-0.5">
+              {pollElapsed > 0 ? `${pollElapsed}초 경과 — 잠시만 기다려주세요...` : "잠시만 기다려주세요..."}
+            </p>
           </div>
+          <button
+            onClick={() => { cancelledRef.current = true; setStatus("IDLE"); setPollElapsed(0); }}
+            className="text-sm text-green-100 hover:text-white underline"
+          >
+            취소
+          </button>
         </div>
       )}
 
