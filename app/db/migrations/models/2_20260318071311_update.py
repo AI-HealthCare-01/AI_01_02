@@ -37,6 +37,20 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
     CONSTRAINT `fk_user_hea_users_1d1f8bd7` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
     KEY `idx_user_health_user_id_145903` (`user_id`, `updated_at`)
 ) CHARACTER SET utf8mb4;
+CREATE TABLE IF NOT EXISTS `documents` (
+    `id` BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    `document_type` VARCHAR(14) NOT NULL COMMENT 'MEDICAL_RECORD: MEDICAL_RECORD\nPRESCRIPTION: PRESCRIPTION\nMEDICATION_BAG: MEDICATION_BAG',
+    `file_name` VARCHAR(255) NOT NULL,
+    `temp_storage_key` VARCHAR(500) NOT NULL,
+    `file_size` BIGINT NOT NULL,
+    `mime_type` VARCHAR(100) NOT NULL,
+    `uploaded_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    `disposed_at` DATETIME(6),
+    `user_id` BIGINT NOT NULL,
+    CONSTRAINT `fk_document_users_a34eb111` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+    KEY `idx_documents_user_id_9f90dd` (`user_id`, `uploaded_at`),
+    KEY `idx_documents_documen_9db149` (`document_type`)
+) CHARACTER SET utf8mb4;
         CREATE TABLE IF NOT EXISTS `ocr_jobs` (
     `id` BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
     `status` VARCHAR(10) NOT NULL COMMENT 'QUEUED: QUEUED\nPROCESSING: PROCESSING\nSUCCEEDED: SUCCEEDED\nFAILED: FAILED' DEFAULT 'QUEUED',
@@ -93,20 +107,6 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
     `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     `job_id` BIGINT NOT NULL UNIQUE,
     CONSTRAINT `fk_guide_re_guide_jo_d9919dfe` FOREIGN KEY (`job_id`) REFERENCES `guide_jobs` (`id`) ON DELETE CASCADE
-) CHARACTER SET utf8mb4;
-        CREATE TABLE IF NOT EXISTS `documents` (
-    `id` BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    `document_type` VARCHAR(14) NOT NULL COMMENT 'MEDICAL_RECORD: MEDICAL_RECORD\nPRESCRIPTION: PRESCRIPTION\nMEDICATION_BAG: MEDICATION_BAG',
-    `file_name` VARCHAR(255) NOT NULL,
-    `temp_storage_key` VARCHAR(500) NOT NULL,
-    `file_size` BIGINT NOT NULL,
-    `mime_type` VARCHAR(100) NOT NULL,
-    `uploaded_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    `disposed_at` DATETIME(6),
-    `user_id` BIGINT NOT NULL,
-    CONSTRAINT `fk_document_users_a34eb111` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-    KEY `idx_documents_user_id_9f90dd` (`user_id`, `uploaded_at`),
-    KEY `idx_documents_documen_9db149` (`document_type`)
 ) CHARACTER SET utf8mb4;
         CREATE TABLE IF NOT EXISTS `user_notification_settings` (
     `id` BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
