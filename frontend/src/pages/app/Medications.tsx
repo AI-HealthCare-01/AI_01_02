@@ -17,6 +17,8 @@ const TIME_OPTIONS = [
   { label: "저녁 (19:00)", value: "19:00" },
   { label: "취침 전 (22:00)", value: "22:00" },
 ];
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
+const MINUTE_OPTIONS = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────────────
 
@@ -311,7 +313,8 @@ function MedicationAccordion({
   });
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showCustomTime, setShowCustomTime] = useState(false);
-  const [customTimeValue, setCustomTimeValue] = useState("12:00");
+  const [customHour, setCustomHour] = useState("12");
+  const [customMinute, setCustomMinute] = useState("00");
 
   // editing 모드 진입 시 폼 초기화
   useEffect(() => {
@@ -325,14 +328,26 @@ function MedicationAccordion({
         enabled: r.enabled,
       });
       setConfirmDelete(false);
+      setShowCustomTime(false);
+      setCustomHour("12");
+      setCustomMinute("00");
     }
   }, [editing, r]);
 
   // 남은 약 갯수 추정: remaining_days × 하루 복용 횟수
   const estimatedRemaining =
     dday != null ? dday.remaining_days * (r.schedule_times.length || 1) : null;
+  const maxScheduleTimes =
+    r.daily_intake_count != null && Number.isFinite(r.daily_intake_count)
+      ? Math.max(1, Math.floor(r.daily_intake_count))
+      : null;
+  const hasReachedScheduleLimit = maxScheduleTimes != null && form.schedule_times.length >= maxScheduleTimes;
 
   function toggleTime(time: string) {
+    if (!form.schedule_times.includes(time) && hasReachedScheduleLimit) {
+      toast.error(`복용 시간은 1일 복용 횟수(${maxScheduleTimes}회)까지만 입력할 수 있어요.`);
+      return;
+    }
     setForm((f) => ({
       ...f,
       schedule_times: f.schedule_times.includes(time)
@@ -348,6 +363,10 @@ function MedicationAccordion({
     }
     if (form.schedule_times.length === 0) {
       toast.error("복용 시간을 하나 이상 선택해주세요.");
+      return;
+    }
+    if (maxScheduleTimes != null && form.schedule_times.length > maxScheduleTimes) {
+      toast.error(`복용 시간은 1일 복용 횟수(${maxScheduleTimes}회)를 넘길 수 없어요.`);
       return;
     }
     onSave({
@@ -484,6 +503,11 @@ function MedicationAccordion({
             {/* 복용 시간 */}
             <div>
               <label className="text-xs font-medium text-gray-500 mb-1 block">복용 시간</label>
+              {maxScheduleTimes != null && (
+                <p className="text-[11px] text-gray-400 mb-2">
+                  1일 복용 횟수 기준 최대 {maxScheduleTimes}개까지 입력할 수 있어요.
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 {TIME_OPTIONS.map((opt) => (
                   <button
@@ -521,15 +545,36 @@ function MedicationAccordion({
               {/* 커스텀 시간 추가 */}
               {showCustomTime ? (
                 <div className="flex items-center gap-2 mt-2">
-                  <input
-                    type="time"
-                    value={customTimeValue}
-                    onChange={(e) => setCustomTimeValue(e.target.value)}
-                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500"
-                  />
+                  <select
+                    value={customHour}
+                    onChange={(e) => setCustomHour(e.target.value)}
+                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500 bg-white"
+                  >
+                    {HOUR_OPTIONS.map((hour) => (
+                      <option key={hour} value={hour}>
+                        {hour}시
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={customMinute}
+                    onChange={(e) => setCustomMinute(e.target.value)}
+                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500 bg-white"
+                  >
+                    {MINUTE_OPTIONS.map((minute) => (
+                      <option key={minute} value={minute}>
+                        {minute}분
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="button"
                     onClick={() => {
+                      if (hasReachedScheduleLimit) {
+                        toast.error(`복용 시간은 1일 복용 횟수(${maxScheduleTimes}회)까지만 입력할 수 있어요.`);
+                        return;
+                      }
+                      const customTimeValue = `${customHour}:${customMinute}`;
                       if (customTimeValue && !form.schedule_times.includes(customTimeValue)) {
                         setForm((f) => ({
                           ...f,
@@ -553,7 +598,13 @@ function MedicationAccordion({
               ) : (
                 <button
                   type="button"
-                  onClick={() => setShowCustomTime(true)}
+                  onClick={() => {
+                    if (hasReachedScheduleLimit) {
+                      toast.error(`복용 시간은 1일 복용 횟수(${maxScheduleTimes}회)까지만 입력할 수 있어요.`);
+                      return;
+                    }
+                    setShowCustomTime(true);
+                  }}
                   className="mt-2 flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-700 transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -671,4 +722,3 @@ interface MedGuideItem {
   precautions?: string;
   side_effects?: string;
 }
-

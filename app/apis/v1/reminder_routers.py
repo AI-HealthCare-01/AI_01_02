@@ -27,6 +27,7 @@ def _serialize(r) -> ReminderResponse:  # type: ignore[no-untyped-def]
         end_date=r.end_date,
         dispensed_date=r.dispensed_date,
         total_days=r.total_days,
+        daily_intake_count=float(r.daily_intake_count) if r.daily_intake_count is not None else None,
         enabled=r.enabled,
         created_at=r.created_at,
         updated_at=r.updated_at,
