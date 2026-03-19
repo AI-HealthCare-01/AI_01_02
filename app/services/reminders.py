@@ -109,7 +109,7 @@ class ReminderService:
         result = []
         for r in reminders:
             depletion = r.dispensed_date + timedelta(days=r.total_days)
-            remaining = (depletion - today).days
+            remaining = self._calculate_remaining_days(depletion=depletion, today=today)
             if 0 <= remaining <= days:
                 result.append(
                     DdayReminderItem(
@@ -269,6 +269,10 @@ class ReminderService:
             return str(dose)
         text = str(dose).strip()
         return text or None
+
+    @staticmethod
+    def _calculate_remaining_days(*, depletion: date, today: date) -> int:
+        return (depletion - today).days - 1
 
     @staticmethod
     def _extract_ocr_medications(job: OcrJob) -> list[dict[str, Any]]:
