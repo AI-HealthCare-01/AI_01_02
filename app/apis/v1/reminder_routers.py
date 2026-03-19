@@ -12,8 +12,8 @@ from app.dtos.reminders import (
     ReminderListResponse,
     ReminderResponse,
 )
-from app.models.users import User
 from app.models.reminders import ScheduleItem, ScheduleItemStatus
+from app.models.users import User
 from app.services.reminders import ReminderService
 
 reminder_router = APIRouter(prefix="/reminders", tags=["reminders"])
@@ -92,8 +92,8 @@ async def list_reminders(
             if row.get("reminder_id") is not None
         }
     for reminder in reminders:
-        setattr(reminder, "confirmed_intake_count", confirmed_count_by_reminder_id.get(reminder.id, 0))
-        setattr(reminder, "responded_intake_count", responded_count_by_reminder_id.get(reminder.id, 0))
+        reminder.confirmed_intake_count = confirmed_count_by_reminder_id.get(reminder.id, 0)
+        reminder.responded_intake_count = responded_count_by_reminder_id.get(reminder.id, 0)
     return Response(
         ReminderListResponse(items=[_serialize(r) for r in reminders]).model_dump(),
         status_code=status.HTTP_200_OK,
