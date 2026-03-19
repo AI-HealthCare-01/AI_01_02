@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Check, Square } from "lucide-react";
 import { OcrMedication, ScheduleItem } from "@/lib/api";
 
 const INTAKE_TIME_LABEL: Record<string, string> = {
@@ -9,10 +10,34 @@ const INTAKE_TIME_LABEL: Record<string, string> = {
   PRN: "필요 시",
 };
 
+const DEFAULT_TIME_LABEL_BY_SLOT = ["아침", "점심", "저녁", "취침 전"];
+
 const DAILY_CONFIRM_STORAGE_PREFIX = "daily_med_confirmed";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function toDisplayIntakeLabels(raw: OcrMedication["intake_time"], frequencyPerDay: number | null): string[] {
+  if (Array.isArray(raw)) {
+    const labels = raw
+      .map((value) => INTAKE_TIME_LABEL[String(value)] ?? String(value))
+      .filter(Boolean);
+    if (labels.length > 0) return labels;
+  }
+
+  if (typeof raw === "string" && raw.trim()) {
+    const split = raw.includes(",")
+      ? raw.split(",").map((value) => value.trim())
+      : [raw.trim()];
+    const labels = split
+      .map((value) => INTAKE_TIME_LABEL[value] ?? value)
+      .filter(Boolean);
+    if (labels.length > 0) return labels;
+  }
+
+  const count = frequencyPerDay && frequencyPerDay > 0 ? Math.min(frequencyPerDay, DEFAULT_TIME_LABEL_BY_SLOT.length) : 1;
+  return DEFAULT_TIME_LABEL_BY_SLOT.slice(0, count);
 }
 
 type Props = {
@@ -63,22 +88,42 @@ export default function MedicationScheduleCard({
     .filter((i) => i.category === "MEDICATION")
     .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
 
-  const completedMedicationCount = ocrMeds.reduce((acc, med) => {
-    const scheduleItem = medicationItems.find(
-      (si) => si.title.toLowerCase().includes(med.drug_name.toLowerCase()),
-    );
-    if (scheduleItem) return acc + (scheduleItem.status === "DONE" ? 1 : 0);
-    const manualKey = `${med.drug_name}-${med.intake_time ?? ""}`;
-    return acc + (manualConfirmedMap[manualKey] ? 1 : 0);
+  const medicationRows = (() => {
+    let scheduleCursor = 0;
+
+    return ocrMeds.flatMap((med, medIndex) => {
+      const intakeLabels = toDisplayIntakeLabels(med.intake_time, med.frequency_per_day);
+      const rowCount = Math.max(1, intakeLabels.length);
+
+      return Array.from({ length: rowCount }, (_, rowIndex) => {
+        const scheduleItem = medicationItems[scheduleCursor] ?? null;
+        if (scheduleItem) {
+          scheduleCursor += 1;
+        }
+
+        return {
+          med,
+          key: `${med.drug_name}-${medIndex}-${rowIndex}`,
+          intakeLabel: intakeLabels[rowIndex] ?? intakeLabels[intakeLabels.length - 1] ?? "-",
+          scheduleItem,
+          manualKey: `${med.drug_name}-${storageDateKey}-${rowIndex}`,
+        };
+      });
+    });
+  })();
+
+  const completedMedicationCount = medicationRows.reduce((acc, row) => {
+    if (row.scheduleItem) return acc + (row.scheduleItem.status === "DONE" ? 1 : 0);
+    return acc + (manualConfirmedMap[row.manualKey] ? 1 : 0);
   }, 0);
 
-  const progress = ocrMeds.length > 0
-    ? Math.round((completedMedicationCount / ocrMeds.length) * 100)
+  const progress = medicationRows.length > 0
+    ? Math.round((completedMedicationCount / medicationRows.length) * 100)
     : 0;
 
   useEffect(() => {
-    onProgressChange?.(progress, ocrMeds.length);
-  }, [onProgressChange, progress, ocrMeds.length]);
+    onProgressChange?.(progress, medicationRows.length);
+  }, [onProgressChange, progress, medicationRows.length]);
 
   return (
     <div className="card-warm p-5">
@@ -97,7 +142,7 @@ export default function MedicationScheduleCard({
 
       {loading ? (
         <p className="text-center text-sm text-gray-400 py-6">불러오는 중...</p>
-      ) : ocrMeds.length === 0 ? (
+      ) : medicationRows.length === 0 ? (
         <p className="text-center text-sm text-gray-400 py-6">OCR로 추출된 복약 정보가 없습니다.</p>
       ) : (
         <div className="space-y-2">
@@ -108,54 +153,61 @@ export default function MedicationScheduleCard({
             <span>1회투약량</span>
             <span className="text-right">복약 여부</span>
           </div>
-          {ocrMeds.map((med, idx) => {
-            const scheduleItem = medicationItems.find(
-              (si) => si.title.toLowerCase().includes(med.drug_name.toLowerCase()),
-            );
-            const manualKey = `${med.drug_name}-${med.intake_time ?? ""}`;
+          {medicationRows.map(({ med, key, intakeLabel, scheduleItem, manualKey }) => {
             const isManualConfirmed = !!manualConfirmedMap[manualKey];
-            const intakeLabel = med.intake_time
-              ? (INTAKE_TIME_LABEL[med.intake_time] ?? med.intake_time)
-              : (scheduleItem ? formatTime(scheduleItem.scheduled_at) : "-");
+            const displayIntakeLabel = scheduleItem ? formatTime(scheduleItem.scheduled_at) : intakeLabel;
             const doseLabel = med.dose !== null && med.dose !== undefined ? `${med.dose}mg` : "-";
             const dosagePerOnce = med.dosage_per_once !== null && med.dosage_per_once !== undefined
               ? `${med.dosage_per_once}`
               : "-";
 
             return (
-              <div key={`${med.drug_name}-${idx}`} className="grid grid-cols-[92px_1fr_90px_110px_128px] gap-2 items-center px-3 py-3 rounded-xl bg-white/80 shadow-sm">
-                <span className="text-sm text-gray-600">{intakeLabel}</span>
+              <div key={key} className="grid grid-cols-[92px_1fr_90px_110px_128px] gap-2 items-center px-3 py-3 rounded-xl bg-white/80 shadow-sm">
+                <span className="text-sm text-gray-600">{displayIntakeLabel}</span>
                 <span className="text-sm font-semibold text-gray-800 truncate">{med.drug_name || "-"}</span>
                 <span className="text-sm text-gray-700">{doseLabel}</span>
                 <span className="text-sm text-gray-700">{dosagePerOnce}</span>
                 <div className="flex items-center justify-end gap-1.5">
                   {scheduleItem ? (
                     <button
+                      type="button"
                       onClick={() =>
                         onUpdateScheduleStatus(
                           scheduleItem.item_id,
                           scheduleItem.status === "DONE" ? "PENDING" : "DONE",
                         )
                       }
-                      className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all duration-150 ${
+                      className={`inline-flex items-center justify-center p-1 text-xs font-semibold rounded-lg transition-all duration-150 ${
                         scheduleItem.status === "DONE"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                          ? "text-gray-500"
+                          : "text-gray-500 hover:text-gray-700"
                       }`}
+                      aria-label={scheduleItem.status === "DONE" ? "복약 완료" : "복약 예정"}
                     >
-                      {scheduleItem.status === "DONE" ? "완료" : "예정"}
+                      <span className="relative flex h-5.5 w-5.5 items-center justify-center">
+                        <Square className="h-5.5 w-5.5" strokeWidth={2.4} />
+                        {scheduleItem.status === "DONE" && (
+                          <Check className="absolute h-5 w-5 text-red-500" strokeWidth={3.6} />
+                        )}
+                      </span>
                     </button>
                   ) : (
                     <button
                       type="button"
                       onClick={() => toggleManualConfirm(manualKey)}
-                      className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all duration-150 ${
+                      className={`inline-flex items-center justify-center p-1 text-xs font-semibold rounded-lg transition-all duration-150 ${
                         isManualConfirmed
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                          ? "text-gray-500"
+                          : "text-gray-500 hover:text-gray-700"
                       }`}
+                      aria-label={isManualConfirmed ? "복약 완료" : "복약 예정"}
                     >
-                      {isManualConfirmed ? "완료" : "예정"}
+                      <span className="relative flex h-5.5 w-5.5 items-center justify-center">
+                        <Square className="h-5.5 w-5.5" strokeWidth={2.4} />
+                        {isManualConfirmed && (
+                          <Check className="absolute h-5 w-5 text-red-500" strokeWidth={3.6} />
+                        )}
+                      </span>
                     </button>
                   )}
                 </div>

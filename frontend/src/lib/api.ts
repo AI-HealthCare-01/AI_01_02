@@ -448,6 +448,11 @@ export const guideApi = {
       body: JSON.stringify({ ocr_job_id: ocrJobId }),
     }),
 
+  getLatestJobStatus: () =>
+    request<{ job_id: string; ocr_job_id: string; status: GuideStatus; error_message: string | null }>(
+      "/guides/jobs/latest",
+    ),
+
   getJobStatus: (jobId: string) =>
     request<{ job_id: string; status: GuideStatus; error_message: string | null }>(
       `/guides/jobs/${jobId}`,
