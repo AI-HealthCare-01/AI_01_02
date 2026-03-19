@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Check, Square } from "lucide-react";
-import { OcrMedication, ScheduleItem } from "@/lib/api";
+import { Check } from "lucide-react";
+import { OcrMedication, Reminder, ScheduleItem } from "@/lib/api";
 
 const INTAKE_TIME_LABEL: Record<string, string> = {
   morning: "아침",
@@ -44,6 +44,7 @@ type Props = {
   title?: string;
   loading: boolean;
   ocrMeds: OcrMedication[];
+  reminders?: Reminder[];
   scheduleItems: ScheduleItem[];
   storageDateKey: string;
   onUpdateScheduleStatus: (itemId: string, status: "PENDING" | "DONE") => void;
@@ -54,6 +55,7 @@ export default function MedicationScheduleCard({
   title = "복약 일정",
   loading,
   ocrMeds,
+  reminders = [],
   scheduleItems,
   storageDateKey,
   onUpdateScheduleStatus,
@@ -91,6 +93,33 @@ export default function MedicationScheduleCard({
   const medicationRows = (() => {
     let scheduleCursor = 0;
 
+    if (ocrMeds.length === 0) {
+      return reminders.flatMap((reminder, reminderIndex) => {
+        const rowCount = Math.max(1, reminder.schedule_times.length);
+
+        return Array.from({ length: rowCount }, (_, rowIndex) => {
+          const scheduleItem = medicationItems[scheduleCursor] ?? null;
+          if (scheduleItem) {
+            scheduleCursor += 1;
+          }
+
+          const reminderDose = reminder.dose?.trim() ?? "";
+          const doseLabel = reminderDose && !reminderDose.includes("캡/정") ? reminderDose : "-";
+          const dosagePerOnce = reminderDose && reminderDose.includes("캡/정") ? reminderDose : "-";
+
+          return {
+            key: `${reminder.medication_name}-${reminderIndex}-${rowIndex}`,
+            intakeLabel: reminder.schedule_times[rowIndex] ?? "-",
+            scheduleItem,
+            manualKey: `${reminder.medication_name}-${storageDateKey}-${rowIndex}`,
+            drugName: reminder.medication_name || "-",
+            doseLabel,
+            dosagePerOnce,
+          };
+        });
+      });
+    }
+
     return ocrMeds.flatMap((med, medIndex) => {
       const intakeLabels = toDisplayIntakeLabels(med.intake_time, med.frequency_per_day);
       const rowCount = Math.max(1, intakeLabels.length);
@@ -102,11 +131,14 @@ export default function MedicationScheduleCard({
         }
 
         return {
-          med,
           key: `${med.drug_name}-${medIndex}-${rowIndex}`,
           intakeLabel: intakeLabels[rowIndex] ?? intakeLabels[intakeLabels.length - 1] ?? "-",
           scheduleItem,
           manualKey: `${med.drug_name}-${storageDateKey}-${rowIndex}`,
+          drugName: med.drug_name || "-",
+          doseLabel: med.dose !== null && med.dose !== undefined ? `${med.dose}mg` : "-",
+          dosagePerOnce:
+            med.dosage_per_once !== null && med.dosage_per_once !== undefined ? `${med.dosage_per_once}` : "-",
         };
       });
     });
@@ -153,18 +185,14 @@ export default function MedicationScheduleCard({
             <span>1회투약량</span>
             <span className="text-right">복약 여부</span>
           </div>
-          {medicationRows.map(({ med, key, intakeLabel, scheduleItem, manualKey }) => {
+          {medicationRows.map(({ key, intakeLabel, scheduleItem, manualKey, drugName, doseLabel, dosagePerOnce }) => {
             const isManualConfirmed = !!manualConfirmedMap[manualKey];
             const displayIntakeLabel = scheduleItem ? formatTime(scheduleItem.scheduled_at) : intakeLabel;
-            const doseLabel = med.dose !== null && med.dose !== undefined ? `${med.dose}mg` : "-";
-            const dosagePerOnce = med.dosage_per_once !== null && med.dosage_per_once !== undefined
-              ? `${med.dosage_per_once}`
-              : "-";
 
             return (
               <div key={key} className="grid grid-cols-[92px_1fr_90px_110px_128px] gap-2 items-center px-3 py-3 rounded-xl bg-white/80 shadow-sm">
                 <span className="text-sm text-gray-600">{displayIntakeLabel}</span>
-                <span className="text-sm font-semibold text-gray-800 truncate">{med.drug_name || "-"}</span>
+                <span className="text-sm font-semibold text-gray-800 truncate">{drugName}</span>
                 <span className="text-sm text-gray-700">{doseLabel}</span>
                 <span className="text-sm text-gray-700">{dosagePerOnce}</span>
                 <div className="flex items-center justify-end gap-1.5">
@@ -177,37 +205,19 @@ export default function MedicationScheduleCard({
                           scheduleItem.status === "DONE" ? "PENDING" : "DONE",
                         )
                       }
-                      className={`inline-flex items-center justify-center p-1 text-xs font-semibold rounded-lg transition-all duration-150 ${
-                        scheduleItem.status === "DONE"
-                          ? "text-gray-500"
-                          : "text-gray-500 hover:text-gray-700"
-                      }`}
+                      className="inline-flex items-center justify-center p-1 rounded-lg transition-all duration-150"
                       aria-label={scheduleItem.status === "DONE" ? "복약 완료" : "복약 예정"}
                     >
-                      <span className="relative flex h-5.5 w-5.5 items-center justify-center">
-                        <Square className="h-5.5 w-5.5" strokeWidth={2.4} />
-                        {scheduleItem.status === "DONE" && (
-                          <Check className="absolute h-5 w-5 text-red-500" strokeWidth={3.6} />
-                        )}
-                      </span>
+                      <CheckBox checked={scheduleItem.status === "DONE"} />
                     </button>
                   ) : (
                     <button
                       type="button"
                       onClick={() => toggleManualConfirm(manualKey)}
-                      className={`inline-flex items-center justify-center p-1 text-xs font-semibold rounded-lg transition-all duration-150 ${
-                        isManualConfirmed
-                          ? "text-gray-500"
-                          : "text-gray-500 hover:text-gray-700"
-                      }`}
+                      className="inline-flex items-center justify-center p-1 rounded-lg transition-all duration-150"
                       aria-label={isManualConfirmed ? "복약 완료" : "복약 예정"}
                     >
-                      <span className="relative flex h-5.5 w-5.5 items-center justify-center">
-                        <Square className="h-5.5 w-5.5" strokeWidth={2.4} />
-                        {isManualConfirmed && (
-                          <Check className="absolute h-5 w-5 text-red-500" strokeWidth={3.6} />
-                        )}
-                      </span>
+                      <CheckBox checked={isManualConfirmed} />
                     </button>
                   )}
                 </div>
@@ -217,5 +227,19 @@ export default function MedicationScheduleCard({
         </div>
       )}
     </div>
+  );
+}
+
+function CheckBox({ checked }: { checked: boolean }) {
+  return (
+    <span
+      className={`flex h-5 w-5 items-center justify-center rounded-[4px] border transition-all duration-150 ${
+        checked
+          ? "border-green-600 bg-green-500 text-white shadow-sm"
+          : "border-gray-500 bg-white text-transparent"
+      }`}
+    >
+      <Check className="h-3.5 w-3.5" strokeWidth={3.2} />
+    </span>
   );
 }

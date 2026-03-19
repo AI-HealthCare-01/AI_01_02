@@ -1,6 +1,7 @@
 import asyncio
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
+from datetime import time as dt_time
 
 from tortoise.transactions import in_transaction
 
@@ -16,7 +17,7 @@ from app.services.guide_automation import GuideAutomationService
 from app.services.notification_settings import NotificationSettingService
 from app.services.reminders import ReminderService
 
-_SYNC_TTL_SECONDS = 300  # 5분
+_SYNC_TTL_SECONDS = 60  # 1분
 _SYNC_CACHE_MAX_SIZE = 10_000
 _sync_cache: dict[int, float] = {}
 
@@ -37,13 +38,7 @@ class NotificationService:
         offset: int,
         is_read: bool | None = None,
     ) -> tuple[list[Notification], int]:
-        now = time.monotonic()
-        last_sync = _sync_cache.get(user.id)
-        if last_sync is None or now - last_sync >= _SYNC_TTL_SECONDS:
-            await self._sync_dynamic_notifications(user=user)
-            if len(_sync_cache) >= _SYNC_CACHE_MAX_SIZE:
-                _sync_cache.clear()
-            _sync_cache[user.id] = now
+        await self._sync_dynamic_notifications_if_due(user=user)
         notifications = await self.repo.list_notifications(
             user_id=user.id,
             limit=limit,
@@ -54,6 +49,7 @@ class NotificationService:
         return notifications, unread_count
 
     async def get_unread_count(self, *, user: User) -> int:
+        await self._sync_dynamic_notifications_if_due(user=user)
         return await self.repo.count_unread(user_id=user.id)
 
     async def mark_as_read(self, *, user: User, notification_id: int) -> Notification:
@@ -73,16 +69,103 @@ class NotificationService:
         async with in_transaction():
             return await self.repo.delete_read_notifications(user_id=user.id)
 
+    async def _sync_dynamic_notifications_if_due(self, *, user: User) -> None:
+        now = time.monotonic()
+        last_sync = _sync_cache.get(user.id)
+        if last_sync is not None and now - last_sync < _SYNC_TTL_SECONDS:
+            return
+
+        await self._sync_dynamic_notifications(user=user)
+        if len(_sync_cache) >= _SYNC_CACHE_MAX_SIZE:
+            _sync_cache.clear()
+        _sync_cache[user.id] = now
+
     async def _sync_dynamic_notifications(self, *, user: User) -> None:
         await self.guide_automation_service.notify_weekly_refresh_if_due(user_id=user.id)
-        results = await asyncio.gather(
-            self._sync_health_alert_notifications(user=user),
-            self._sync_dday_notifications(user=user),
-            return_exceptions=True,
-        )
-        for result in results:
-            if isinstance(result, Exception):
-                logger.warning("notification_sync_partial_failure", extra={"error": str(result)})
+        for sync_fn in (
+            self._sync_health_alert_notifications,
+            self._sync_dday_notifications,
+            self._sync_medication_reminder_notifications,
+        ):
+            try:
+                await sync_fn(user=user)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"notification_sync_partial_failure: {exc}", extra={"error": str(exc)})
+
+    async def _sync_medication_reminder_notifications(self, *, user: User) -> None:
+        setting = await self.notification_setting_service.get_or_create(user=user)
+        if not setting.medication_alarm_enabled:
+            return
+
+        now = datetime.now(config.TIMEZONE)
+        today = now.date()
+        reminders = await self.reminder_service.list_reminders(user=user, enabled=True, limit=200, offset=0)
+        if not reminders:
+            return
+
+        existing_notifications = await Notification.filter(
+            user_id=user.id,
+            type=NotificationType.SYSTEM,
+        ).only("id", "payload")
+        existing_keys: set[tuple[int, str]] = set()
+        for notification in existing_notifications:
+            payload = notification.payload if isinstance(notification.payload, dict) else {}
+            if payload.get("event") != "medication_reminder":
+                continue
+            reminder_id = int(payload.get("reminder_id") or 0)
+            scheduled_at = str(payload.get("scheduled_at") or "")
+            if reminder_id > 0 and scheduled_at:
+                existing_keys.add((reminder_id, scheduled_at))
+
+        for reminder in reminders:
+            if reminder.start_date and today < reminder.start_date:
+                continue
+            if reminder.end_date and today > reminder.end_date:
+                continue
+
+            for time_str in reminder.schedule_times:
+                scheduled_at = self._build_scheduled_at_for_today(time_str=time_str, now=now)
+                if scheduled_at is None:
+                    continue
+
+                reminder_at = scheduled_at - timedelta(minutes=5)
+                if not (reminder_at <= now < scheduled_at):
+                    continue
+
+                scheduled_at_key = scheduled_at.isoformat()
+                dedup_key = (reminder.id, scheduled_at_key)
+                if dedup_key in existing_keys:
+                    continue
+
+                medication_label = reminder.medication_name
+                if reminder.dose_text:
+                    medication_label = f"{medication_label} {reminder.dose_text}"
+
+                message = f"5분 뒤 {scheduled_at.strftime('%H:%M')}에 {medication_label} 복용 시간입니다."
+
+                await self.repo.create_notification(
+                    user_id=user.id,
+                    title="복약 알림",
+                    message=message,
+                    notification_type=NotificationType.SYSTEM,
+                    payload={
+                        "event": "medication_reminder",
+                        "reminder_id": reminder.id,
+                        "medication_name": reminder.medication_name,
+                        "dose": reminder.dose_text,
+                        "scheduled_at": scheduled_at_key,
+                        "remind_at": reminder_at.isoformat(),
+                    },
+                )
+                existing_keys.add(dedup_key)
+
+    @staticmethod
+    def _build_scheduled_at_for_today(*, time_str: str, now: datetime) -> datetime | None:
+        try:
+            hour, minute = map(int, str(time_str).split(":"))
+        except (TypeError, ValueError, AttributeError):
+            return None
+        return datetime.combine(now.date(), dt_time(hour, minute)).replace(tzinfo=now.tzinfo)
 
     async def _sync_dday_notifications(self, *, user: User) -> None:
         setting = await self.notification_setting_service.get_or_create(user=user)
