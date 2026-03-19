@@ -11,6 +11,8 @@ import {
   ScheduleItem,
   OcrMedication,
   HealthProfileUpsertRequest,
+  Reminder,
+  reminderApi,
 } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
 import { toDateStr, getMondayOfWeek } from "@/lib/dateUtils";
@@ -52,6 +54,7 @@ export default function Records() {
   const [weeklyRates, setWeeklyRates] = useState<Array<number | null>>(Array(7).fill(null));
   const [profile, setProfile] = useState<HealthProfile | null>(null);
   const [ocrMeds, setOcrMeds] = useState<OcrMedication[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
   const [dailyDiary, setDailyDiary] = useState("");
@@ -160,7 +163,17 @@ export default function Records() {
     }
   }
 
-  async function updateMedicationStatus(itemId: string, status: "PENDING" | "DONE") {
+  async function loadReminders() {
+    try {
+      const response = await reminderApi.list(true);
+      setReminders(response.items);
+    } catch (err) {
+      console.warn("Failed to load reminders:", err);
+      setReminders([]);
+    }
+  }
+
+  async function updateMedicationStatus(itemId: string, status: "PENDING" | "DONE" | "SKIPPED") {
     try {
       const updated = await scheduleApi.updateStatus(itemId, status);
       setScheduleItems((prev) => prev.map((it) => (it.item_id === itemId ? updated : it)));
@@ -183,7 +196,7 @@ export default function Records() {
 
   async function load(date: Date) {
     setLoading(true);
-    const [, , meds] = await Promise.all([loadSchedule(date), loadProfile(), loadOcrMedications()]);
+    const [, , meds] = await Promise.all([loadSchedule(date), loadProfile(), loadOcrMedications(), loadReminders()]);
     await loadWeeklyRates(date, meds);
     setLoading(false);
   }
@@ -390,6 +403,7 @@ export default function Records() {
             title="복약 일정"
             loading={loading}
             ocrMeds={ocrMeds}
+            reminders={reminders}
             scheduleItems={scheduleItems}
             storageDateKey={toDateStr(selectedDate)}
             onUpdateScheduleStatus={updateMedicationStatus}

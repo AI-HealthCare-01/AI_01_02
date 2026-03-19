@@ -18,6 +18,32 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
 }
 
+function addDays(dateStr: string, days: number) {
+  const date = new Date(`${dateStr}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function isDateWithinMedicationPeriod(
+  targetDate: string,
+  opts: {
+    startDate?: string | null;
+    endDate?: string | null;
+    dispensedDate?: string | null;
+    totalDays?: number | null;
+  },
+) {
+  const effectiveStartDate = opts.startDate ?? opts.dispensedDate ?? null;
+  const inferredEndDate = (
+    opts.endDate
+    ?? (opts.dispensedDate && opts.totalDays && opts.totalDays > 0 ? addDays(opts.dispensedDate, opts.totalDays - 1) : null)
+  );
+
+  if (effectiveStartDate && targetDate < effectiveStartDate) return false;
+  if (inferredEndDate && targetDate > inferredEndDate) return false;
+  return true;
+}
+
 function toDisplayIntakeLabels(raw: OcrMedication["intake_time"], frequencyPerDay: number | null): string[] {
   if (Array.isArray(raw)) {
     const labels = raw
@@ -47,7 +73,7 @@ type Props = {
   reminders?: Reminder[];
   scheduleItems: ScheduleItem[];
   storageDateKey: string;
-  onUpdateScheduleStatus: (itemId: string, status: "PENDING" | "DONE") => void;
+  onUpdateScheduleStatus: (itemId: string, status: "PENDING" | "DONE" | "SKIPPED") => void;
   onProgressChange?: (progress: number, totalCount: number) => void;
 };
 
@@ -89,12 +115,24 @@ export default function MedicationScheduleCard({
   const medicationItems = scheduleItems
     .filter((i) => i.category === "MEDICATION")
     .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+  const filteredReminders = reminders.filter((reminder) =>
+    isDateWithinMedicationPeriod(storageDateKey, {
+      startDate: reminder.start_date,
+      endDate: reminder.end_date,
+      dispensedDate: reminder.dispensed_date,
+      totalDays: reminder.total_days,
+    }));
+  const filteredOcrMeds = ocrMeds.filter((med) =>
+    isDateWithinMedicationPeriod(storageDateKey, {
+      dispensedDate: med.dispensed_date,
+      totalDays: med.total_days,
+    }));
 
   const medicationRows = (() => {
     let scheduleCursor = 0;
 
-    if (ocrMeds.length === 0) {
-      return reminders.flatMap((reminder, reminderIndex) => {
+    if (filteredOcrMeds.length === 0) {
+      return filteredReminders.flatMap((reminder, reminderIndex) => {
         const rowCount = Math.max(1, reminder.schedule_times.length);
 
         return Array.from({ length: rowCount }, (_, rowIndex) => {
@@ -120,7 +158,7 @@ export default function MedicationScheduleCard({
       });
     }
 
-    return ocrMeds.flatMap((med, medIndex) => {
+    return filteredOcrMeds.flatMap((med, medIndex) => {
       const intakeLabels = toDisplayIntakeLabels(med.intake_time, med.frequency_per_day);
       const rowCount = Math.max(1, intakeLabels.length);
 
@@ -148,6 +186,14 @@ export default function MedicationScheduleCard({
     if (row.scheduleItem) return acc + (row.scheduleItem.status === "DONE" ? 1 : 0);
     return acc + (manualConfirmedMap[row.manualKey] ? 1 : 0);
   }, 0);
+  const skippedMedicationCount = medicationRows.reduce((acc, row) => {
+    if (!row.scheduleItem) return acc;
+    return acc + (row.scheduleItem.status === "SKIPPED" ? 1 : 0);
+  }, 0);
+  const pendingMedicationCount = medicationRows.reduce((acc, row) => {
+    if (row.scheduleItem) return acc + (row.scheduleItem.status === "PENDING" ? 1 : 0);
+    return acc + (manualConfirmedMap[row.manualKey] ? 0 : 1);
+  }, 0);
 
   const progress = medicationRows.length > 0
     ? Math.round((completedMedicationCount / medicationRows.length) * 100)
@@ -160,7 +206,20 @@ export default function MedicationScheduleCard({
   return (
     <div className="card-warm p-5">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-bold text-gray-800">{title}</h2>
+        <div>
+          <h2 className="text-base font-bold text-gray-800">{title}</h2>
+          <div className="flex items-center gap-2 mt-2 text-[11px]">
+            <span className="rounded-full bg-green-50 px-2 py-0.5 font-semibold text-green-700">
+              완료 {completedMedicationCount}
+            </span>
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 font-semibold text-gray-600">
+              미응답 {pendingMedicationCount}
+            </span>
+            <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">
+              건너뜀 {skippedMedicationCount}
+            </span>
+          </div>
+        </div>
         <div className="flex items-center gap-2.5">
           <span className="text-sm font-bold text-green-600">복약율 {progress}%</span>
           <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">

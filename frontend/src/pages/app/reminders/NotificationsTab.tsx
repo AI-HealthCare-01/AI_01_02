@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bell, PlusCircle, Check, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
-import { notificationApi, ApiNotification, NotificationType } from "@/lib/api";
+import { notificationApi, ApiNotification, NotificationType, scheduleApi } from "@/lib/api";
 import { useNotification } from "@/lib/NotificationContext";
 
 const TYPE_ICON: Record<NotificationType, React.ReactNode> = {
@@ -33,6 +33,11 @@ function formatNotificationTime(createdAt: string) {
     minute: "2-digit",
     hour12: false,
   });
+}
+
+function getActionTaken(payload: Record<string, unknown>) {
+  const value = payload?.action_taken;
+  return value === "DONE" || value === "SKIPPED" ? value : null;
 }
 
 export default function NotificationsTab() {
@@ -83,6 +88,42 @@ export default function NotificationsTab() {
       toast.success(updated_count > 0 ? "읽은 알림을 삭제했습니다." : "삭제할 읽은 알림이 없습니다.");
     } catch {
       toast.error("읽은 알림 삭제에 실패했습니다.");
+    }
+  }
+
+  async function handleMedicationConfirmationAction(
+    notification: ApiNotification,
+    status: "DONE" | "SKIPPED",
+  ) {
+    const scheduleItemId = String(notification.payload?.schedule_item_id ?? "");
+    if (!scheduleItemId) {
+      toast.error("복약 일정 정보를 찾지 못했습니다.");
+      return;
+    }
+
+    try {
+      await scheduleApi.updateStatus(scheduleItemId, status);
+      const updatedNotification = notification.is_read
+        ? notification
+        : await notificationApi.markAsRead(notification.id);
+      setNotifications((prev) =>
+        prev.map((item) =>
+          item.id === notification.id
+            ? {
+                ...updatedNotification,
+                is_read: true,
+                payload: {
+                  ...updatedNotification.payload,
+                  action_taken: status,
+                },
+              }
+            : item,
+        ),
+      );
+      refreshBadge();
+      toast.success(status === "DONE" ? "복약 완료로 기록했어요." : "건너뜀으로 기록했어요.");
+    } catch {
+      toast.error("복약 상태 업데이트에 실패했습니다.");
     }
   }
 
@@ -173,6 +214,35 @@ export default function NotificationsTab() {
                     <p className="text-xs text-gray-500 mt-0.5 whitespace-normal break-words leading-relaxed">
                       {n.message}
                     </p>
+                    {n.payload?.event === "medication_confirmation_required" && !n.is_read && !getActionTaken(n.payload) && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleMedicationConfirmationAction(n, "DONE");
+                          }}
+                          className="rounded-lg bg-green-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-green-600 transition-colors"
+                        >
+                          복약 확인
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleMedicationConfirmationAction(n, "SKIPPED");
+                          }}
+                          className="rounded-lg bg-amber-100 px-3 py-1.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-200 transition-colors"
+                        >
+                          건너뜀
+                        </button>
+                      </div>
+                    )}
+                    {n.payload?.event === "medication_confirmation_required" && getActionTaken(n.payload) && (
+                      <p className="mt-2 text-[11px] font-medium text-gray-400">
+                        {getActionTaken(n.payload) === "DONE" ? "복약 완료로 기록됨" : "건너뜀으로 기록됨"}
+                      </p>
+                    )}
                     <p className="text-[11px] text-gray-400 mt-1">
                       {formatNotificationTime(n.created_at)}
                     </p>
