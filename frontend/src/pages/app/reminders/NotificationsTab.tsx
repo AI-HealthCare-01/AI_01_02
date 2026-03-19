@@ -103,6 +103,12 @@ export default function NotificationsTab() {
 
     try {
       await scheduleApi.updateStatus(scheduleItemId, status);
+    } catch {
+      toast.error("복약 상태 업데이트에 실패했습니다.");
+      return;
+    }
+
+    try {
       const updatedNotification = notification.is_read
         ? notification
         : await notificationApi.markAsRead(notification.id);
@@ -121,10 +127,16 @@ export default function NotificationsTab() {
         ),
       );
       refreshBadge();
-      toast.success(status === "DONE" ? "복약 완료로 기록했어요." : "건너뜀으로 기록했어요.");
     } catch {
-      toast.error("복약 상태 업데이트에 실패했습니다.");
+      setNotifications((prev) =>
+        prev.map((item) =>
+          item.id === notification.id
+            ? { ...item, payload: { ...item.payload, action_taken: status } }
+            : item,
+        ),
+      );
     }
+    toast.success(status === "DONE" ? "복약 완료로 기록했어요." : "건너뜀으로 기록했어요.");
   }
 
   const recentNotifications = notifications.filter((n) => isWithinOneWeek(n.created_at));

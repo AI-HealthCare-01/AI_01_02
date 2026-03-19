@@ -323,7 +323,7 @@ function MedicationAccordion({
   const dosagePerOnce = parseDosagePerOnce(r.dose);
   const estimatedRemaining =
     dosagePerOnce != null && r.daily_intake_count != null && r.total_days != null
-      ? Math.max(0, dosagePerOnce * r.daily_intake_count * r.total_days - r.confirmed_intake_count)
+      ? Math.max(0, dosagePerOnce * r.daily_intake_count * r.total_days - r.confirmed_intake_count * dosagePerOnce)
       : null;
   const maxScheduleTimes =
     r.daily_intake_count != null && Number.isFinite(r.daily_intake_count)
