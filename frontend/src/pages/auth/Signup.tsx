@@ -23,6 +23,7 @@ export default function Signup() {
 
   const pwRules = [
     { label: "8자 이상", ok: form.password.length >= 8 },
+    { label: "128자 이하", ok: form.password.length <= 128 },
     { label: "영문 포함", ok: /[a-zA-Z]/.test(form.password) },
     { label: "숫자 포함", ok: /[0-9]/.test(form.password) },
     { label: "특수문자 포함", ok: /[^a-zA-Z0-9]/.test(form.password) },
