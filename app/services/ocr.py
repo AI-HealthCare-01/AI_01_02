@@ -13,6 +13,7 @@ from app.models.ocr import Document, DocumentType, OcrFailureCode, OcrJob, OcrJo
 from app.models.users import User
 from app.repositories.ocr_repository import OcrRepository
 from app.services.ocr_queue import OcrQueuePublisher
+from app.services.prescriptions import PrescriptionService
 from app.services.reminders import ReminderService
 
 
@@ -20,6 +21,7 @@ class OcrService:
     def __init__(self) -> None:
         self.repo = OcrRepository()
         self.queue_publisher = OcrQueuePublisher()
+        self.prescription_service = PrescriptionService()
         self.reminder_service = ReminderService()
 
     async def upload_document(self, *, user: User, document_type: DocumentType, file: UploadFile) -> Document:
@@ -183,6 +185,11 @@ class OcrService:
         if confirmed:
             meds = confirmed_result.get("extracted_medications")
             if isinstance(meds, list):
+                await self.prescription_service.sync_from_ocr_confirmation(
+                    user=user,
+                    source_ocr_job_id=job.id,
+                    medications=meds,
+                )
                 await self.reminder_service.sync_from_ocr_medications(user=user, medications=meds)
 
         return updated_job
@@ -217,6 +224,11 @@ class OcrService:
 
         meds = confirmed_payload.get("extracted_medications")
         if isinstance(meds, list):
+            await self.prescription_service.sync_from_ocr_confirmation(
+                user=user,
+                source_ocr_job_id=job.id,
+                medications=meds,
+            )
             await self.reminder_service.sync_from_ocr_medications(user=user, medications=meds)
 
         return updated_job

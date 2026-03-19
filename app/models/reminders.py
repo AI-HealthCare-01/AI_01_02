@@ -62,6 +62,7 @@ class ScheduleItem(models.Model):
     )
     category = fields.CharEnumField(enum_type=ScheduleItemCategory)
     title = fields.CharField(max_length=255)
+    medication_name = fields.CharField(max_length=255, null=True)
     scheduled_at = fields.DatetimeField()
     status = fields.CharEnumField(enum_type=ScheduleItemStatus, default=ScheduleItemStatus.PENDING)
     completed_at = fields.DatetimeField(null=True)
@@ -70,4 +71,4 @@ class ScheduleItem(models.Model):
 
     class Meta:
         table = "schedule_items"
-        indexes = (("user_id", "scheduled_at"), ("user_id", "status"), ("reminder_id",))
+        indexes = (("user_id", "scheduled_at"), ("user_id", "status"), ("reminder_id",), ("user_id", "medication_name"))

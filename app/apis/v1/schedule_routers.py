@@ -5,7 +5,12 @@ from fastapi import APIRouter, Depends, Path, Query, status
 from fastapi.responses import ORJSONResponse as Response
 
 from app.dependencies.security import get_request_user
-from app.dtos.schedules import DailyScheduleResponse, ScheduleItemResponse, ScheduleItemStatusUpdateRequest
+from app.dtos.schedules import (
+    DailyScheduleResponse,
+    ScheduleItemResponse,
+    ScheduleItemStatusUpdateRequest,
+    ScheduleMedicationResponse,
+)
 from app.models.users import User
 from app.services.schedules import ScheduleService
 
@@ -17,9 +22,23 @@ def _serialize_item(item) -> ScheduleItemResponse:  # type: ignore[no-untyped-de
         item_id=str(item.id),
         category=item.category,
         title=item.title,
+        medication_name=item.medication_name,
         scheduled_at=item.scheduled_at,
         status=item.status,
         completed_at=item.completed_at,
+    )
+
+
+def _serialize_medication(item) -> ScheduleMedicationResponse:  # type: ignore[no-untyped-def]
+    return ScheduleMedicationResponse(
+        drug_name=item.drug_name,
+        dose=item.dose,
+        frequency_per_day=item.frequency_per_day,
+        dosage_per_once=item.dosage_per_once,
+        intake_time=item.intake_time,
+        dispensed_date=item.dispensed_date,
+        total_days=item.total_days,
+        confidence=None,
     )
 
 
@@ -30,12 +49,13 @@ async def get_daily_schedule(
     target_date: Annotated[date, Query(alias="date")],
     timezone: Annotated[str | None, Query(max_length=50)] = None,
 ) -> Response:
-    items = await service.get_daily_schedule(user=user, target_date=target_date, timezone=timezone)
+    items, medications = await service.get_daily_schedule(user=user, target_date=target_date, timezone=timezone)
     done_count, total_count, adherence_rate = service.calculate_medication_adherence(items)
     return Response(
         DailyScheduleResponse(
             date=target_date,
             items=[_serialize_item(i) for i in items],
+            medications=[_serialize_medication(item) for item in medications],
             medication_done_count=done_count,
             medication_total_count=total_count,
             medication_adherence_rate_percent=adherence_rate,

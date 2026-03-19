@@ -18,6 +18,8 @@ const AiGuide = lazy(() => import("./pages/app/AiGuide"));
 const Chat = lazy(() => import("./pages/app/Chat"));
 const Medications = lazy(() => import("./pages/app/Medications"));
 const Records = lazy(() => import("./pages/app/Records"));
+const Settings = lazy(() => import("./pages/app/Settings"));
+const Support = lazy(() => import("./pages/app/Support"));
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   return getToken() ? <>{children}</> : <Navigate to="/login" replace />;
@@ -129,6 +131,8 @@ export default function App() {
           <Route path="chat" element={<Chat />} />
           <Route path="medications" element={<Medications />} />
           <Route path="records" element={<Records />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="support" element={<Support />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

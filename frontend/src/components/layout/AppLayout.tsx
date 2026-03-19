@@ -1,17 +1,19 @@
-import { Outlet, NavLink, useNavigate } from "react-router";
+import { Outlet, NavLink, useLocation, useNavigate } from "react-router";
 import {
   LayoutDashboard,
   BookOpen,
   MessageCircle,
   Pill,
   NotebookPen,
+  Settings,
+  CircleHelp,
+  MoreHorizontal,
   LogOut,
-  UserX,
 } from "lucide-react";
-import { authApi, clearAllUserData, userApi } from "@/lib/api";
-import { useState } from "react";
+import { authApi, clearAllUserData } from "@/lib/api";
+import { useEffect, useState } from "react";
 
-const NAV_ITEMS = [
+const PRIMARY_NAV_ITEMS = [
   { to: "/", label: "홈", icon: LayoutDashboard, end: true },
   { to: "/ai-guide", label: "AI 가이드", icon: BookOpen },
   { to: "/chat", label: "실시간 챗봇", icon: MessageCircle },
@@ -19,22 +21,23 @@ const NAV_ITEMS = [
   { to: "/records", label: "일상 기록", icon: NotebookPen },
 ];
 
+const AUXILIARY_NAV_ITEMS = [
+  { to: "/settings", label: "환경설정", icon: Settings },
+  { to: "/support", label: "문의하기", icon: CircleHelp },
+];
+
 export default function AppLayout() {
+  const location = useLocation();
   const navigate = useNavigate();
-  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+
+  useEffect(() => {
+    setShowMoreMenu(false);
+  }, [location.pathname]);
 
   function handleLogout() {
+    setShowMoreMenu(false);
     authApi.logout();
-    clearAllUserData();
-    navigate("/login");
-  }
-
-  async function handleWithdraw() {
-    try {
-      await userApi.deleteAccount();
-    } catch (err) {
-      console.warn("Account deletion request failed:", err);
-    }
     clearAllUserData();
     navigate("/login");
   }
@@ -59,7 +62,7 @@ export default function AppLayout() {
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-3 space-y-0.5 relative z-10">
-          {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
+          {PRIMARY_NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -78,8 +81,32 @@ export default function AppLayout() {
           ))}
         </nav>
 
-        {/* Logout / Withdraw */}
-        <div className="px-3 pb-4 space-y-0.5 relative z-10">
+        <div className="px-3 pb-3 relative z-10">
+          <p className="px-3.5 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+            보조 메뉴
+          </p>
+          <div className="space-y-0.5">
+            {AUXILIARY_NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                    isActive
+                      ? "bg-white text-green-700 shadow-sm"
+                      : "text-gray-500 hover:bg-white/50 hover:text-gray-700"
+                  }`
+                }
+              >
+                <Icon className="w-[18px] h-[18px] shrink-0" />
+                <span className="flex-1">{label}</span>
+              </NavLink>
+            ))}
+          </div>
+        </div>
+
+        {/* Logout */}
+        <div className="px-3 pb-4 space-y-0.5 relative z-10 border-t border-gray-200/50 pt-3 mx-3">
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 w-full px-3.5 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:bg-red-50 hover:text-red-500 transition-all duration-200"
@@ -87,47 +114,67 @@ export default function AppLayout() {
             <LogOut className="w-4 h-4 shrink-0" />
             로그아웃
           </button>
-          <button
-            onClick={() => setShowWithdraw(true)}
-            className="flex items-center gap-3 w-full px-3.5 py-2 rounded-xl text-xs font-medium text-gray-300 hover:bg-red-50 hover:text-red-400 transition-all duration-200"
-          >
-            <UserX className="w-3.5 h-3.5 shrink-0" />
-            회원 탈퇴
-          </button>
         </div>
       </aside>
 
-      {/* ── Withdraw modal ── */}
-      {showWithdraw && (
-        <div className="fixed inset-0 bg-black/25 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-6 text-center animate-page-enter">
-            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
-              <UserX className="w-5 h-5 text-red-400" />
-            </div>
-            <h3 className="text-base font-bold text-gray-800 mb-1">회원 탈퇴</h3>
-            <p className="text-sm text-gray-400 mb-6">
-              탈퇴 시 모든 데이터가 비활성화됩니다.<br />정말 탈퇴하시겠습니까?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowWithdraw(false)}
-                className="flex-1 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleWithdraw}
-                className="flex-1 py-2.5 text-sm font-medium bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors"
-              >
-                탈퇴하기
-              </button>
-            </div>
+      {/* ── Mobile more menu ── */}
+      <div className="md:hidden fixed inset-x-0 top-0 z-50 px-4 pt-3">
+        <div className="mx-auto flex max-w-5xl justify-end">
+          <div className="relative">
+            <button
+              type="button"
+              aria-label="더보기"
+              aria-expanded={showMoreMenu}
+              onClick={() => setShowMoreMenu((prev) => !prev)}
+              className="flex items-center gap-2 rounded-2xl border border-gray-200/70 bg-white/90 px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm backdrop-blur-sm transition-all duration-200 hover:bg-white"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+              더보기
+            </button>
+
+            {showMoreMenu && (
+              <>
+                <button
+                  type="button"
+                  aria-label="더보기 닫기"
+                  className="fixed inset-0 z-40 bg-black/10"
+                  onClick={() => setShowMoreMenu(false)}
+                />
+                <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl border border-gray-200 bg-white p-2 shadow-xl">
+                  {AUXILIARY_NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      onClick={() => setShowMoreMenu(false)}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-all duration-200 ${
+                          isActive
+                            ? "bg-green-50 text-green-700"
+                            : "text-gray-600 hover:bg-gray-50"
+                        }`
+                      }
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span>{label}</span>
+                    </NavLink>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-gray-600 transition-all duration-200 hover:bg-red-50 hover:text-red-500"
+                  >
+                    <LogOut className="w-4 h-4 shrink-0" />
+                    <span>로그아웃</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
       {/* ── Main content ── */}
-      <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+      <main className="flex-1 overflow-y-auto pb-20 pt-[4.5rem] md:pb-0 md:pt-0">
         <div className="min-h-full animate-page-enter">
           <Outlet />
         </div>
@@ -135,7 +182,7 @@ export default function AppLayout() {
 
       {/* ── Bottom tab bar (mobile) ── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 glass border-t border-gray-200/40 flex z-40">
-        {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
+        {PRIMARY_NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}

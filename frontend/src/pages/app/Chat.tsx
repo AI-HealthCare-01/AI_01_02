@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { Send, Plus, Loader2, MessageCircle, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { chatApi, type ChatReference } from "@/lib/api";
@@ -59,6 +60,7 @@ interface Message {
 }
 
 export default function Chat() {
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<StoredSession[]>(loadSessions);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -194,6 +196,14 @@ export default function Chat() {
     }
   }
 
+  function handleBack() {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate("/");
+  }
+
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
   return (
@@ -257,7 +267,7 @@ export default function Chat() {
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-200/40 bg-white/60 backdrop-blur-sm">
           <button
-            onClick={() => setMobileView("list")}
+            onClick={handleBack}
             className="md:hidden p-1 text-gray-400 hover:text-gray-600"
           >
             <ChevronLeft className="w-5 h-5" />
@@ -267,6 +277,13 @@ export default function Chat() {
           </div>
           <span className="text-base font-bold text-gray-800">loguri AI</span>
           <div className="flex-1" />
+          <button
+            type="button"
+            onClick={() => setMobileView("list")}
+            className="md:hidden text-xs text-gray-400 hover:text-gray-600 transition-colors font-medium"
+          >
+            목록
+          </button>
           {activeSession && (
             <button
               onClick={deleteCurrentSession}

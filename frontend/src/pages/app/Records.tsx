@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Edit2, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Edit2, CalendarDays, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   scheduleApi,
   profileApi,
-  ocrApi,
   guideApi,
   diaryApi,
   HealthProfile,
@@ -51,9 +50,10 @@ export default function Records() {
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [weeklyRates, setWeeklyRates] = useState<Array<number | null>>(Array(7).fill(null));
   const [profile, setProfile] = useState<HealthProfile | null>(null);
-  const [ocrMeds, setOcrMeds] = useState<OcrMedication[]>([]);
+  const [dailyMeds, setDailyMeds] = useState<OcrMedication[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
+  const [showLifestyleInfo, setShowLifestyleInfo] = useState(false);
   const [dailyDiary, setDailyDiary] = useState("");
   const weekCacheRef = useRef<Record<string, Awaited<ReturnType<typeof scheduleApi.getDaily>>[]>>({});
 
@@ -61,9 +61,20 @@ export default function Records() {
     try {
       const r = await scheduleApi.getDaily(toDateStr(date));
       setScheduleItems(r.items);
+      setDailyMeds(r.medications);
+      return r;
     } catch (err) {
       console.warn("Failed to load schedule:", err);
       setScheduleItems([]);
+      setDailyMeds([]);
+      return {
+        date: toDateStr(date),
+        items: [],
+        medications: [],
+        medication_done_count: 0,
+        medication_total_count: 0,
+        medication_adherence_rate_percent: 0,
+      };
     }
   }
 
@@ -71,12 +82,7 @@ export default function Records() {
     return `${WEEKLY_RATE_STORAGE_PREFIX}:${toDateStr(getMondayOfWeek(date))}`;
   }
 
-  async function loadWeeklyRates(date: Date, meds: OcrMedication[]) {
-    if (meds.length === 0) {
-      setWeeklyRates(Array(7).fill(null));
-      return;
-    }
-
+  async function loadWeeklyRates(date: Date) {
     const monday = getMondayOfWeek(date);
     const mondayKey = toDateStr(monday);
     const weekDates = Array.from({ length: 7 }, (_, i) => {
@@ -90,13 +96,22 @@ export default function Records() {
       dailySchedules = weekCacheRef.current[mondayKey];
     } else {
       dailySchedules = await Promise.all(
-        weekDates.map((d) => scheduleApi.getDaily(toDateStr(d)).catch(() => ({ date: toDateStr(d), items: [] }))),
+        weekDates.map((d) => scheduleApi.getDaily(toDateStr(d)).catch(() => ({
+          date: toDateStr(d),
+          items: [],
+          medications: [],
+          medication_done_count: 0,
+          medication_total_count: 0,
+          medication_adherence_rate_percent: 0,
+        }))),
       );
       weekCacheRef.current[mondayKey] = dailySchedules;
     }
 
     const computedRates = weekDates.map((d, i) => {
       const dateStr = toDateStr(d);
+      const meds = dailySchedules[i].medications ?? [];
+      if (meds.length === 0) return null;
       const medicationItems = dailySchedules[i].items
         .filter((item) => item.category === "MEDICATION")
         .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
@@ -114,7 +129,13 @@ export default function Records() {
 
       const completed = meds.reduce((acc, med) => {
         const scheduleItem = medicationItems.find(
-          (si) => si.title.toLowerCase().includes(med.drug_name.toLowerCase()),
+          (si) => {
+            const medicationName = si.medication_name ?? si.title;
+            if (medicationName.toLowerCase() !== med.drug_name.toLowerCase()) return false;
+            if (!med.intake_time) return true;
+            const scheduledTime = new Date(si.scheduled_at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+            return scheduledTime === med.intake_time;
+          },
         );
         if (scheduleItem) return acc + (scheduleItem.status === "DONE" ? 1 : 0);
         const manualKey = `${med.drug_name}-${med.intake_time ?? ""}`;
@@ -141,26 +162,7 @@ export default function Records() {
     }
   }
 
-  async function loadOcrMedications() {
-    const jobId = localStorage.getItem("ocr_job_id");
-    if (!jobId) {
-      setOcrMeds([]);
-      return [] as OcrMedication[];
-    }
-    try {
-      const res = await ocrApi.getJobResult(jobId);
-      const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
-      const normalized = Array.isArray(meds) ? meds : [];
-      setOcrMeds(normalized);
-      return normalized;
-    } catch (err) {
-      console.warn("Failed to load OCR medications:", err);
-      setOcrMeds([]);
-      return [] as OcrMedication[];
-    }
-  }
-
-  async function updateMedicationStatus(itemId: string, status: "PENDING" | "DONE") {
+  async function updateMedicationStatus(itemId: string, status: "PENDING" | "DONE" | "SKIPPED") {
     try {
       const updated = await scheduleApi.updateStatus(itemId, status);
       setScheduleItems((prev) => prev.map((it) => (it.item_id === itemId ? updated : it)));
@@ -183,8 +185,8 @@ export default function Records() {
 
   async function load(date: Date) {
     setLoading(true);
-    const [, , meds] = await Promise.all([loadSchedule(date), loadProfile(), loadOcrMedications()]);
-    await loadWeeklyRates(date, meds);
+    await Promise.all([loadSchedule(date), loadProfile()]);
+    await loadWeeklyRates(date);
     setLoading(false);
   }
 
@@ -386,10 +388,28 @@ export default function Records() {
             )}
           </div>
 
+          <button
+            type="button"
+            onClick={() => setShowLifestyleInfo(true)}
+            className="md:hidden card-warm w-full p-4 text-left transition-all duration-200 hover:shadow-md"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-gray-700">입력된 일상정보</h3>
+                <p className="text-sm text-gray-400 mt-1 leading-relaxed">
+                  현재 저장된 일상정보 전체를 바로 확인할 수 있습니다.
+                </p>
+              </div>
+              <span className="shrink-0 rounded-xl bg-green-100 px-4 py-2.5 text-sm font-bold text-green-700 shadow-sm">
+                전체 보기
+              </span>
+            </div>
+          </button>
+
           <MedicationScheduleCard
             title="복약 일정"
             loading={loading}
-            ocrMeds={ocrMeds}
+            medications={dailyMeds}
             scheduleItems={scheduleItems}
             storageDateKey={toDateStr(selectedDate)}
             onUpdateScheduleStatus={updateMedicationStatus}
@@ -448,36 +468,72 @@ export default function Records() {
           </div>
 
           {/* 입력된 일상정보 */}
-          <div className="card-warm p-5">
+          <div className="hidden md:block card-warm p-5">
             <h3 className="text-sm font-bold text-gray-700 mb-3">입력된 일상정보</h3>
-            <div className="rounded-xl border border-gray-200 bg-white/70 p-3">
-              {!profile ? (
-                <p className="text-sm text-gray-400">온보딩 정보가 아직 없습니다.</p>
-              ) : (
-                <div className="space-y-2 text-sm text-gray-700">
-                  <InfoRow label="키/몸무게" value={`${profile.basic_info.height_cm}cm / ${profile.basic_info.weight_kg}kg`} />
-                  <InfoRow label="운동 빈도" value={`주 ${profile.lifestyle.exercise_frequency_per_week}회`} />
-                  <InfoRow label="PC/스마트폰" value={`${profile.lifestyle.pc_hours_per_day}h / ${profile.lifestyle.smartphone_hours_per_day}h`} />
-                  <InfoRow label="커피" value={`${profile.lifestyle.caffeine_cups_per_day}잔`} />
-                  <InfoRow label="흡연" value={smokingLabel} />
-                  <InfoRow label="음주" value={alcoholLabel} />
-                  <InfoRow label="취침/기상" value={`${profile.sleep_input.bed_time} / ${profile.sleep_input.wake_time}`} />
-                  <InfoRow label="식사 패턴" value={regularMealsLabel} />
-                </div>
-              )}
-            </div>
+            <LifestyleInfoContent
+              profile={profile}
+              smokingLabel={smokingLabel}
+              alcoholLabel={alcoholLabel}
+              regularMealsLabel={regularMealsLabel}
+            />
           </div>
 
           {/* 일상 정보 수정 버튼 */}
           <button
             onClick={() => setShowEdit(true)}
-            className="w-full py-3 bg-red-400 hover:bg-red-500 text-white text-sm font-bold rounded-xl hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2"
+            className="hidden md:flex w-full py-3 bg-red-400 hover:bg-red-500 text-white text-sm font-bold rounded-xl hover:shadow-md transition-all duration-200 items-center justify-center gap-2"
           >
             <Edit2 className="w-4 h-4" />
             일상 정보 수정하기
           </button>
         </div>
       </div>
+
+      {showLifestyleInfo && (
+        <div className="md:hidden fixed inset-0 z-[55]">
+          <button
+            type="button"
+            aria-label="입력된 일상정보 닫기"
+            className="absolute inset-0 bg-black/25 backdrop-blur-sm"
+            onClick={() => setShowLifestyleInfo(false)}
+          />
+          <div className="absolute inset-x-0 bottom-0 max-h-[78vh] overflow-y-auto rounded-t-[28px] bg-white p-5 shadow-2xl animate-page-enter">
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-gray-200" />
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-gray-800">입력된 일상정보</h3>
+                <p className="text-sm text-gray-400 mt-1">현재 저장된 정보를 그대로 확인할 수 있습니다.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLifestyleInfo(false)}
+                className="rounded-xl p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <LifestyleInfoContent
+              profile={profile}
+              smokingLabel={smokingLabel}
+              alcoholLabel={alcoholLabel}
+              regularMealsLabel={regularMealsLabel}
+            />
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowLifestyleInfo(false);
+                setShowEdit(true);
+              }}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-red-400 py-3 text-sm font-bold text-white transition-all duration-200 hover:bg-red-500"
+            >
+              <Edit2 className="w-4 h-4" />
+              일상 정보 수정하기
+            </button>
+          </div>
+        </div>
+      )}
 
       {showEdit && (
         <EditModal
@@ -849,6 +905,37 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-1.5">
       <span className="text-xs text-gray-500">{label}</span>
       <span className="text-sm font-medium text-gray-700 text-right">{value}</span>
+    </div>
+  );
+}
+
+function LifestyleInfoContent({
+  profile,
+  smokingLabel,
+  alcoholLabel,
+  regularMealsLabel,
+}: {
+  profile: HealthProfile | null;
+  smokingLabel: string;
+  alcoholLabel: string;
+  regularMealsLabel: string;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white/70 p-3">
+      {!profile ? (
+        <p className="text-sm text-gray-400">온보딩 정보가 아직 없습니다.</p>
+      ) : (
+        <div className="space-y-2 text-sm text-gray-700">
+          <InfoRow label="키/몸무게" value={`${profile.basic_info.height_cm}cm / ${profile.basic_info.weight_kg}kg`} />
+          <InfoRow label="운동 빈도" value={`주 ${profile.lifestyle.exercise_frequency_per_week}회`} />
+          <InfoRow label="PC/스마트폰" value={`${profile.lifestyle.pc_hours_per_day}h / ${profile.lifestyle.smartphone_hours_per_day}h`} />
+          <InfoRow label="커피" value={`${profile.lifestyle.caffeine_cups_per_day}잔`} />
+          <InfoRow label="흡연" value={smokingLabel} />
+          <InfoRow label="음주" value={alcoholLabel} />
+          <InfoRow label="취침/기상" value={`${profile.sleep_input.bed_time} / ${profile.sleep_input.wake_time}`} />
+          <InfoRow label="식사 패턴" value={regularMealsLabel} />
+        </div>
+      )}
     </div>
   );
 }

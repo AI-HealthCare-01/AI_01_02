@@ -5,16 +5,18 @@ from app.core import config
 from app.core.exceptions import AppException, ErrorCode
 from app.core.logger import default_logger as logger
 from app.dtos.schedules import ScheduleItemStatusUpdateRequest
-from app.models.reminders import MedicationReminder, ScheduleItem, ScheduleItemCategory, ScheduleItemStatus
+from app.models.reminders import ScheduleItem, ScheduleItemCategory, ScheduleItemStatus
 from app.models.users import User
 from app.services.notification_settings import NotificationSettingService
+from app.services.prescriptions import PrescriptionService
 
 
 class ScheduleService:
     def __init__(self) -> None:
         self.notification_setting_service = NotificationSettingService()
+        self.prescription_service = PrescriptionService()
 
-    async def get_daily_schedule(self, *, user: User, target_date: date, timezone: str | None) -> list[ScheduleItem]:
+    async def get_daily_schedule(self, *, user: User, target_date: date, timezone: str | None) -> tuple[list[ScheduleItem], list]:
         try:
             tz = ZoneInfo(timezone) if timezone else config.TIMEZONE
         except Exception:  # noqa: BLE001
@@ -25,11 +27,13 @@ class ScheduleService:
         day_end = datetime.combine(target_date, time.max).replace(tzinfo=tz)
 
         await self.schedule_sync(user=user, target_date=target_date, tz=tz)
-        return await ScheduleItem.filter(
+        items = await ScheduleItem.filter(
             user_id=user.id,
             scheduled_at__gte=day_start,
             scheduled_at__lte=day_end,
         ).order_by("scheduled_at")
+        medications = await self.prescription_service.build_daily_medication_entries(user=user, target_date=target_date)
+        return items, medications
 
     async def schedule_sync(self, *, user: User, target_date: date, tz) -> None:
         setting = await self.notification_setting_service.get_or_create(user=user)
@@ -46,7 +50,8 @@ class ScheduleService:
         )
 
         existing_map = {
-            (item.category, item.title, item.scheduled_at, item.reminder_id): item for item in existing_items
+            (item.category, item.title, item.scheduled_at, item.reminder_id, item.medication_name): item
+            for item in existing_items
         }
         desired_keys = set(desired_specs.keys())
         existing_keys = set(existing_map.keys())
@@ -62,12 +67,13 @@ class ScheduleService:
                     ScheduleItem(
                         user_id=user.id,
                         reminder_id=reminder_id,
+                        medication_name=medication_name,
                         scheduled_at=scheduled_at,
                         category=category,
                         title=title,
                         status=ScheduleItemStatus.PENDING,
                     )
-                    for category, title, scheduled_at, reminder_id in create_keys
+                    for category, title, scheduled_at, reminder_id, medication_name in create_keys
                 ]
             )
 
@@ -93,20 +99,26 @@ class ScheduleService:
         for category, title, time_str in default_items:
             h, m = map(int, time_str.split(":"))
             scheduled_at = datetime.combine(target_date, time(h, m)).replace(tzinfo=tz)
-            desired[(category, title, scheduled_at, None)] = None
+            desired[(category, title, scheduled_at, None, None)] = None
 
         if setting.medication_alarm_enabled:
-            reminders = await MedicationReminder.filter(user_id=user.id, enabled=True)
-            for reminder in reminders:
-                if reminder.start_date and target_date < reminder.start_date:
-                    continue
-                if reminder.end_date and target_date > reminder.end_date:
-                    continue
-                for time_str in reminder.schedule_times:
+            prescription_medications = await self.prescription_service.get_medications_for_date(
+                user=user,
+                target_date=target_date,
+            )
+            for medication in prescription_medications:
+                schedule_times = medication.schedule_times if isinstance(medication.schedule_times, list) else []
+                for time_str in schedule_times:
                     try:
                         h, m = map(int, str(time_str).split(":"))
                         scheduled_at = datetime.combine(target_date, time(h, m)).replace(tzinfo=tz)
-                        desired[(ScheduleItemCategory.MEDICATION, "복약", scheduled_at, reminder.id)] = None
+                        desired[(
+                            ScheduleItemCategory.MEDICATION,
+                            "복약",
+                            scheduled_at,
+                            None,
+                            medication.medication_name,
+                        )] = None
                     except (ValueError, AttributeError):
                         continue
         return desired

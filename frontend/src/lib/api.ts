@@ -189,6 +189,7 @@ export interface ScheduleItem {
   item_id: string;
   category: string;
   title: string;
+  medication_name?: string | null;
   scheduled_at: string;
   status: "PENDING" | "DONE" | "SKIPPED";
   completed_at: string | null;
@@ -196,7 +197,14 @@ export interface ScheduleItem {
 
 export const scheduleApi = {
   getDaily: (date: string) =>
-    request<{ date: string; items: ScheduleItem[] }>(`/schedules/daily?date=${date}`),
+    request<{
+      date: string;
+      items: ScheduleItem[];
+      medications: OcrMedication[];
+      medication_done_count: number;
+      medication_total_count: number;
+      medication_adherence_rate_percent: number;
+    }>(`/schedules/daily?date=${date}`),
 
   updateStatus: (itemId: string, status: "PENDING" | "DONE" | "SKIPPED") =>
     request<ScheduleItem>(`/schedules/items/${itemId}/status`, {
@@ -594,6 +602,15 @@ export interface ApiNotification {
   created_at: string;
 }
 
+export interface NotificationSettings {
+  home_schedule_enabled: boolean;
+  meal_alarm_enabled: boolean;
+  medication_alarm_enabled: boolean;
+  exercise_alarm_enabled: boolean;
+  sleep_alarm_enabled: boolean;
+  medication_dday_alarm_enabled: boolean;
+}
+
 export const notificationApi = {
   getUnreadCount: () =>
     request<{ unread_count: number }>("/notifications/unread-count"),
@@ -615,6 +632,15 @@ export const notificationApi = {
 
   deleteRead: () =>
     request<{ updated_count: number }>("/notifications/read", { method: "DELETE" }),
+
+  getSettings: () =>
+    request<NotificationSettings>("/notifications/settings"),
+
+  updateSettings: (data: Partial<NotificationSettings>) =>
+    request<NotificationSettings>("/notifications/settings", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 };
 
 // ── Diaries ──────────────────────────────────────────

@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { RefreshCw, Pill, BookOpen, MessageCircle, NotebookPen, Upload } from "lucide-react";
+import { Pill, BookOpen, MessageCircle, NotebookPen, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   scheduleApi,
   userApi,
   reminderApi,
-  ocrApi,
   OcrMedication,
   ScheduleItem,
   UserInfo,
@@ -29,7 +28,7 @@ export default function Dashboard() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [dday, setDday] = useState<DdayReminder[]>([]);
-  const [ocrMeds, setOcrMeds] = useState<OcrMedication[]>([]);
+  const [dailyMeds, setDailyMeds] = useState<OcrMedication[]>([]);
   const [loading, setLoading] = useState(true);
   const [todayKey, setTodayKey] = useState(() => toDateStr(new Date()));
   const today = useMemo(() => new Date(todayKey + "T00:00:00"), [todayKey]);
@@ -48,21 +47,6 @@ export default function Dashboard() {
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
-  async function loadOcrMedications() {
-    const jobId = localStorage.getItem("ocr_job_id");
-    if (!jobId) {
-      setOcrMeds([]);
-      return;
-    }
-    try {
-      const res = await ocrApi.getJobResult(jobId);
-      const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
-      setOcrMeds(Array.isArray(meds) ? meds : []);
-    } catch {
-      setOcrMeds([]);
-    }
-  }
-
   async function load() {
     setLoading(true);
     try {
@@ -73,18 +57,19 @@ export default function Dashboard() {
       ]);
       setUser(userData);
       setItems(scheduleData.items);
+      setDailyMeds(scheduleData.medications);
       setDday(ddayData.items);
     } catch {
       // non-critical
+      setDailyMeds([]);
     } finally {
       setLoading(false);
     }
-    await loadOcrMedications();
   }
 
   useEffect(() => { load(); }, [todayKey]); // eslint-disable-line
 
-  async function updateMedicationStatus(itemId: string, status: "PENDING" | "DONE") {
+  async function updateMedicationStatus(itemId: string, status: "PENDING" | "DONE" | "SKIPPED") {
     try {
       const updated = await scheduleApi.updateStatus(itemId, status);
       setItems((prev) => prev.map((it) => (it.item_id === itemId ? updated : it)));
@@ -103,19 +88,13 @@ export default function Dashboard() {
   return (
     <div className="min-h-full p-4 md:p-8 max-w-3xl mx-auto space-y-5 stagger-children">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div>
         <div>
           <h1 className="text-2xl font-bold text-gray-800">
             {user ? `안녕하세요, ${user.name}님` : "안녕하세요"}
           </h1>
           <p className="text-sm text-gray-400 mt-0.5 font-medium">{dateLabel}</p>
         </div>
-        <button
-          onClick={load}
-          className="p-2.5 rounded-xl hover:bg-white text-gray-400 hover:text-gray-600 hover:shadow-sm transition-all duration-200"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
       </div>
 
       {/* D-day alert banner */}
@@ -159,7 +138,7 @@ export default function Dashboard() {
       <MedicationScheduleCard
         title="복약 일정"
         loading={loading}
-        ocrMeds={ocrMeds}
+        medications={dailyMeds}
         scheduleItems={items}
         storageDateKey={todayKey}
         onUpdateScheduleStatus={updateMedicationStatus}
