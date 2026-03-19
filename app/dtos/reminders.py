@@ -25,6 +25,8 @@ class ReminderResponse(BaseModel):
     dispensed_date: date | None
     total_days: int | None
     daily_intake_count: float | None
+    confirmed_intake_count: int
+    responded_intake_count: int
     enabled: bool
     created_at: datetime
     updated_at: datetime

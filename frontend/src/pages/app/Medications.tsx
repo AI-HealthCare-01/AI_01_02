@@ -4,12 +4,6 @@ import { Pill, ChevronDown, ChevronUp, AlertTriangle, Upload, Pencil, X, Trash2,
 import { toast } from "sonner";
 import { reminderApi, guideApi, Reminder, DdayReminder, GuideJobResult } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
-import { toDateStr, getMondayOfWeek } from "@/lib/dateUtils";
-
-// ── 주간 복약률 ─────────────────────────────────────────────────────────────
-
-const DOW_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
-const WEEKLY_RATE_STORAGE_PREFIX = "weekly_med_rate";
 
 const TIME_OPTIONS = [
   { label: "아침 (08:00)", value: "08:00" },
@@ -20,6 +14,14 @@ const TIME_OPTIONS = [
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
 const MINUTE_OPTIONS = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
 
+function parseDosagePerOnce(doseText: string | null | undefined) {
+  if (!doseText) return null;
+  const match = doseText.match(/(\d+(?:\.\d+)?)/);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────────────
 
 export default function Medications() {
@@ -27,29 +29,9 @@ export default function Medications() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [ddayMap, setDdayMap] = useState<Record<string, DdayReminder>>({});
   const [guide, setGuide] = useState<GuideJobResult | null>(null);
-  const [weeklyRates, setWeeklyRates] = useState<Array<number | null>>(Array(7).fill(null));
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-
-  function loadWeeklyRates() {
-    try {
-      const key = `${WEEKLY_RATE_STORAGE_PREFIX}:${toDateStr(getMondayOfWeek(new Date()))}`;
-      const raw = localStorage.getItem(key);
-      if (!raw) {
-        setWeeklyRates(Array(7).fill(null));
-        return;
-      }
-      const parsed = JSON.parse(raw) as Array<number | null>;
-      if (!Array.isArray(parsed) || parsed.length !== 7) {
-        setWeeklyRates(Array(7).fill(null));
-        return;
-      }
-      setWeeklyRates(parsed);
-    } catch {
-      setWeeklyRates(Array(7).fill(null));
-    }
-  }
 
   async function reload(initial = false) {
     try {
@@ -84,7 +66,6 @@ export default function Medications() {
           }
         } catch (err) { console.warn("Failed to load medication guide:", err); }
       }
-      loadWeeklyRates();
     }
     init();
   }, []); // eslint-disable-line
@@ -136,9 +117,17 @@ export default function Medications() {
   const active = reminders.filter((r) => r.enabled);
   const inactive = reminders.filter((r) => !r.enabled);
   const ddayWarnings = Object.values(ddayMap).filter((d) => d.remaining_days <= 7);
-  const weeklyRatesWithValues = weeklyRates.filter((v): v is number => v !== null);
-  const weeklyAverageRate = weeklyRatesWithValues.length > 0
-    ? Math.round(weeklyRatesWithValues.reduce((sum, v) => sum + v, 0) / weeklyRatesWithValues.length)
+  const totalPlannedIntakes = active.reduce((sum, reminder) => {
+    if (reminder.daily_intake_count == null || reminder.total_days == null) return sum;
+    return sum + reminder.daily_intake_count * reminder.total_days;
+  }, 0);
+  const totalConfirmedIntakes = active.reduce((sum, reminder) => sum + reminder.confirmed_intake_count, 0);
+  const totalRespondedIntakes = active.reduce((sum, reminder) => sum + reminder.responded_intake_count, 0);
+  const overallAdherenceRate = totalPlannedIntakes > 0
+    ? Math.round((totalConfirmedIntakes / totalPlannedIntakes) * 100)
+    : null;
+  const overallRecordRate = totalPlannedIntakes > 0
+    ? Math.round((totalRespondedIntakes / totalPlannedIntakes) * 100)
     : null;
 
   return (
@@ -231,31 +220,28 @@ export default function Medications() {
 
         {/* ── 우측 패널 ── */}
         <div className="w-full lg:w-64 shrink-0 space-y-3">
-          {/* 이번 주 복약 */}
+          {/* 총 복약 현황 */}
           <div className="card-warm rounded-xl p-5">
-            <h3 className="text-sm font-bold text-gray-700 mb-4">이번 주 복약</h3>
-            <div className="space-y-2">
-              {DOW_LABELS.map((label, i) => (
-                <div key={label} className="flex items-center gap-3">
-                  <span className="text-xs text-gray-500 w-4">{label}</span>
-                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-green-500"
-                      style={{ width: `${weeklyRates[i] ?? 0}%` }}
-                    />
-                  </div>
-                  <span className="text-xs font-semibold text-gray-600 w-10 text-right">
-                    {weeklyRates[i] !== null ? `${weeklyRates[i]}%` : "-"}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-              <span className="text-sm font-semibold text-gray-600">주간 평균 복약율</span>
-              <span className="text-lg font-bold text-green-600">
-                {weeklyAverageRate !== null ? `${weeklyAverageRate}%` : "—"}
-              </span>
+            <h3 className="text-sm font-bold text-gray-700 mb-4">처방 기준 복약 현황</h3>
+            <div className="space-y-3">
+              <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3">
+                <p className="text-xs font-semibold text-green-700 mb-1">총 복용율</p>
+                <p className="text-2xl font-bold text-green-800">
+                  {overallAdherenceRate !== null ? `${overallAdherenceRate}%` : "—"}
+                </p>
+                <p className="text-[11px] text-green-700 mt-1">
+                  완료 {totalConfirmedIntakes} / 예정 {totalPlannedIntakes || 0}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+                <p className="text-xs font-semibold text-gray-600 mb-1">기록률</p>
+                <p className="text-2xl font-bold text-gray-800">
+                  {overallRecordRate !== null ? `${overallRecordRate}%` : "—"}
+                </p>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  응답 {totalRespondedIntakes} / 예정 {totalPlannedIntakes || 0}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -334,9 +320,11 @@ function MedicationAccordion({
     }
   }, [editing, r]);
 
-  // 남은 약 갯수 추정: remaining_days × 하루 복용 횟수
+  const dosagePerOnce = parseDosagePerOnce(r.dose);
   const estimatedRemaining =
-    dday != null ? dday.remaining_days * (r.schedule_times.length || 1) : null;
+    dosagePerOnce != null && r.daily_intake_count != null && r.total_days != null
+      ? Math.max(0, dosagePerOnce * r.daily_intake_count * r.total_days - r.confirmed_intake_count)
+      : null;
   const maxScheduleTimes =
     r.daily_intake_count != null && Number.isFinite(r.daily_intake_count)
       ? Math.max(1, Math.floor(r.daily_intake_count))

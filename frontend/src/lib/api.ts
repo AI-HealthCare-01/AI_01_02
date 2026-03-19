@@ -538,6 +538,8 @@ export interface Reminder {
   dispensed_date: string | null;
   total_days: number | null;
   daily_intake_count: number | null;
+  confirmed_intake_count: number;
+  responded_intake_count: number;
   enabled: boolean;
   created_at: string;
   updated_at: string;
