@@ -74,6 +74,9 @@ export default function Medications() {
       }
     }
     init();
+
+    // 온보딩에서 전달된 state를 소비하여 새로고침 시 재발 방지
+    if (setupReminders) window.history.replaceState({}, "");
   }, []); // eslint-disable-line
 
   async function handleSave(id: string, data: {
