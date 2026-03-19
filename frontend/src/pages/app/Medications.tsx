@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { Pill, ChevronDown, ChevronUp, AlertTriangle, Upload, Pencil, X, Trash2, Plus, Bell, Clock } from "lucide-react";
 import { toast } from "sonner";
-import { reminderApi, guideApi, Reminder, DdayReminder, GuideJobResult } from "@/lib/api";
+import { reminderApi, Reminder, DdayReminder } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
 
 const TIME_OPTIONS = [
@@ -30,7 +30,6 @@ export default function Medications() {
   const setupReminders = (location.state as { setupReminders?: boolean })?.setupReminders === true;
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [ddayMap, setDdayMap] = useState<Record<string, DdayReminder>>({});
-  const [guide, setGuide] = useState<GuideJobResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -61,18 +60,7 @@ export default function Medications() {
     async function init() {
       await reload(true);
 
-      // 가이드 & 주간 복약률 (비동기)
-      const jobId = localStorage.getItem("guide_job_id");
-      if (jobId) {
-        try {
-          const s = await guideApi.getJobStatus(jobId);
-          if (s.status === "SUCCEEDED") {
-            const r = await guideApi.getJobResult(jobId);
-            setGuide(r);
-          }
-        } catch (err) { console.warn("Failed to load medication guide:", err); }
-      }
-    }
+}
     init();
 
     // 온보딩에서 전달된 state를 소비하여 새로고침 시 재발 방지
@@ -107,21 +95,6 @@ export default function Medications() {
       toast.error(toUserMessage(err));
     }
   }
-
-  // 가이드 데이터를 drug_name 기준 맵으로 파싱 (useMemo로 매 렌더 파싱 방지)
-  const guideMap = useMemo(() => {
-    const map: Record<string, MedGuideItem> = {};
-    if (!guide) return map;
-    try {
-      const parsed = JSON.parse(guide.medication_guidance);
-      if (Array.isArray(parsed)) {
-        for (const item of parsed as MedGuideItem[]) {
-          if (item.drug_name) map[item.drug_name] = item;
-        }
-      }
-    } catch (err) { console.warn("Failed to parse medication guidance JSON:", err); }
-    return map;
-  }, [guide]);
 
   const active = reminders.filter((r) => r.enabled);
   const inactive = reminders.filter((r) => !r.enabled);
@@ -212,7 +185,7 @@ export default function Medications() {
                         key={r.id}
                         reminder={r}
                         dday={ddayMap[r.medication_name]}
-                        guideItem={guideMap[r.medication_name]}
+
                         expanded={expandedId === r.id}
                         editing={editingId === r.id}
                         onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
@@ -235,7 +208,7 @@ export default function Medications() {
                         key={r.id}
                         reminder={r}
                         dday={ddayMap[r.medication_name]}
-                        guideItem={guideMap[r.medication_name]}
+
                         expanded={expandedId === r.id}
                         editing={editingId === r.id}
                         onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
@@ -297,7 +270,6 @@ export default function Medications() {
 function MedicationAccordion({
   reminder: r,
   dday,
-  guideItem,
   expanded,
   editing,
   onToggle,
@@ -307,7 +279,6 @@ function MedicationAccordion({
 }: {
   reminder: Reminder;
   dday?: DdayReminder;
-  guideItem?: MedGuideItem;
   expanded: boolean;
   editing: boolean;
   onToggle: () => void;
@@ -476,22 +447,6 @@ function MedicationAccordion({
             <p className="text-xs font-medium text-gray-400 mt-2">
               {r.start_date ?? "—"} ~ {r.end_date ?? "계속"}
             </p>
-          )}
-
-          {/* 약물 상세 정보 (가이드) */}
-          {guideItem && (guideItem.precautions || guideItem.side_effects) && (
-            <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
-              {guideItem.precautions && (
-                <p className="text-xs text-amber-600">
-                  <span className="font-semibold">주의:</span> {guideItem.precautions}
-                </p>
-              )}
-              {guideItem.side_effects && (
-                <p className="text-xs text-red-400">
-                  <span className="font-semibold">부작용:</span> {guideItem.side_effects}
-                </p>
-              )}
-            </div>
           )}
 
           <button
@@ -743,13 +698,3 @@ function MedicationAccordion({
   );
 }
 
-// ── 약물 가이드 요약 ────────────────────────────────────────────────────────
-
-interface MedGuideItem {
-  drug_name?: string;
-  dose?: string | number;
-  frequency_per_day?: number;
-  intake_time?: string[] | string;
-  precautions?: string;
-  side_effects?: string;
-}
