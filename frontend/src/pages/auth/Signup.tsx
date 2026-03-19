@@ -23,8 +23,7 @@ export default function Signup() {
 
   const pwRules = [
     { label: "8자 이상", ok: form.password.length >= 8 },
-    { label: "대문자 포함", ok: /[A-Z]/.test(form.password) },
-    { label: "소문자 포함", ok: /[a-z]/.test(form.password) },
+    { label: "영문 포함", ok: /[a-zA-Z]/.test(form.password) },
     { label: "숫자 포함", ok: /[0-9]/.test(form.password) },
     { label: "특수문자 포함", ok: /[^a-zA-Z0-9]/.test(form.password) },
   ];
@@ -132,7 +131,7 @@ export default function Signup() {
                 value={form.password}
                 onChange={(e) => set("password", e.target.value)}
                 required
-                placeholder="영문 대/소문자, 숫자, 특수문자 포함 8자 이상"
+                placeholder="영문, 숫자, 특수문자 포함 8자 이상"
                 minLength={8}
                 className={inputCls}
               />
