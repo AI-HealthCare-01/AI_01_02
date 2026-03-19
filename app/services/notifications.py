@@ -198,29 +198,38 @@ class NotificationService:
             if item.id in existing_item_ids:
                 continue
 
-            reminder = getattr(item, "reminder", None)
-            medication_name = str(getattr(reminder, "medication_name", "") or "복약")
-            dose_text = str(getattr(reminder, "dose_text", "") or "").strip()
-            medication_label = medication_name if not dose_text else f"{medication_name} {dose_text}"
+            try:
+                reminder = getattr(item, "reminder", None)
+                medication_name = str(getattr(reminder, "medication_name", "") or "복약")
+                dose_text = str(getattr(reminder, "dose_text", "") or "").strip()
+                medication_label = medication_name if not dose_text else f"{medication_name} {dose_text}"
 
-            await self.repo.create_notification(
-                user_id=user.id,
-                title="복약 확인",
-                message=(
-                    f"{item.scheduled_at.astimezone(config.TIMEZONE).strftime('%H:%M')} 복약 기록이 아직 없어요. "
-                    f"{medication_label} 복용 여부를 선택해주세요."
-                ),
-                notification_type=NotificationType.SYSTEM,
-                payload={
-                    "event": "medication_confirmation_required",
-                    "schedule_item_id": item.id,
-                    "reminder_id": item.reminder_id,
-                    "medication_name": medication_name,
-                    "dose": dose_text or None,
-                    "scheduled_at": item.scheduled_at.astimezone(config.TIMEZONE).isoformat(),
-                },
-            )
-            existing_item_ids.add(item.id)
+                await self.repo.create_notification(
+                    user_id=user.id,
+                    title="복약 확인",
+                    message=(
+                        f"{item.scheduled_at.astimezone(config.TIMEZONE).strftime('%H:%M')} 복약 기록이 아직 없어요. "
+                        f"{medication_label} 복용 여부를 선택해주세요."
+                    ),
+                    notification_type=NotificationType.SYSTEM,
+                    payload={
+                        "event": "medication_confirmation_required",
+                        "schedule_item_id": item.id,
+                        "reminder_id": item.reminder_id,
+                        "medication_name": medication_name,
+                        "dose": dose_text or None,
+                        "scheduled_at": item.scheduled_at.astimezone(config.TIMEZONE).isoformat(),
+                    },
+                )
+                existing_item_ids.add(item.id)
+            except Exception as exc:  # noqa: BLE001
+                logger.error(
+                    "medication_confirmation_notification_failed: user_id=%s, item_id=%s, error=%s",
+                    user.id,
+                    item.id,
+                    exc,
+                    exc_info=True,
+                )
 
     @staticmethod
     def _build_scheduled_at_for_today(*, time_str: str, now: datetime) -> datetime | None:

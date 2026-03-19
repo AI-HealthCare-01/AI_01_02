@@ -74,12 +74,7 @@ export default function Records() {
     return `${WEEKLY_RATE_STORAGE_PREFIX}:${toDateStr(getMondayOfWeek(date))}`;
   }
 
-  async function loadWeeklyRates(date: Date, meds: OcrMedication[]) {
-    if (meds.length === 0) {
-      setWeeklyRates(Array(7).fill(null));
-      return;
-    }
-
+  async function loadWeeklyRates(date: Date) {
     const monday = getMondayOfWeek(date);
     const mondayKey = toDateStr(monday);
     const weekDates = Array.from({ length: 7 }, (_, i) => {
@@ -98,33 +93,12 @@ export default function Records() {
       weekCacheRef.current[mondayKey] = dailySchedules;
     }
 
-    const computedRates = weekDates.map((d, i) => {
-      const dateStr = toDateStr(d);
+    const computedRates = weekDates.map((_d, i) => {
       const medicationItems = dailySchedules[i].items
-        .filter((item) => item.category === "MEDICATION")
-        .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
-
-      let manualMap: Record<string, boolean> = {};
-      try {
-        const raw = localStorage.getItem(getDailyConfirmStorageKey(dateStr));
-        if (raw) {
-          const parsed = JSON.parse(raw) as Record<string, boolean>;
-          manualMap = parsed ?? {};
-        }
-      } catch {
-        manualMap = {};
-      }
-
-      const completed = meds.reduce((acc, med) => {
-        const scheduleItem = medicationItems.find(
-          (si) => si.title.toLowerCase().includes(med.drug_name.toLowerCase()),
-        );
-        if (scheduleItem) return acc + (scheduleItem.status === "DONE" ? 1 : 0);
-        const manualKey = `${med.drug_name}-${med.intake_time ?? ""}`;
-        return acc + (manualMap[manualKey] ? 1 : 0);
-      }, 0);
-
-      return Math.round((completed / meds.length) * 100);
+        .filter((item) => item.category === "MEDICATION");
+      if (medicationItems.length === 0) return null;
+      const doneCount = medicationItems.filter((item) => item.status === "DONE").length;
+      return Math.round((doneCount / medicationItems.length) * 100);
     });
 
     setWeeklyRates(computedRates);
@@ -177,6 +151,8 @@ export default function Records() {
     try {
       const updated = await scheduleApi.updateStatus(itemId, status);
       setScheduleItems((prev) => prev.map((it) => (it.item_id === itemId ? updated : it)));
+      const mondayKey = toDateStr(getMondayOfWeek(selectedDate));
+      delete weekCacheRef.current[mondayKey];
     } catch (err: unknown) {
       toast.error(toUserMessage(err));
     }
@@ -196,8 +172,8 @@ export default function Records() {
 
   async function load(date: Date) {
     setLoading(true);
-    const [, , meds] = await Promise.all([loadSchedule(date), loadProfile(), loadOcrMedications(), loadReminders()]);
-    await loadWeeklyRates(date, meds);
+    await Promise.all([loadSchedule(date), loadProfile(), loadOcrMedications(), loadReminders()]);
+    await loadWeeklyRates(date);
     setLoading(false);
   }
 

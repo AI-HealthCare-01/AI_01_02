@@ -122,6 +122,37 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   }
 }
 
+async function requestNoAuth<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      ...init,
+      signal: controller.signal,
+      credentials: "include",
+      headers: {
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...(init.headers ?? {}),
+      },
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, res.status));
+    }
+    if (res.status === 204) return undefined as T;
+    return res.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("요청 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 const UPLOAD_TIMEOUT_MS = 120_000;
 
 async function requestForm<T>(path: string, body: FormData): Promise<T> {
@@ -164,10 +195,10 @@ export const authApi = {
     gender: "MALE" | "FEMALE";
     birth_date: string;
     phone_number: string;
-  }) => request<{ detail: string }>("/auth/signup", { method: "POST", body: JSON.stringify(body) }),
+  }) => requestNoAuth<{ detail: string }>("/auth/signup", { method: "POST", body: JSON.stringify(body) }),
 
   login: (email: string, password: string) =>
-    request<{ access_token: string }>("/auth/login", {
+    requestNoAuth<{ access_token: string }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
