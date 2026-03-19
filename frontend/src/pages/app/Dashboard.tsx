@@ -8,6 +8,7 @@ import {
   reminderApi,
   ocrApi,
   OcrMedication,
+  Reminder,
   ScheduleItem,
   UserInfo,
   DdayReminder,
@@ -30,6 +31,7 @@ export default function Dashboard() {
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [dday, setDday] = useState<DdayReminder[]>([]);
   const [ocrMeds, setOcrMeds] = useState<OcrMedication[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [todayKey, setTodayKey] = useState(() => toDateStr(new Date()));
   const today = useMemo(() => new Date(todayKey + "T00:00:00"), [todayKey]);
@@ -66,14 +68,16 @@ export default function Dashboard() {
   async function load() {
     setLoading(true);
     try {
-      const [userData, scheduleData, ddayData] = await Promise.all([
+      const [userData, scheduleData, ddayData, reminderData] = await Promise.all([
         userApi.me(),
         scheduleApi.getDaily(todayKey),
         reminderApi.getDday(7),
+        reminderApi.list(true),
       ]);
       setUser(userData);
       setItems(scheduleData.items);
       setDday(ddayData.items);
+      setReminders(reminderData.items);
     } catch {
       // non-critical
     } finally {
@@ -154,6 +158,7 @@ export default function Dashboard() {
         title="복약 일정"
         loading={loading}
         ocrMeds={ocrMeds}
+        reminders={reminders}
         scheduleItems={items}
         storageDateKey={todayKey}
         onUpdateScheduleStatus={updateMedicationStatus}

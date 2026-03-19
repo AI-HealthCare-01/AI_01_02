@@ -1,9 +1,11 @@
+import re
 from datetime import date, datetime, timedelta
 from typing import Any
 
 from app.core import config
 from app.core.exceptions import AppException, ErrorCode
 from app.dtos.reminders import DdayReminderItem, MedicationReminderUpsertRequest
+from app.models.ocr import OcrJob, OcrJobStatus
 from app.models.reminders import MedicationReminder
 from app.models.users import User
 
@@ -39,6 +41,7 @@ class ReminderService:
     async def list_reminders(
         self, *, user: User, enabled: bool | None, limit: int = 50, offset: int = 0
     ) -> list[MedicationReminder]:
+        await self.backfill_legacy_dose_texts_from_ocr(user=user)
         qs = MedicationReminder.filter(user_id=user.id)
         if enabled is not None:
             qs = qs.filter(enabled=enabled)
@@ -174,6 +177,37 @@ class ReminderService:
             )
             existing_by_name[medication_name] = new_reminder
 
+    async def backfill_legacy_dose_texts_from_ocr(self, *, user: User) -> int:
+        reminders = await MedicationReminder.filter(user_id=user.id)
+        legacy_reminders = [r for r in reminders if self._is_legacy_numeric_dose_text(r.dose_text)]
+        if not legacy_reminders:
+            return 0
+
+        target_names = {r.medication_name for r in legacy_reminders}
+        dosage_text_by_name: dict[str, str] = {}
+        jobs = await OcrJob.filter(user_id=user.id, status=OcrJobStatus.SUCCEEDED).order_by("-completed_at", "-id")
+        for job in jobs:
+            medications = self._extract_ocr_medications(job)
+            for med in medications:
+                medication_name = str(med.get("drug_name") or "").strip()
+                if not medication_name or medication_name not in target_names or medication_name in dosage_text_by_name:
+                    continue
+                dose_text = self._extract_dose_text(med)
+                if dose_text and "캡/정" in dose_text:
+                    dosage_text_by_name[medication_name] = dose_text
+            if target_names.issubset(dosage_text_by_name.keys()):
+                break
+
+        updated_count = 0
+        for reminder in legacy_reminders:
+            corrected_dose_text = dosage_text_by_name.get(reminder.medication_name)
+            if not corrected_dose_text or corrected_dose_text == reminder.dose_text:
+                continue
+            reminder.dose_text = corrected_dose_text
+            await reminder.save(update_fields=["dose_text", "updated_at"])
+            updated_count += 1
+        return updated_count
+
     @classmethod
     def _extract_schedule_times(cls, med: dict[str, Any]) -> list[str]:
         raw = med.get("intake_time")
@@ -224,6 +258,10 @@ class ReminderService:
 
     @staticmethod
     def _extract_dose_text(med: dict[str, Any]) -> str | None:
+        dosage_per_once = ReminderService._parse_int(med.get("dosage_per_once"))
+        if dosage_per_once is not None and dosage_per_once > 0:
+            return f"{dosage_per_once} 캡/정"
+
         dose = med.get("dose")
         if dose is None:
             return None
@@ -231,3 +269,20 @@ class ReminderService:
             return str(dose)
         text = str(dose).strip()
         return text or None
+
+    @staticmethod
+    def _extract_ocr_medications(job: OcrJob) -> list[dict[str, Any]]:
+        confirmed_result = job.confirmed_result if isinstance(job.confirmed_result, dict) else {}
+        structured_result = job.structured_result if isinstance(job.structured_result, dict) else {}
+        medications = confirmed_result.get("extracted_medications")
+        if not isinstance(medications, list):
+            medications = structured_result.get("extracted_medications")
+        if not isinstance(medications, list):
+            medications = structured_result.get("medications")
+        return [med for med in medications if isinstance(med, dict)]
+
+    @staticmethod
+    def _is_legacy_numeric_dose_text(value: str | None) -> bool:
+        if not value:
+            return False
+        return bool(re.fullmatch(r"\d+(?:\.\d+)?", value.strip()))

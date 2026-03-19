@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
+import { toast } from "sonner";
 import { notificationApi, getToken } from "@/lib/api";
 
 interface NotificationContextValue {
@@ -13,12 +14,33 @@ const NotificationContext = createContext<NotificationContextValue>({
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [unreadCount, setUnreadCount] = useState(0);
+  const knownNotificationIdsRef = useRef<Set<string>>(new Set());
+  const hasLoadedRef = useRef(false);
 
   const refresh = useCallback(() => {
     if (!getToken()) return;
     notificationApi
-      .getUnreadCount()
-      .then((r) => setUnreadCount(r.unread_count))
+      .list({ limit: 20 })
+      .then((r) => {
+        setUnreadCount(r.unread_count);
+
+        const incomingIds = new Set(r.items.map((item) => item.id));
+        if (hasLoadedRef.current) {
+          const newMedicationReminders = r.items.filter((item) => {
+            if (knownNotificationIdsRef.current.has(item.id)) return false;
+            return item.payload?.event === "medication_reminder";
+          });
+
+          for (const notification of newMedicationReminders) {
+            toast(notification.title, {
+              description: notification.message,
+            });
+          }
+        }
+
+        knownNotificationIdsRef.current = incomingIds;
+        hasLoadedRef.current = true;
+      })
       .catch(() => {});
   }, []);
 
