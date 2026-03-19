@@ -1,9 +1,9 @@
 # AI Health 4인 스윔레인 (REQ/API 기준)
 
 기준 문서:
-- `docs/REQUIREMENTS_DEFINITION.md` (v1.29)
-- `docs/API_SPECIFICATION.md` (v1.36)
-- `docs/TEAM_DEVELOPMENT_GUIDELINE.md` (v2.30)
+- `docs/REQUIREMENTS_DEFINITION.md` (v1.32)
+- `docs/API_SPECIFICATION.md` (v1.40)
+- `docs/TEAM_DEVELOPMENT_GUIDELINE.md` (v2.31)
 
 ## 1) 역할(레인) 정의
 
@@ -28,6 +28,7 @@ flowchart LR
     G --> H[가이드 결과/분석/일정]
     H --> I[알림/리마인더/D-day]
     H --> J[챗봇 컨텍스트 활용]
+    H --> L[일기 작성/조회]
     J --> K[SSE 응답 + 출처표기]
 ```
 
@@ -36,20 +37,23 @@ flowchart LR
 ### Lane 1. 프로필/회원/보안
 
 담당 REQ:
-- 인증/권한: `REQ-011`, `REQ-024~028`, `REQ-107~109`
-- 공통 보안/추적: `REQ-105`, `REQ-111`
+- 인증/권한: `REQ-011`, `REQ-024~028`, `REQ-063~065`, `REQ-107~109`, `REQ-129~132`
+- 공통 보안/추적: `REQ-105`, `REQ-111`, `REQ-135~136`
 
 담당 API:
 - `POST /api/v1/auth/signup`
 - `POST /api/v1/auth/login`
-- `GET /api/v1/auth/token/refresh`
+- `POST /api/v1/auth/token/refresh`
+- `POST /api/v1/auth/logout`
 - `GET/PATCH/DELETE /api/v1/users/me`
-- `PUT/GET /api/v1/profiles/health`
+- `PUT/GET /api/v1/users/me/health-profile`
 
 핵심 산출물:
 - JWT 인증/인가 미들웨어, 소유권 검증 규칙
+- 로그아웃 JTI 블랙리스팅 + JWT 토큰 로테이션
 - 회원 탈퇴 소프트 삭제(`is_active=false`) + 토큰 즉시 무효화
-- 프로필 입력 4축(`basic_info/lifestyle_input/sleep_input/nutrition_input`) 저장
+- 프로필 입력 평탄화 구조 저장 + 서버 계산 파생 지표(BMI 등)
+- 프론트엔드 토큰 자동 갱신 + 사용자 전환 데이터 격리
 
 핸드오프:
 - Lane 2에 `user_id + health_profile + access_token` 기반 작업 가능 상태 전달
@@ -61,7 +65,7 @@ flowchart LR
 ### Lane 2. OCR
 
 담당 REQ:
-- OCR 전체: `REQ-050~062`
+- OCR 전체: `REQ-050~062`, `REQ-068~069`
 - 관련 비기능: `REQ-114`, `REQ-116`, `REQ-118`, `REQ-120`, `REQ-124`, `REQ-126`
 
 담당 API:
@@ -71,12 +75,15 @@ flowchart LR
 - `GET /api/v1/ocr/jobs/{job_id}/result`
 - `PATCH /api/v1/ocr/jobs/{job_id}/confirm`
 - `GET /api/v1/medications/search`
+- `GET /api/v1/medications/info`
 
 핵심 산출물:
-- 파일 유효성 검증(확장자/용량/손상)
+- 파일 유효성 검증(확장자/용량/손상, 10MB 제한)
 - OCR 비동기 상태머신(`QUEUED -> PROCESSING -> SUCCEEDED/FAILED`)
 - 저신뢰 필드 하이라이트 + 사용자 수정/확정 루프
-- 원본 이미지 즉시 폐기(성공/실패/큐실패 포함)
+- 원본 이미지 즉시 폐기(성공/실패/큐실패 포함, 이중 방어 로직)
+- 약물 상세 정보 3-tier 폴백 (DB→공공API→LLM)
+- ADHD 약물 DB(PsychDrug) 검색
 
 핸드오프:
 - Lane 3에 `ocr_job_id(SUCCEEDED)` + 구조화 처방 데이터 전달
@@ -89,8 +96,9 @@ flowchart LR
 ### Lane 3. 가이드/알림
 
 담당 REQ:
-- 가이드/분석/일정: `REQ-001~010`, `REQ-012~015`, `REQ-045~049`
-- 알림/리마인더: `REQ-016~021`
+- 가이드/분석/일정: `REQ-001~010`, `REQ-012~015`, `REQ-045~049`, `REQ-070`
+- 알림/리마인더: `REQ-016~021`, `REQ-066~067`, `REQ-071~072`
+- 일기: `REQ-073~074`
 - 관련 비기능: `REQ-112`, `REQ-121`, `REQ-123`
 
 담당 API:
@@ -110,12 +118,20 @@ flowchart LR
 - `PATCH /api/v1/reminders/{reminder_id}`
 - `DELETE /api/v1/reminders/{reminder_id}`
 - `GET /api/v1/reminders/medication-dday`
+- `DELETE /api/v1/notifications/read`
+- `GET/PATCH /api/v1/notifications/settings`
+- `PUT /api/v1/diaries/{diary_date}`
+- `GET /api/v1/diaries/{diary_date}`
+- `GET /api/v1/diaries`
 
 핵심 산출물:
-- 가이드 비동기 생성/상태/결과 API
+- 가이드 비동기 생성/상태/결과 API + 스냅샷 확정+생성(confirm-and-create)
 - 분석 요약/위험 플래그/알러지 경고 생성
 - 일정 이행률 및 일일 일정 상태 관리
 - 가이드 완료 알림 + 리마인더 CRUD + D-day 계산
+- 알림 설정(카테고리별 토글) + 읽은 알림 삭제
+- 복약 5분 전 실시간 알림 생성(dose_text 포함)
+- 일기 upsert/조회 API
 
 핸드오프:
 - Lane 4에 가이드 결과/분석 요약을 챗봇 참조 컨텍스트로 제공
@@ -155,7 +171,7 @@ flowchart LR
 
 1. Lane 1 선행 구축: 인증/보안 + 프로필 API
 2. Lane 2 핵심 경로 구축: 업로드 -> OCR -> 확정
-3. Lane 3 구축: 가이드/분석/일정 + 알림
+3. Lane 3 구축: 가이드/분석/일정 + 알림 + 일기
 4. Lane 4 구축: 챗봇 세션/스트리밍/가드레일
 5. 공통 회귀: 권한/상태전이/에러매핑/성능(P95) 검증
 

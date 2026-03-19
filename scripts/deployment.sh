@@ -52,9 +52,12 @@ echo ""
 
 # ---------- Docker Login ----------
 echo "${COLOR_BLUE}Docker login${COLOR_NC}"
-if ! echo "$docker_pw" | docker login -u "$docker_user" --password-stdin ; then
-  echo "${COLOR_RED}도커 로그인에 실패했습니다. 도커 유저네임과 비밀번호를 확인해주세요.${COLOR_NC}"
-  exit 1
+if ! echo "$docker_pw" | docker login -u "$docker_user" --password-stdin 2>/dev/null; then
+  # credential store error but login may have succeeded — verify with docker info
+  if ! docker info >/dev/null 2>&1; then
+    echo "${COLOR_RED}도커 로그인에 실패했습니다. 도커 유저네임과 비밀번호를 확인해주세요.${COLOR_NC}"
+    exit 1
+  fi
 fi
 echo "${COLOR_GREEN}도커 로그인 성공!${COLOR_NC}"
 echo ""

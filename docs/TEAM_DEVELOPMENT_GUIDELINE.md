@@ -1,14 +1,15 @@
 # AI Health Project 팀 개발 가이드라인
 
-문서 버전: v2.30  
-작성일: 2026-03-13  
+문서 버전: v2.31
+작성일: 2026-03-19
 기준 문서:
-- `docs/REQUIREMENTS_DEFINITION.md` (v1.29)
-- `docs/API_SPECIFICATION.md` (v1.36)
+- `docs/REQUIREMENTS_DEFINITION.md` (v1.32)
+- `docs/API_SPECIFICATION.md` (v1.40)
 - `docs/요구사항_정의서.xlsx`
 - `docs/API_명세서.xlsx`
 
 문서 변경 이력:
+- v2.31 (2026-03-19): 코드 실사 기반 동기화 — 5.5 일기(Diary) 기능 상세 가이드 추가; 3장 기능별 한눈에 보기에 일기 기능 추가; 기준 문서 버전을 REQUIREMENTS_DEFINITION.md v1.32, API_SPECIFICATION.md v1.40으로 동기화
 - v2.30 (2026-03-13): 코드 실사 기반 동기화 — 3장 기능별 한눈에 보기 표의 모든 기능 상태를 "대기중 (명세 기준)"에서 "개발완료"로 일괄 갱신; 기준 문서 버전을 REQUIREMENTS_DEFINITION.md v1.29, API_SPECIFICATION.md v1.36으로 동기화
 - v2.29 (2026-03-03): 문서 정합성 점검 결과를 반영해 알림 API 표기를 축약(`*`)에서 명세 경로 단위로 명확화하고, 과거 변경 이력의 구 REQ 체계 표기를 혼동 없도록 정리
 - v2.28 (2026-02-27): 최신 `API_명세서.xlsx`(36건) 반영으로 schedules API를 가이드 기능 범위에 편입하고 API 상태 표기를 명세 기준으로 정리
@@ -55,6 +56,7 @@
 2. 실시간 챗봇
 3. OCR 기반 의료정보 인식
 4. 알림 기능
+5. 일기(일상 기록)
 
 ## 3. 기능별 한눈에 보기
 
@@ -63,7 +65,8 @@
 | 1. LLM 기반 안내 가이드 생성 | 프로필+처방+지식을 결합한 개인화 복약/생활 가이드 | REQ-001~010, REQ-012~015, REQ-045~049 | `POST /api/v1/guides/jobs`, `GET /api/v1/guides/jobs/{job_id}`, `GET /api/v1/guides/jobs/{job_id}/result`, `POST /api/v1/guides/jobs/{job_id}/refresh`, `GET /api/v1/analysis/summary`, `GET /api/v1/schedules/daily`, `PATCH /api/v1/schedules/items/{item_id}/status` | 개발완료 |
 | 2. 실시간 챗봇 | 안전 가드레일 + 하이브리드 검색 + SSE 스트리밍 | REQ-029~044 | `GET /api/v1/chat/prompt-options`, `POST /api/v1/chat/sessions`, `DELETE /api/v1/chat/sessions/{session_id}`, `POST /api/v1/chat/sessions/{session_id}/stream` | 개발완료 |
 | 3. OCR 기반 의료정보 인식 | 처방/약봉투 텍스트 구조화 + 신뢰도 검증 + 사용자 확인 | REQ-050~062 | `POST /api/v1/ocr/documents/upload`, `POST /api/v1/ocr/jobs`, `GET /api/v1/ocr/jobs/{job_id}/result`, `PATCH /api/v1/ocr/jobs/{job_id}/confirm`, `GET /api/v1/medications/search` | 개발완료 |
-| 4. 알림 기능 | 가이드 완료/읽음 처리/리마인더/D-day 안내 | REQ-016~021 | `GET /api/v1/notifications`, `GET /api/v1/notifications/unread-count`, `PATCH /api/v1/notifications/{notification_id}/read`, `PATCH /api/v1/notifications/read-all`, `POST /api/v1/reminders`, `GET /api/v1/reminders`, `PATCH /api/v1/reminders/{reminder_id}`, `DELETE /api/v1/reminders/{reminder_id}`, `GET /api/v1/reminders/medication-dday` | 개발완료 |
+| 4. 알림 기능 | 가이드 완료/읽음 처리/리마인더/D-day 안내 | REQ-016~021, REQ-066~067, REQ-071~072 | `GET /api/v1/notifications`, `GET /api/v1/notifications/unread-count`, `PATCH /api/v1/notifications/{notification_id}/read`, `PATCH /api/v1/notifications/read-all`, `DELETE /api/v1/notifications/read`, `GET/PATCH /api/v1/notifications/settings`, `POST /api/v1/reminders`, `GET /api/v1/reminders`, `PATCH /api/v1/reminders/{reminder_id}`, `DELETE /api/v1/reminders/{reminder_id}`, `GET /api/v1/reminders/medication-dday` | 개발완료 |
+| 5. 일기(일상 기록) | 날짜별 일기 작성/조회 | REQ-073~074 | `PUT /api/v1/diaries/{diary_date}`, `GET /api/v1/diaries/{diary_date}`, `GET /api/v1/diaries` | 개발완료 |
 
 ## 4. 전체 서비스 흐름 (E2E)
 
@@ -75,6 +78,7 @@
 6. 가이드 생성/갱신(비동기 작업) + 일일 일정 조회/이행 상태 기록
 7. 챗봇 기능 사용(객관식 프롬프트 + SSE + 세션 삭제)
 8. 알림/리마인더/D-day 수신
+9. 일기(일상 기록) 작성/조회
 
 비동기 공통 원칙:
 - 작업 생성 API는 빠르게 `202 Accepted` 반환 (`REQ-114`)
@@ -239,6 +243,35 @@ DoD:
 - 알림 조회/읽음 API가 권한/경계 테스트를 통과
 - D-day 계산 오차 없이 동작
 
+### 5.5 일기(일상 기록)
+
+목표:
+- 사용자가 날짜별 일기를 작성하고 조회할 수 있도록 한다.
+
+요구사항:
+- 기능: `REQ-073~074`
+
+핵심 로직:
+1. 날짜별 1건만 존재(user_id + date unique)
+2. PUT은 upsert — 없으면 생성, 있으면 갱신
+3. 해당 날짜에 일기가 없으면 빈 내용 반환
+4. 기간 목록 조회 시 start ≤ end 검증
+
+API:
+- 명세: `PUT /api/v1/diaries/{diary_date}`
+- 명세: `GET /api/v1/diaries/{diary_date}`
+- 명세: `GET /api/v1/diaries`
+
+개발 체크리스트:
+- 날짜별 unique constraint 동작 검증
+- 최대 5000자 content 길이 제한 검증
+- 본인 데이터만 접근 허용(소유권 검사)
+
+DoD:
+- 일기 upsert/조회가 정상 동작
+- 날짜 범위 조회가 날짜순 정렬로 반환
+- 권한 검증 통과
+
 ## 6. 공통 비기능 요구사항 운영 기준
 
 성능:
@@ -292,8 +325,9 @@ QA:
 1. 인증/접근제어 + OCR 핵심 경로 (`REQ-011`, `REQ-022~028`, `REQ-050~058`, `REQ-061~062`)
 2. 가이드/분석/LLM (`REQ-001~010`, `REQ-012~015`, `REQ-045~049`)
 3. 챗봇 본 기능 (`REQ-029~044`)
-4. 알림/리마인더 확장 (`REQ-016~021`)
-5. 운영 품질 보강 (`REQ-101~128`)
+4. 알림/리마인더 확장 (`REQ-016~021`, `REQ-066~072`)
+5. 일기 기능 (`REQ-073~074`)
+6. 운영 품질 보강 (`REQ-101~138`)
 
 ## 9. PR/리뷰 운영 규칙
 

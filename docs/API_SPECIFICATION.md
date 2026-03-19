@@ -1,7 +1,7 @@
 # AI Health Project API 명세서
 
-문서 버전: v1.39
-작성일: 2026-03-16
+문서 버전: v1.40
+작성일: 2026-03-19
 원본:
 - `docs/요구사항_정의서.xlsx`
 - `docs/API_명세서.xlsx`
@@ -10,6 +10,7 @@
 문서 목적: 객체 모델 명세와 API 계약 명세를 독립 문서로 관리한다.
 
 문서 변경 이력:
+- v1.40 (2026-03-19): 코드 실사 기반 동기화 — 11.9 일기(Diary) 객체 모델 추가; 11.10 알림 설정(UserNotificationSetting) 객체 추가; 12.6 일기 API 3건 추가(PUT/GET /diaries/{date}, GET /diaries); 12.8 동기화 목록 43건→46건 갱신; onboarding_completed_at nullable 정정
 - v1.39 (2026-03-16): 코드 실사 기반 전수 정합 동기화 — 12.2 token/refresh GET→POST 정정, profiles/health→users/me/health-profile 경로 정정, logout 엔드포인트 추가; 12.3 medications/info·guides/confirm-and-create 추가; 12.4 chat messages 200→201 정정; 12.5 알림 설정·읽은 알림 삭제 엔드포인트 추가; 12.6 AUTH_INVALID_CREDENTIALS 추가·VALIDATION_ERROR HTTP 400→422 정정; 12.8 동기화 목록 36건→43건 갱신; 정책 메모 health-profile alias 경로 정정
 - v1.38 (2026-03-14): 코드 실사 기반 동기화 — 11.3 건강 프로필 객체를 실제 구현(`health_profiles.py`) 기준으로 재정렬: lifestyle 평탄화, nutrition_status 필드명 반영, computed 메트릭 추가; 11.8 ScheduleItem category에 EXERCISE 추가
 - v1.37 (2026-03-13): 코드 실사 기반 동기화 — 11.6 `ChatSession` 객체에 `title` 필드 추가; 12.6 에러코드 표에 `AUTH_ACCOUNT_INACTIVE` 항목 추가
@@ -127,7 +128,7 @@
 | HealthProfile | weekly_refresh_weekday | int \| null | 선택(nullable) | 주간 갱신 요일(0=월~6=일) |
 | HealthProfile | weekly_refresh_time | string(`HH:MM`) \| null | 선택(nullable) | 주간 갱신 시각 |
 | HealthProfile | weekly_adherence_rate | float(0~100) \| null | 선택(nullable) | 주간 이행률 |
-| HealthProfile | onboarding_completed_at | string(datetime) | 필수 | 온보딩 완료 시각 |
+| HealthProfile | onboarding_completed_at | string(datetime) \| null | 선택(nullable) | 온보딩 완료 시각 |
 | HealthProfile | updated_at | string(datetime) | 필수 | 수정 시각 |
 | BasicInfoInput | height_cm | float | 필수 | 키(cm) |
 | BasicInfoInput | weight_kg | float | 필수 | 체중(kg) |
@@ -308,6 +309,33 @@
 | ScheduleItemStatusUpdateRequest | completed_at | string(datetime) \| null | 선택(nullable) | 완료 처리 시각 |
 
 
+### 11.9 일기(Diary) 객체
+
+| 객체명 | 필드 | 타입 | 필수/선택 | 설명 |
+|---|---|---|---|---|
+| DiaryUpsertRequest | content | string | 필수 | 일기 내용(최대 5000자) |
+| DiaryResponse | date | string(date) | 필수 | 일기 날짜 |
+| DiaryResponse | content | string | 필수 | 일기 내용 |
+| DiaryResponse | updated_at | string(datetime) \| null | 선택(nullable) | 수정 시각 |
+| DiaryListResponse | items | DiaryResponse[] | 필수 | 일기 목록 |
+
+### 11.10 알림 설정 객체
+
+| 객체명 | 필드 | 타입 | 필수/선택 | 설명 |
+|---|---|---|---|---|
+| NotificationSettingResponse | home_schedule_enabled | bool | 필수 | 홈 일정 알림 |
+| NotificationSettingResponse | meal_alarm_enabled | bool | 필수 | 식사 알림 |
+| NotificationSettingResponse | medication_alarm_enabled | bool | 필수 | 복약 알림 |
+| NotificationSettingResponse | exercise_alarm_enabled | bool | 필수 | 운동 알림 |
+| NotificationSettingResponse | sleep_alarm_enabled | bool | 필수 | 수면 알림 |
+| NotificationSettingResponse | medication_dday_alarm_enabled | bool | 필수 | 약 소진 D-day 알림 |
+| NotificationSettingUpdateRequest | home_schedule_enabled | bool | 선택 | 홈 일정 알림 |
+| NotificationSettingUpdateRequest | meal_alarm_enabled | bool | 선택 | 식사 알림 |
+| NotificationSettingUpdateRequest | medication_alarm_enabled | bool | 선택 | 복약 알림 |
+| NotificationSettingUpdateRequest | exercise_alarm_enabled | bool | 선택 | 운동 알림 |
+| NotificationSettingUpdateRequest | sleep_alarm_enabled | bool | 선택 | 수면 알림 |
+| NotificationSettingUpdateRequest | medication_dday_alarm_enabled | bool | 선택 | 약 소진 D-day 알림 |
+
 ## 12. API 계약 명세 (Request/Response)
 
 ### 12.1 공통 규칙
@@ -421,7 +449,20 @@
 - 읽은 알림 삭제 API(`DELETE /notifications/read`)는 `is_read=true`인 알림을 일괄 삭제한다.
 - 알림 설정 API(`GET/PATCH /notifications/settings`)는 카테고리별 알림 활성화 토글(홈 일정, 식사, 복약, 운동, 수면, 약 소진 D-day)을 관리한다.
 
-### 12.6 대표 에러 코드 매핑
+### 12.6 일기 API
+
+| Method | Path | 상태 | Request (필수/선택) | Success Response |
+|---|---|---|---|---|
+| PUT | `/api/v1/diaries/{diary_date}` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `diary_date`(string(date), 필수), `DiaryUpsertRequest` (`content` 필수) | `200 DiaryResponse` |
+| GET | `/api/v1/diaries/{diary_date}` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `diary_date`(string(date), 필수) | `200 DiaryResponse` |
+| GET | `/api/v1/diaries` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `start`(date, 필수), `end`(date, 필수) | `200 DiaryListResponse` |
+
+정책 메모:
+- 일기는 사용자당 날짜별 1건만 존재하며, PUT은 upsert(없으면 생성, 있으면 갱신) 방식으로 동작한다.
+- 해당 날짜에 일기가 없으면 빈 문자열(`""`)로 응답한다.
+- 목록 조회 시 `start` ≤ `end` 조건을 검증한다.
+
+### 12.7 대표 에러 코드 매핑
 
 정책 메모:
 - 모든 엔드포인트는 `AppException`/`ErrorCode` 기반 `ApiError` 구조를 반환한다 (REQ-012 구현 완료).
@@ -448,16 +489,16 @@
 | 503 | `QUEUE_UNAVAILABLE` | 비동기 작업 큐 등록 실패(서비스 일시 불가) | 잠시 후 재시도 |
 | 504 | `EXTERNAL_SERVICE_TIMEOUT` | 외부 LLM/OCR 타임아웃 | 잠시 후 재시도 |
 
-### 12.7 운영 안정성 연계 정책 (비계약)
+### 12.8 운영 안정성 연계 정책 (비계약)
 
 - 장애 감지: HTTP 5xx 에러율 급증, OCR/LLM 타임아웃 연속 발생을 실시간 모니터링하고 임계치 초과 시 담당자에게 즉시 경고한다 (`REQ-119`).
 - 장애 복구: 크리티컬 장애 시 30분 이내 롤백 또는 임시 복구(Fallback) 절차를 수행한다 (`REQ-101`).
 - 본 항목은 API endpoint 계약이 아니라 운영 요구사항 연계 메모다.
 
-### 12.8 API_명세서.xlsx 동기화 목록
+### 12.9 API_명세서.xlsx 동기화 목록
 
-- 기준: `docs/API_명세서.xlsx` `origin` 시트 + 코드 실사 (v1.39)
-- 동기화 건수: 43건
+- 기준: `docs/API_명세서.xlsx` `origin` 시트 + 코드 실사 (v1.40)
+- 동기화 건수: 46건
 
 | 도메인 | Method | Path | 기능 요약 | 완료 상태 |
 |---|---|---|---|---|
@@ -503,8 +544,11 @@
 | V1 | PATCH | `/api/v1/reminders/{reminder_id}` | 복약 리마인더 수정 | 개발완료 |
 | V1 | DELETE | `/api/v1/reminders/{reminder_id}` | 복약 리마인더 삭제 | 개발완료 |
 | V1 | GET | `/api/v1/reminders/medication-dday` | 약 소진 D-day 조회 | 개발완료 |
+| V1 | PUT | `/api/v1/diaries/{diary_date}` | 일기 저장/갱신(upsert) | 개발완료 |
+| V1 | GET | `/api/v1/diaries/{diary_date}` | 일기 단건 조회 | 개발완료 |
+| V1 | GET | `/api/v1/diaries` | 일기 목록 조회(기간) | 개발완료 |
 
-### 12.9 요구사항 기반 미등록 API 갭 (2026-03-16)
+### 12.10 요구사항 기반 미등록 API 갭 (2026-03-19)
 
 - 기준: `요구사항_정의서.xlsx`, `API_명세서.xlsx`, 코드 실사
-- 현재 기준 미등록 API 갭 없음 (v1.39 동기화 완료).
+- 현재 기준 미등록 API 갭 없음 (v1.40 동기화 완료).

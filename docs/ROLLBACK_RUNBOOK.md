@@ -1,5 +1,9 @@
 # 롤백 런북 (REQ-101)
 
+운영 도메인: `logly.life`
+서버: EC2 t3.medium
+배포 방식: `docker-compose.prod.yml`
+
 목표: 크리티컬 장애 발생 시 **30분 이내** 이전 안정 버전으로 복구한다.
 
 ## 1. 롤백 트리거 기준
@@ -7,7 +11,7 @@
 | 상황 | 기준 |
 |---|---|
 | 5xx 에러율 급증 | 배포 후 5분 내 5xx > 5% |
-| 핵심 API 불능 | `/api/docs`, 로그인, OCR 작업 생성 중 하나라도 실패 |
+| 핵심 API 불능 | `/health`, `/api/docs`, 로그인, OCR 작업 생성 중 하나라도 실패 |
 | DB 마이그레이션 실패 | 컨테이너 시작 시 migration 오류 로그 |
 | 외부 API 연쇄 타임아웃 | OCR/LLM 타임아웃 5분 내 3회 이상 연속 |
 
@@ -37,25 +41,27 @@ cd project
 sed -i 's/APP_VERSION=.*/APP_VERSION=<이전버전>/' .env
 sed -i 's/AI_WORKER_VERSION=.*/AI_WORKER_VERSION=<이전버전>/' .env
 
-# 롤백 실행
-docker compose pull fastapi ai-worker
-docker compose up -d --no-deps fastapi ai-worker
+# 롤백 실행 (docker-compose.prod.yml 사용)
+docker compose -f docker-compose.prod.yml pull fastapi ai-worker
+docker compose -f docker-compose.prod.yml up -d --no-deps fastapi ai-worker
 ```
 
 ### Step 3 — 복구 확인 (5분)
 
 ```bash
 # 헬스체크
-curl -f https://<도메인>/api/docs
+curl -f https://logly.life/health
+curl -f https://logly.life/api/docs
 
 # 컨테이너 상태
-docker compose ps
+docker compose -f docker-compose.prod.yml ps
 
 # 에러 로그 확인
-docker compose logs --tail=50 fastapi
-docker compose logs --tail=50 ai-worker
+docker compose -f docker-compose.prod.yml logs --tail=50 fastapi
+docker compose -f docker-compose.prod.yml logs --tail=50 ai-worker
 ```
 
+- [ ] `/health` 정상 응답 (`{"status": "ok"}`)
 - [ ] `/api/docs` 정상 응답
 - [ ] 5xx 에러율 정상화
 - [ ] Sentry 신규 에러 없음

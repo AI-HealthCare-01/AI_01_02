@@ -1,6 +1,6 @@
 Project AI_Health_Core_Baseline {
   database_type: "MySQL"
-  Note: 'Simplified ERD for first web service project (2026-02-27). Aligned with latest requirements and API spreadsheets. Focuses on minimum tables needed to implement current API contract (36 endpoints).'
+  Note: 'Simplified ERD for first web service project (2026-03-19). Aligned with latest requirements and API spreadsheets. Focuses on minimum tables needed to implement current API contract (46 endpoints).'
 }
 
 // ----------------------------------------------------------------------
@@ -12,6 +12,7 @@ Project AI_Health_Core_Baseline {
 // - prompt_versions / model_versions / inference_audits / external_api_call_logs
 // - chat_message_references / chat_guardrail_events / ocr_results / ocr_medications
 // Note: guide_results IS included (separate 1:1 table with guide_jobs) to match actual ORM.
+// Note: psych_drugs, user_notification_settings, daily_diaries added (2026-03-19) to match actual ORM.
 // Reason: keep first-project schema easy to understand and implement.
 
 // ----------------------------------------------------------------------
@@ -103,17 +104,38 @@ Table users {
 Table health_profiles {
   id bigint [pk, increment, not null]
   user_id bigint [not null, unique]
-  basic_info json [not null]
-  lifestyle_input json
-  sleep_input json
-  nutrition_input json
+  height_cm float [not null]
+  weight_kg float [not null]
+  drug_allergies json [not null, default: '[]']
+  exercise_frequency_per_week int [not null]
+  pc_hours_per_day int [not null]
+  smartphone_hours_per_day int [not null]
+  caffeine_cups_per_day int [not null]
+  smoking int [not null]
+  alcohol_frequency_per_week int [not null]
+  bed_time varchar(5) [not null]
+  wake_time varchar(5) [not null]
+  sleep_latency_minutes int [not null]
+  night_awakenings_per_week int [not null]
+  daytime_sleepiness int [not null]
+  appetite_level int [not null]
+  meal_regular boolean [not null]
+  bmi float [not null]
+  sleep_time_hours float [not null]
+  caffeine_mg int [not null]
+  digital_time_hours int [not null]
+  weekly_refresh_weekday int
+  weekly_refresh_time varchar(5)
+  weekly_adherence_rate float
+  onboarding_completed_at datetime(6)
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
 
-  Note: 'Single profile aggregate for PUT/GET /profiles/health. Uses JSON blocks to keep schema simple for first project. Supports REQ-045~047.'
+  Note: 'Flattened profile for PUT/GET /users/me/health-profile. Computed fields (bmi, sleep_time_hours, caffeine_mg, digital_time_hours) are calculated server-side. Supports REQ-045~047.'
 
   indexes {
     (user_id) [name: 'idx_health_profiles_user_id', unique]
+    (user_id, updated_at) [name: 'idx_health_profiles_user_updated_at']
   }
 }
 
@@ -183,6 +205,23 @@ Table medications {
   indexes {
     (name_ko) [name: 'idx_medications_name_ko']
     (is_active) [name: 'idx_medications_is_active']
+  }
+}
+
+Table psych_drugs {
+  id bigint [pk, increment, not null]
+  ingredient_name varchar(255)
+  product_name varchar(255)
+  side_effects longtext
+  precautions longtext
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  Note: 'ADHD psychiatry drug database (seed data ~164 rows). Provides side effects and precautions for medication info lookup (REQ-068, REQ-069).'
+
+  indexes {
+    (product_name) [name: 'idx_psych_drugs_product_name']
+    (ingredient_name) [name: 'idx_psych_drugs_ingredient_name']
   }
 }
 
@@ -303,6 +342,25 @@ Table notifications {
   }
 }
 
+Table user_notification_settings {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null, unique]
+  home_schedule_enabled boolean [not null, default: true]
+  meal_alarm_enabled boolean [not null, default: true]
+  medication_alarm_enabled boolean [not null, default: true]
+  exercise_alarm_enabled boolean [not null, default: true]
+  sleep_alarm_enabled boolean [not null, default: true]
+  medication_dday_alarm_enabled boolean [not null, default: true]
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  Note: 'Per-user notification toggle settings for 6 alarm categories. Supports REQ-066.'
+
+  indexes {
+    (user_id) [name: 'idx_notification_settings_user_id', unique]
+  }
+}
+
 Table medication_reminders {
   id bigint [pk, increment, not null]
   user_id bigint [not null]
@@ -319,7 +377,7 @@ Table medication_reminders {
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
 
-  Note: 'Single reminder table for CRUD and medication D-day calculation. Optional supply fields support REQ-020, REQ-021, REQ-121 without extra supply tables.'
+  Note: 'Single reminder table for CRUD and medication D-day calculation. dose_text stores formatted dosage (e.g. "1 캡/정"). Optional supply fields support REQ-020, REQ-021, REQ-121 without extra supply tables.'
 
   indexes {
     (user_id, enabled) [name: 'idx_reminders_user_enabled']
@@ -350,6 +408,24 @@ Table schedule_items {
 }
 
 // ----------------------------------------------------------------------
+// 6) Daily diary
+// ----------------------------------------------------------------------
+Table daily_diaries {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  date date [not null]
+  content longtext [not null, default: '']
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+  updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  Note: 'Daily journal entries for user diary feature. One diary per user per date. Supports REQ-073.'
+
+  indexes {
+    (user_id, date) [name: 'idx_daily_diaries_user_date', unique]
+  }
+}
+
+// ----------------------------------------------------------------------
 // Relationships
 // ----------------------------------------------------------------------
 Ref: users.id - health_profiles.user_id [delete: cascade]
@@ -366,3 +442,5 @@ Ref: users.id < medication_reminders.user_id [delete: cascade]
 Ref: medications.id < medication_reminders.medication_id [delete: set null]
 Ref: users.id < schedule_items.user_id [delete: cascade]
 Ref: medication_reminders.id < schedule_items.reminder_id [delete: set null]
+Ref: users.id - user_notification_settings.user_id [delete: cascade]
+Ref: users.id < daily_diaries.user_id [delete: cascade]
