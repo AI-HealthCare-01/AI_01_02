@@ -59,8 +59,7 @@ export default function Medications() {
   useEffect(() => {
     async function init() {
       await reload(true);
-
-}
+    }
     init();
 
     // 온보딩에서 전달된 state를 소비하여 새로고침 시 재발 방지
@@ -185,7 +184,6 @@ export default function Medications() {
                         key={r.id}
                         reminder={r}
                         dday={ddayMap[r.medication_name]}
-
                         expanded={expandedId === r.id}
                         editing={editingId === r.id}
                         onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
@@ -208,7 +206,6 @@ export default function Medications() {
                         key={r.id}
                         reminder={r}
                         dday={ddayMap[r.medication_name]}
-
                         expanded={expandedId === r.id}
                         editing={editingId === r.id}
                         onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
