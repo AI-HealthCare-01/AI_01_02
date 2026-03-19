@@ -21,13 +21,13 @@ def _depletion(dispensed_date: date, total_days: int) -> date:
 
 
 def test_dday_exact_boundary():
-    """소진 7일 전 경계값: remaining_days == 7이면 포함 조건 충족."""
+    """표시 기준은 소진일까지 남은 날짜에서 1을 뺀 값이다."""
     today = date.today()
     dispensed = today - timedelta(days=23)  # total_days=30 → depletion = today+7
     depletion = _depletion(dispensed, 30)
-    remaining = (depletion - today).days
+    remaining = (depletion - today).days - 1
 
-    assert remaining == 7
+    assert remaining == 6
     assert remaining <= 7  # days=7 윈도우에 포함
 
 
@@ -67,7 +67,7 @@ async def test_dday_already_depleted():
     today = date.today()
     dispensed = today - timedelta(days=35)  # total_days=30 → depletion = today-5
     depletion = _depletion(dispensed, 30)
-    remaining = (depletion - today).days  # -5
+    remaining = (depletion - today).days - 1  # -6
 
     assert remaining < 0
 
@@ -76,5 +76,14 @@ async def test_dday_already_depleted():
         remaining_days=remaining,
         estimated_depletion_date=depletion,
     )
-    assert item.remaining_days == -5
+    assert item.remaining_days == -6
     assert item.estimated_depletion_date == depletion
+
+
+def test_dday_calculate_remaining_days_minus_one():
+    from app.services.reminders import ReminderService
+
+    today = date(2026, 3, 19)
+    depletion = date(2026, 3, 22)
+
+    assert ReminderService._calculate_remaining_days(depletion=depletion, today=today) == 2
