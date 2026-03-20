@@ -11,7 +11,7 @@ from app.models.health_profiles import UserHealthProfile
 from app.models.notifications import Notification, NotificationType
 from app.models.ocr import Document, DocumentType, OcrJob, OcrJobStatus
 from app.models.psych_drugs import PsychDrug
-from app.models.reminders import MedicationReminder
+from app.models.reminders import MedicationReminder, ScheduleItem, ScheduleItemCategory, ScheduleItemStatus
 from app.models.users import User
 from app.services.notifications import _sync_cache
 
@@ -479,3 +479,178 @@ class TestNotificationApis(TestCase):
                 type=NotificationType.MEDICATION_DDAY,
             )
             assert len(dday_notifications) == 1
+
+    async def test_medication_reminder_notification_created_five_minutes_before_schedule(self):
+        email = "noti_med_rem@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01083334444")
+            user = await User.get(email=email)
+            now = datetime.now(config.TIMEZONE)
+            schedule_time = (now + timedelta(minutes=4)).strftime("%H:%M")
+            await MedicationReminder.create(
+                user=user,
+                medication_name="콘서타",
+                dose_text="1정",
+                schedule_times=[schedule_time],
+                enabled=True,
+            )
+
+            headers = {"Authorization": f"Bearer {access_token}"}
+            response = await client.get("/api/v1/notifications", headers=headers)
+
+            assert response.status_code == status.HTTP_200_OK
+            body = response.json()
+            medication_notifications = [
+                item
+                for item in body["items"]
+                if item["type"] == "SYSTEM" and item.get("payload", {}).get("event") == "medication_reminder"
+            ]
+            assert len(medication_notifications) == 1
+            assert medication_notifications[0]["title"] == "복약 알림"
+            assert medication_notifications[0]["message"] == f"5분 뒤 {schedule_time}에 콘서타 1정 복용 시간입니다."
+
+    async def test_medication_reminder_notification_is_deduplicated_for_same_schedule(self):
+        email = "noti_med_dedup@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01085556666")
+            user = await User.get(email=email)
+            now = datetime.now(config.TIMEZONE)
+            schedule_time = (now + timedelta(minutes=4)).strftime("%H:%M")
+            await MedicationReminder.create(
+                user=user,
+                medication_name="메디키넷",
+                schedule_times=[schedule_time],
+                enabled=True,
+            )
+
+            headers = {"Authorization": f"Bearer {access_token}"}
+            first = await client.get("/api/v1/notifications", headers=headers)
+            _sync_cache.pop(user.id, None)
+            second = await client.get("/api/v1/notifications", headers=headers)
+
+            assert first.status_code == status.HTTP_200_OK
+            assert second.status_code == status.HTTP_200_OK
+
+            medication_notifications = await Notification.filter(
+                user_id=user.id,
+                type=NotificationType.SYSTEM,
+            )
+            medication_notifications = [
+                item
+                for item in medication_notifications
+                if isinstance(item.payload, dict) and item.payload.get("event") == "medication_reminder"
+            ]
+            assert len(medication_notifications) == 1
+
+    async def test_medication_reminder_notification_backfills_legacy_numeric_dose_from_ocr(self):
+        email = "noti_med_backfill@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01086667777")
+            user = await User.get(email=email)
+            now = datetime.now(config.TIMEZONE)
+            schedule_time = (now + timedelta(minutes=4)).strftime("%H:%M")
+
+            document = await Document.create(
+                user=user,
+                document_type=DocumentType.PRESCRIPTION,
+                file_name="med_backfill.png",
+                temp_storage_key="documents/test/med_backfill.png",
+                file_size=100,
+                mime_type="image/png",
+            )
+            await OcrJob.create(
+                user=user,
+                document=document,
+                status=OcrJobStatus.SUCCEEDED,
+                confirmed_result={
+                    "extracted_medications": [
+                        {
+                            "drug_name": "메디키넷리타드캡슐",
+                            "dose": 10.0,
+                            "dosage_per_once": 1,
+                        }
+                    ]
+                },
+            )
+            reminder = await MedicationReminder.create(
+                user=user,
+                medication_name="메디키넷리타드캡슐",
+                dose_text="10.0",
+                schedule_times=[schedule_time],
+                enabled=True,
+            )
+
+            headers = {"Authorization": f"Bearer {access_token}"}
+            response = await client.get("/api/v1/notifications", headers=headers)
+
+            assert response.status_code == status.HTTP_200_OK
+            body = response.json()
+            medication_notifications = [
+                item
+                for item in body["items"]
+                if item["type"] == "SYSTEM" and item.get("payload", {}).get("event") == "medication_reminder"
+            ]
+            assert len(medication_notifications) == 1
+            assert (
+                medication_notifications[0]["message"]
+                == f"5분 뒤 {schedule_time}에 메디키넷리타드캡슐 1 캡/정 복용 시간입니다."
+            )
+
+            await reminder.refresh_from_db()
+            assert reminder.dose_text == "1 캡/정"
+
+    async def test_get_unread_count_triggers_medication_reminder_sync(self):
+        email = "noti_med_unread@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01087778888")
+            user = await User.get(email=email)
+            now = datetime.now(config.TIMEZONE)
+            schedule_time = (now + timedelta(minutes=4)).strftime("%H:%M")
+            await MedicationReminder.create(
+                user=user,
+                medication_name="리탈린",
+                schedule_times=[schedule_time],
+                enabled=True,
+            )
+
+            headers = {"Authorization": f"Bearer {access_token}"}
+            response = await client.get("/api/v1/notifications/unread-count", headers=headers)
+
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json()["unread_count"] == 1
+
+    async def test_medication_confirmation_notification_created_one_hour_after_pending_schedule(self):
+        email = "noti_med_confirm@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01089990000")
+            user = await User.get(email=email)
+            reminder = await MedicationReminder.create(
+                user=user,
+                medication_name="메디키넷리타드캡슐",
+                dose_text="1 캡/정",
+                schedule_times=["09:00"],
+                enabled=True,
+            )
+            await ScheduleItem.create(
+                user=user,
+                reminder=reminder,
+                category=ScheduleItemCategory.MEDICATION,
+                title="복약",
+                scheduled_at=datetime.now(config.TIMEZONE) - timedelta(hours=2),
+                status=ScheduleItemStatus.PENDING,
+            )
+
+            headers = {"Authorization": f"Bearer {access_token}"}
+            response = await client.get("/api/v1/notifications", headers=headers)
+
+            assert response.status_code == status.HTTP_200_OK
+            body = response.json()
+            confirmation_notifications = [
+                item
+                for item in body["items"]
+                if item["type"] == "SYSTEM"
+                and item.get("payload", {}).get("event") == "medication_confirmation_required"
+            ]
+            assert len(confirmation_notifications) == 1
+            assert confirmation_notifications[0]["title"] == "복약 확인"
+            assert "복용 여부를 선택해주세요" in confirmation_notifications[0]["message"]

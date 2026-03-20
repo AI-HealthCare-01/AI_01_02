@@ -11,3 +11,6 @@ class GuideRepository:
 
     async def get_user_job(self, *, job_id: int, user_id: int) -> GuideJob | None:
         return await GuideJob.get_or_none(id=job_id, user_id=user_id)
+
+    async def get_latest_user_job(self, *, user_id: int) -> GuideJob | None:
+        return await GuideJob.filter(user_id=user_id).order_by("-created_at", "-id").first()

@@ -6,7 +6,9 @@ import {
   scheduleApi,
   userApi,
   reminderApi,
+  ocrApi,
   OcrMedication,
+  Reminder,
   ScheduleItem,
   UserInfo,
   DdayReminder,
@@ -28,7 +30,8 @@ export default function Dashboard() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [dday, setDday] = useState<DdayReminder[]>([]);
-  const [dailyMeds, setDailyMeds] = useState<OcrMedication[]>([]);
+  const [ocrMeds, setOcrMeds] = useState<OcrMedication[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [todayKey, setTodayKey] = useState(() => toDateStr(new Date()));
   const today = useMemo(() => new Date(todayKey + "T00:00:00"), [todayKey]);
@@ -47,24 +50,40 @@ export default function Dashboard() {
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
+  async function loadOcrMedications() {
+    const jobId = localStorage.getItem("ocr_job_id");
+    if (!jobId) {
+      setOcrMeds([]);
+      return;
+    }
+    try {
+      const res = await ocrApi.getJobResult(jobId);
+      const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
+      setOcrMeds(Array.isArray(meds) ? meds : []);
+    } catch {
+      setOcrMeds([]);
+    }
+  }
+
   async function load() {
     setLoading(true);
     try {
-      const [userData, scheduleData, ddayData] = await Promise.all([
+      const [userData, scheduleData, ddayData, reminderData] = await Promise.all([
         userApi.me(),
         scheduleApi.getDaily(todayKey),
         reminderApi.getDday(7),
+        reminderApi.list(true),
       ]);
       setUser(userData);
       setItems(scheduleData.items);
-      setDailyMeds(scheduleData.medications);
       setDday(ddayData.items);
+      setReminders(reminderData.items);
     } catch {
       // non-critical
-      setDailyMeds([]);
     } finally {
       setLoading(false);
     }
+    await loadOcrMedications();
   }
 
   useEffect(() => { load(); }, [todayKey]); // eslint-disable-line
@@ -88,7 +107,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-full p-4 md:p-8 max-w-3xl mx-auto space-y-5 stagger-children">
       {/* Header */}
-      <div>
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">
             {user ? `안녕하세요, ${user.name}님` : "안녕하세요"}
@@ -138,7 +157,8 @@ export default function Dashboard() {
       <MedicationScheduleCard
         title="복약 일정"
         loading={loading}
-        medications={dailyMeds}
+        ocrMeds={ocrMeds}
+        reminders={reminders}
         scheduleItems={items}
         storageDateKey={todayKey}
         onUpdateScheduleStatus={updateMedicationStatus}
