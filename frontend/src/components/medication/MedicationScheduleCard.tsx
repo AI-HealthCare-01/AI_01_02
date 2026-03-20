@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, Clock3, Pill } from "lucide-react";
 import { OcrMedication, Reminder, ScheduleItem } from "@/lib/api";
 
 const INTAKE_TIME_LABEL: Record<string, string> = {
@@ -11,8 +11,44 @@ const INTAKE_TIME_LABEL: Record<string, string> = {
 };
 
 const DEFAULT_TIME_LABEL_BY_SLOT = ["아침", "점심", "저녁", "취침 전"];
-
 const DAILY_CONFIRM_STORAGE_PREFIX = "daily_med_confirmed";
+
+type MedicationStatus = "PENDING" | "DONE" | "SKIPPED";
+
+type MedicationRow = {
+  key: string;
+  intakeLabel: string;
+  scheduleItem: ScheduleItem | null;
+  manualKey: string;
+  drugName: string;
+  doseLabel: string;
+  dosagePerOnce: string;
+};
+
+const STATUS_META: Record<
+  MedicationStatus,
+  {
+    label: string;
+    badgeClassName: string;
+    actionClassName: string;
+  }
+> = {
+  DONE: {
+    label: "완료",
+    badgeClassName: "border-green-200 bg-green-50 text-green-700",
+    actionClassName: "border-green-200 bg-green-50 text-green-700",
+  },
+  PENDING: {
+    label: "미응답",
+    badgeClassName: "border-gray-200 bg-white text-gray-500",
+    actionClassName: "border-gray-200 bg-white text-gray-500",
+  },
+  SKIPPED: {
+    label: "건너뜀",
+    badgeClassName: "border-amber-200 bg-amber-50 text-amber-700",
+    actionClassName: "border-amber-200 bg-amber-50 text-amber-700",
+  },
+};
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
@@ -66,6 +102,16 @@ function toDisplayIntakeLabels(raw: OcrMedication["intake_time"], frequencyPerDa
   return DEFAULT_TIME_LABEL_BY_SLOT.slice(0, count);
 }
 
+function formatDosagePerOnce(value: string): string {
+  if (!value || value === "-") return "-";
+  return /\d$/.test(value) ? `${value}정` : value;
+}
+
+function getRowStatus(scheduleItem: ScheduleItem | null, manualChecked: boolean): MedicationStatus {
+  if (scheduleItem) return scheduleItem.status;
+  return manualChecked ? "DONE" : "PENDING";
+}
+
 type Props = {
   title?: string;
   loading: boolean;
@@ -73,7 +119,7 @@ type Props = {
   reminders?: Reminder[];
   scheduleItems: ScheduleItem[];
   storageDateKey: string;
-  onUpdateScheduleStatus: (itemId: string, status: "PENDING" | "DONE" | "SKIPPED") => void;
+  onUpdateScheduleStatus: (itemId: string, status: MedicationStatus) => void;
   onProgressChange?: (progress: number, totalCount: number) => void;
 };
 
@@ -113,7 +159,7 @@ export default function MedicationScheduleCard({
   }
 
   const medicationItems = scheduleItems
-    .filter((i) => i.category === "MEDICATION")
+    .filter((item) => item.category === "MEDICATION")
     .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
   const filteredReminders = reminders.filter((reminder) =>
     isDateWithinMedicationPeriod(storageDateKey, {
@@ -128,7 +174,7 @@ export default function MedicationScheduleCard({
       totalDays: med.total_days,
     }));
 
-  const medicationRows = (() => {
+  const medicationRows: MedicationRow[] = (() => {
     let scheduleCursor = 0;
 
     if (filteredOcrMeds.length === 0) {
@@ -205,26 +251,30 @@ export default function MedicationScheduleCard({
 
   return (
     <div className="card-warm p-5">
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-base font-bold text-gray-800">{title}</h2>
-          <div className="flex items-center gap-2 mt-2 text-[11px]">
-            <span className="rounded-full bg-green-50 px-2 py-0.5 font-semibold text-green-700">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="rounded-full border border-green-200 bg-green-50 px-2.5 py-1 font-semibold text-green-700">
               완료 {completedMedicationCount}
             </span>
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 font-semibold text-gray-600">
+            <span className="rounded-full border border-gray-200 bg-white px-2.5 py-1 font-semibold text-gray-600">
               미응답 {pendingMedicationCount}
             </span>
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 font-semibold text-amber-700">
               건너뜀 {skippedMedicationCount}
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2.5">
-          <span className="text-sm font-bold text-green-600">복약율 {progress}%</span>
-          <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+
+        <div className="min-w-[180px]">
+          <div className="mb-2 flex items-center justify-between text-xs font-semibold text-gray-500">
+            <span>복약률</span>
+            <span className="text-sm font-bold text-green-600">{progress}%</span>
+          </div>
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
             <div
-              className="h-full gradient-primary rounded-full transition-all duration-700 ease-out"
+              className="h-full rounded-full gradient-primary transition-all duration-700 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -232,53 +282,86 @@ export default function MedicationScheduleCard({
       </div>
 
       {loading ? (
-        <p className="text-center text-sm text-gray-400 py-6">불러오는 중...</p>
+        <p className="py-6 text-center text-sm text-gray-400">불러오는 중...</p>
       ) : medicationRows.length === 0 ? (
-        <p className="text-center text-sm text-gray-400 py-6">OCR로 추출된 복약 정보가 없습니다.</p>
+        <p className="py-6 text-center text-sm text-gray-400">OCR로 추출된 복약 정보가 없습니다.</p>
       ) : (
-        <div className="space-y-2">
-          <div className="grid grid-cols-[92px_1fr_90px_110px_128px] gap-2 px-3 py-2 text-xs font-semibold text-gray-500">
-            <span>복용시간</span>
-            <span>약품명</span>
-            <span>용량</span>
-            <span>1회투약량</span>
-            <span className="text-right">복약 여부</span>
-          </div>
+        <div className="space-y-3">
           {medicationRows.map(({ key, intakeLabel, scheduleItem, manualKey, drugName, doseLabel, dosagePerOnce }) => {
             const isManualConfirmed = !!manualConfirmedMap[manualKey];
             const displayIntakeLabel = scheduleItem ? formatTime(scheduleItem.scheduled_at) : intakeLabel;
+            const status = getRowStatus(scheduleItem, isManualConfirmed);
+            const statusMeta = STATUS_META[status];
 
             return (
-              <div key={key} className="grid grid-cols-[92px_1fr_90px_110px_128px] gap-2 items-center px-3 py-3 rounded-xl bg-white/80 shadow-sm">
-                <span className="text-sm text-gray-600">{displayIntakeLabel}</span>
-                <span className="text-sm font-semibold text-gray-800 truncate">{drugName}</span>
-                <span className="text-sm text-gray-700">{doseLabel}</span>
-                <span className="text-sm text-gray-700">{dosagePerOnce}</span>
-                <div className="flex items-center justify-end gap-1.5">
-                  {scheduleItem ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateScheduleStatus(
-                          scheduleItem.item_id,
-                          scheduleItem.status === "DONE" ? "PENDING" : "DONE",
-                        )
-                      }
-                      className="inline-flex items-center justify-center p-1 rounded-lg transition-all duration-150"
-                      aria-label={scheduleItem.status === "DONE" ? "복약 완료" : "복약 예정"}
-                    >
-                      <CheckBox checked={scheduleItem.status === "DONE"} />
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => toggleManualConfirm(manualKey)}
-                      className="inline-flex items-center justify-center p-1 rounded-lg transition-all duration-150"
-                      aria-label={isManualConfirmed ? "복약 완료" : "복약 예정"}
-                    >
-                      <CheckBox checked={isManualConfirmed} />
-                    </button>
-                  )}
+              <div key={key} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-green-50">
+                    <Pill className="h-5 w-5 text-green-600" />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-gray-800">{drugName}</p>
+                        <div className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                          <Clock3 className="h-3.5 w-3.5" />
+                          <span>{displayIntakeLabel}</span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
+                            용량 {doseLabel}
+                          </span>
+                          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                            1회 {formatDosagePerOnce(dosagePerOnce)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-start gap-3 md:items-end">
+                        {scheduleItem ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onUpdateScheduleStatus(
+                                scheduleItem.item_id,
+                                scheduleItem.status === "SKIPPED" ? "PENDING" : "SKIPPED",
+                              )
+                            }
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
+                              scheduleItem.status === "SKIPPED"
+                                ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                                : "border-gray-200 bg-white text-gray-500 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                            }`}
+                          >
+                            {scheduleItem.status === "SKIPPED" ? "건너뜀 해제" : "건너뜀"}
+                          </button>
+                        ) : (
+                          <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusMeta.badgeClassName}`}>
+                            {statusMeta.label}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (scheduleItem) {
+                              onUpdateScheduleStatus(
+                                scheduleItem.item_id,
+                                scheduleItem.status === "DONE" ? "PENDING" : "DONE",
+                              );
+                              return;
+                            }
+                            toggleManualConfirm(manualKey);
+                          }}
+                          className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition-colors hover:border-green-300 hover:text-green-700"
+                          aria-label={status === "DONE" ? "복약 완료" : "복약 예정"}
+                        >
+                          <CheckBox checked={status === "DONE"} />
+                          <span>{status === "DONE" ? "체크됨" : "체크하기"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             );
@@ -292,10 +375,10 @@ export default function MedicationScheduleCard({
 function CheckBox({ checked }: { checked: boolean }) {
   return (
     <span
-      className={`flex h-5 w-5 items-center justify-center rounded-[4px] border transition-all duration-150 ${
+      className={`flex h-5 w-5 items-center justify-center rounded-[6px] border transition-all duration-150 ${
         checked
           ? "border-green-600 bg-green-500 text-white shadow-sm"
-          : "border-gray-500 bg-white text-transparent"
+          : "border-gray-400 bg-white text-transparent"
       }`}
     >
       <Check className="h-3.5 w-3.5" strokeWidth={3.2} />

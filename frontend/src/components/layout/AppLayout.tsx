@@ -174,21 +174,21 @@ export default function AppLayout() {
       </div>
 
       {/* ── Main content ── */}
-      <main className="flex-1 overflow-y-auto pb-20 pt-[4.5rem] md:pb-0 md:pt-0">
+      <main className="flex-1 overflow-y-auto pb-28 pt-[4.5rem] md:pb-0 md:pt-0">
         <div className="min-h-full animate-page-enter">
           <Outlet />
         </div>
       </main>
 
       {/* ── Bottom tab bar (mobile) ── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 glass border-t border-gray-200/40 flex z-40">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex min-h-[88px] border-t border-gray-200/40 bg-white/92 px-1 pt-3 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl pb-[calc(env(safe-area-inset-bottom)+0.8rem)]">
         {PRIMARY_NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
             className={({ isActive }) =>
-              `relative flex flex-col items-center justify-center flex-1 py-2.5 gap-0.5 transition-all duration-200 ${
+              `relative flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl py-3 transition-all duration-200 ${
                 isActive ? "text-green-600" : "text-gray-400"
               }`
             }
@@ -196,11 +196,11 @@ export default function AppLayout() {
             {({ isActive }) => (
               <>
                 <div className="relative">
-                  <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive ? "scale-110" : ""}`} />
+                  <Icon className={`h-[22px] w-[22px] transition-transform duration-200 ${isActive ? "scale-110" : ""}`} />
                 </div>
-                <span className="text-[10px] font-semibold leading-none">{label}</span>
+                <span className="text-[11px] font-semibold leading-none">{label}</span>
                 {isActive && (
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-green-500 rounded-full" />
+                  <div className="absolute top-0 left-1/2 h-0.5 w-9 -translate-x-1/2 rounded-full bg-green-500" />
                 )}
               </>
             )}

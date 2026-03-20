@@ -1,22 +1,36 @@
-import { useEffect, useState } from "react";
-import { Bell, PlusCircle, Check, CalendarClock } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  AlertTriangle,
+  Bell,
+  Check,
+  Circle,
+  MoonStar,
+  Pill,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
-import { notificationApi, ApiNotification, NotificationType, scheduleApi } from "@/lib/api";
+import { notificationApi, type ApiNotification, type NotificationType } from "@/lib/api";
 import { useNotification } from "@/lib/NotificationContext";
 
-const TYPE_ICON: Record<NotificationType, React.ReactNode> = {
-  SYSTEM: <PlusCircle className="w-5 h-5 text-gray-400" />,
-  HEALTH_ALERT: <PlusCircle className="w-5 h-5 text-amber-400" />,
-  REPORT_READY: <PlusCircle className="w-5 h-5 text-blue-400" />,
-  GUIDE_READY: <PlusCircle className="w-5 h-5 text-green-500" />,
-  MEDICATION_DDAY: <CalendarClock className="w-5 h-5 text-amber-500" />,
+type FilterType = "all" | "unread";
+
+type NotificationTone = {
+  icon: ReactNode;
+  iconWrapClass: string;
+  titleClass: string;
+  summaryClass: string;
+  unreadCardClass: string;
 };
 
-// ── 메인 컴포넌트 ──────────────────────────────────────────────────────────────
-
-type FilterType = "all" | "unread";
 const COLLAPSED_VISIBLE_COUNT = 3;
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const ACTION_HINT_PATTERN = /하세요|해 주세요|권장|상담|확인|예약|유지|줄이|피하|우선|시작|복용|관리|점검|받아/;
+const ONE_LINE_CLAMP_STYLE = {
+  display: "-webkit-box",
+  WebkitBoxOrient: "vertical" as const,
+  WebkitLineClamp: 1,
+  overflow: "hidden",
+};
 
 function isWithinOneWeek(createdAt: string) {
   return Date.now() - new Date(createdAt).getTime() <= ONE_WEEK_MS;
@@ -35,9 +49,89 @@ function formatNotificationTime(createdAt: string) {
   });
 }
 
-function getActionTaken(payload: Record<string, unknown>) {
-  const value = payload?.action_taken;
-  return value === "DONE" || value === "SKIPPED" ? value : null;
+function normalizeText(text: string) {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function splitSentences(text: string) {
+  return normalizeText(text)
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function extractHealthState(message: string, fallback: string) {
+  const normalized = normalizeText(message);
+  if (/수면 부족|잦은 각성|졸림|피로/.test(normalized)) return "수면 부족";
+  if (/영양|체중|식사/.test(normalized)) return "영양 상태 주의";
+  if (/알레르기|발진|호흡곤란/.test(normalized)) return "알레르기 위험";
+  if (/음주/.test(normalized)) return "음주 주의";
+  if (/흡연/.test(normalized)) return "흡연 주의";
+  return fallback;
+}
+
+function deriveStatusAction(notification: ApiNotification) {
+  const sentences = splitSentences(notification.message);
+  const fallbackAction = sentences[1] ?? sentences[0] ?? notification.title;
+  const action = sentences.find((sentence, index) => index > 0 && ACTION_HINT_PATTERN.test(sentence))
+    ?? fallbackAction;
+
+  let state = notification.title;
+  if (notification.type === "MEDICATION_DDAY") {
+    state = "약 소진 임박";
+  } else if (notification.type === "GUIDE_READY" || notification.type === "REPORT_READY") {
+    state = "가이드 업데이트";
+  } else if (notification.type === "HEALTH_ALERT") {
+    state = extractHealthState(notification.message, notification.title);
+  }
+
+  return {
+    state,
+    action: normalizeText(action),
+    summary: `${state} · - 행동: ${normalizeText(action)}`,
+  };
+}
+
+function getNotificationTone(notification: ApiNotification): NotificationTone {
+  const combinedText = `${notification.title} ${notification.message}`;
+
+  if (/수면|취침|잠|각성|졸림/.test(combinedText)) {
+    return {
+      icon: <MoonStar className="w-5 h-5 text-amber-600" />,
+      iconWrapClass: "bg-amber-50 ring-1 ring-amber-100",
+      titleClass: "text-amber-900",
+      summaryClass: "text-amber-800",
+      unreadCardClass: "bg-amber-50/70 border-amber-200 hover:border-amber-300",
+    };
+  }
+
+  if (notification.type === "MEDICATION_DDAY") {
+    return {
+      icon: <Pill className="w-5 h-5 text-green-600" />,
+      iconWrapClass: "bg-green-50 ring-1 ring-green-100",
+      titleClass: "text-green-900",
+      summaryClass: "text-green-800",
+      unreadCardClass: "bg-green-50/70 border-green-200 hover:border-green-300",
+    };
+  }
+
+  if (notification.type === "GUIDE_READY" || notification.type === "REPORT_READY" || notification.type === "SYSTEM") {
+    return {
+      icon: <Sparkles className="w-5 h-5 text-blue-600" />,
+      iconWrapClass: "bg-blue-50 ring-1 ring-blue-100",
+      titleClass: "text-blue-900",
+      summaryClass: "text-blue-800",
+      unreadCardClass: "bg-blue-50/70 border-blue-200 hover:border-blue-300",
+    };
+  }
+
+  return {
+    icon: <AlertTriangle className="w-5 h-5 text-red-600" />,
+    iconWrapClass: "bg-red-50 ring-1 ring-red-100",
+    titleClass: "text-red-900",
+    summaryClass: "text-red-800",
+    unreadCardClass: "bg-red-50/70 border-red-200 hover:border-red-300",
+  };
 }
 
 export default function NotificationsTab() {
@@ -45,6 +139,7 @@ export default function NotificationsTab() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterType>("all");
   const [showAllInAllTab, setShowAllInAllTab] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const { refresh: refreshBadge } = useNotification();
 
   async function load() {
@@ -85,58 +180,18 @@ export default function NotificationsTab() {
     try {
       const { updated_count } = await notificationApi.deleteRead();
       setNotifications((prev) => prev.filter((n) => !n.is_read));
+      setExpandedId(null);
       toast.success(updated_count > 0 ? "읽은 알림을 삭제했습니다." : "삭제할 읽은 알림이 없습니다.");
     } catch {
       toast.error("읽은 알림 삭제에 실패했습니다.");
     }
   }
 
-  async function handleMedicationConfirmationAction(
-    notification: ApiNotification,
-    status: "DONE" | "SKIPPED",
-  ) {
-    const scheduleItemId = String(notification.payload?.schedule_item_id ?? "");
-    if (!scheduleItemId) {
-      toast.error("복약 일정 정보를 찾지 못했습니다.");
-      return;
+  function handleNotificationClick(notification: ApiNotification) {
+    if (!notification.is_read) {
+      void markRead(notification.id);
     }
-
-    try {
-      await scheduleApi.updateStatus(scheduleItemId, status);
-    } catch {
-      toast.error("복약 상태 업데이트에 실패했습니다.");
-      return;
-    }
-
-    try {
-      const updatedNotification = notification.is_read
-        ? notification
-        : await notificationApi.markAsRead(notification.id);
-      setNotifications((prev) =>
-        prev.map((item) =>
-          item.id === notification.id
-            ? {
-                ...updatedNotification,
-                is_read: true,
-                payload: {
-                  ...updatedNotification.payload,
-                  action_taken: status,
-                },
-              }
-            : item,
-        ),
-      );
-      refreshBadge();
-    } catch {
-      setNotifications((prev) =>
-        prev.map((item) =>
-          item.id === notification.id
-            ? { ...item, payload: { ...item.payload, action_taken: status } }
-            : item,
-        ),
-      );
-    }
-    toast.success(status === "DONE" ? "복약 완료로 기록했어요." : "건너뜀으로 기록했어요.");
+    setExpandedId((prev) => (prev === notification.id ? null : notification.id));
   }
 
   const recentNotifications = notifications.filter((n) => isWithinOneWeek(n.created_at));
@@ -149,138 +204,138 @@ export default function NotificationsTab() {
   const canToggleAllFold = filter === "all" && recentNotifications.length > COLLAPSED_VISIBLE_COUNT;
 
   return (
-    <div>
-      <div className="min-w-0">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          {/* 필터 탭 */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                setFilter("all");
-                setShowAllInAllTab(false);
-              }}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-all duration-200 ${
-                filter === "all"
-                  ? "gradient-primary text-white border-transparent shadow-sm"
-                  : "border-gray-200 text-gray-500 hover:border-gray-300"
-              }`}
-            >
-              전체
-            </button>
-            <button
-              onClick={() => setFilter("unread")}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-all duration-200 ${
-                filter === "unread"
-                  ? "gradient-primary text-white border-transparent shadow-sm"
-                  : "border-gray-200 text-gray-500 hover:border-gray-300"
-              }`}
-            >
-              읽지 않은 알림 {unread.length}개
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={deleteRead}
-              disabled={read.length === 0}
-              className="py-2.5 px-4 text-sm font-medium border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              읽은 알림 삭제
-            </button>
-            <button
-              onClick={markAllRead}
-              disabled={unread.length === 0}
-              className="py-2.5 px-4 text-sm font-medium border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              모두 읽음
-            </button>
-          </div>
+    <div className="min-w-0">
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setFilter("all");
+              setShowAllInAllTab(false);
+            }}
+            className={`min-h-11 rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-200 ${
+              filter === "all"
+                ? "gradient-primary border-transparent text-white shadow-sm"
+                : "border-gray-200 text-gray-500 hover:border-gray-300"
+            }`}
+          >
+            전체
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter("unread")}
+            className={`min-h-11 rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-200 ${
+              filter === "unread"
+                ? "gradient-primary border-transparent text-white shadow-sm"
+                : "border-gray-200 text-gray-500 hover:border-gray-300"
+            }`}
+          >
+            읽지 않은 알림 {unread.length}개
+          </button>
         </div>
 
-        {/* 알림 목록 */}
-        {loading ? (
-          <div className="text-center py-16 text-gray-400 text-sm">불러오는 중...</div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-16 text-gray-400 text-sm">
-            <Bell className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-            <p>{filter === "unread" ? "읽지 않은 알림이 없습니다." : "알림이 없습니다."}</p>
-          </div>
-        ) : (
-          <div>
-            <div className="space-y-2">
-              {displayed.map((n) => (
-                <div
-                  key={n.id}
-                  onClick={() => !n.is_read && markRead(n.id)}
-                  className={`flex items-start gap-3 bg-white/80 rounded-xl px-4 py-3.5 shadow-sm transition-all duration-200 ${
-                    n.is_read
-                      ? "cursor-default"
-                      : "hover:bg-gray-50 cursor-pointer"
-                  }`}
-                >
-                  <div className="shrink-0">{TYPE_ICON[n.type]}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium ${n.is_read ? "text-gray-400" : "text-gray-800"}`}>
-                      {n.title}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-0.5 whitespace-normal break-words leading-relaxed">
-                      {n.message}
-                    </p>
-                    {n.payload?.event === "medication_confirmation_required" && !n.is_read && !getActionTaken(n.payload) && (
-                      <div className="mt-2 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleMedicationConfirmationAction(n, "DONE");
-                          }}
-                          className="rounded-lg bg-green-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-green-600 transition-colors"
-                        >
-                          복약 확인
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleMedicationConfirmationAction(n, "SKIPPED");
-                          }}
-                          className="rounded-lg bg-amber-100 px-3 py-1.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-200 transition-colors"
-                        >
-                          건너뜀
-                        </button>
-                      </div>
-                    )}
-                    {n.payload?.event === "medication_confirmation_required" && getActionTaken(n.payload) && (
-                      <p className="mt-2 text-[11px] font-medium text-gray-400">
-                        {getActionTaken(n.payload) === "DONE" ? "복약 완료로 기록됨" : "건너뜀으로 기록됨"}
-                      </p>
-                    )}
-                    <p className="text-[11px] text-gray-400 mt-1">
-                      {formatNotificationTime(n.created_at)}
-                    </p>
-                  </div>
-                  <div className="shrink-0">
-                    {n.is_read ? (
-                      <Check className="w-4 h-4 text-gray-300" />
-                    ) : (
-                      <Check className="w-4 h-4 text-green-500" />
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            {canToggleAllFold && (
-              <button
-                type="button"
-                onClick={() => setShowAllInAllTab((prev) => !prev)}
-                className="mt-3 text-sm font-medium text-green-700 hover:text-green-800 transition-colors"
-              >
-                {showAllInAllTab ? "접기" : `전체 알림 보기 (${recentNotifications.length}개)`}
-              </button>
-            )}
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={deleteRead}
+            disabled={read.length === 0}
+            className="min-h-11 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-all duration-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            읽은 알림 삭제
+          </button>
+          <button
+            type="button"
+            onClick={markAllRead}
+            disabled={unread.length === 0}
+            className="min-h-11 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-all duration-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            모두 읽음
+          </button>
+        </div>
       </div>
+
+      {loading ? (
+        <div className="py-16 text-center text-sm text-gray-400">불러오는 중...</div>
+      ) : filtered.length === 0 ? (
+        <div className="py-16 text-center text-sm text-gray-400">
+          <Bell className="mx-auto mb-3 h-10 w-10 text-gray-200" />
+          <p>{filter === "unread" ? "읽지 않은 알림이 없습니다." : "알림이 없습니다."}</p>
+        </div>
+      ) : (
+        <div>
+          <div className="space-y-3">
+            {displayed.map((notification) => {
+              const tone = getNotificationTone(notification);
+              const content = deriveStatusAction(notification);
+              const isExpanded = expandedId === notification.id;
+
+              return (
+                <button
+                  key={notification.id}
+                  type="button"
+                  onClick={() => handleNotificationClick(notification)}
+                  className={`w-full rounded-2xl border px-4 py-3.5 text-left shadow-sm transition-all duration-200 ${
+                    notification.is_read
+                      ? "border-gray-200 bg-white/80 opacity-65 hover:opacity-90"
+                      : tone.unreadCardClass
+                  } ${isExpanded ? "max-h-none" : "max-h-[96px] overflow-hidden"}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${tone.iconWrapClass}`}>
+                      {tone.icon}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className={`truncate text-sm font-bold ${tone.titleClass}`}>
+                            {notification.title}
+                          </p>
+                          <p className={`mt-1 text-sm ${tone.summaryClass}`} style={ONE_LINE_CLAMP_STYLE}>
+                            {content.summary}
+                          </p>
+                        </div>
+                        <div className="shrink-0 pt-0.5">
+                          {notification.is_read ? (
+                            <Check className="h-4 w-4 text-gray-400" />
+                          ) : (
+                            <Circle className="h-4 w-4 fill-current text-green-500" />
+                          )}
+                        </div>
+                      </div>
+
+                      {isExpanded ? (
+                        <div className="mt-3 space-y-2 border-t border-black/5 pt-3">
+                          <p className={`text-sm font-bold ${tone.titleClass}`}>
+                            상태: {content.state}
+                          </p>
+                          <p className="text-sm text-gray-700">
+                            <span className="font-semibold text-gray-800">- 행동:</span> {content.action}
+                          </p>
+                          <p className="text-xs leading-relaxed text-gray-500">
+                            {notification.message}
+                          </p>
+                          <p className="text-[11px] text-gray-400">
+                            {formatNotificationTime(notification.created_at)}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          {canToggleAllFold && (
+            <button
+              type="button"
+              onClick={() => setShowAllInAllTab((prev) => !prev)}
+              className="mt-3 min-h-11 text-sm font-medium text-green-700 transition-colors hover:text-green-800"
+            >
+              {showAllInAllTab ? "접기" : `전체 알림 보기 (${recentNotifications.length}개)`}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
