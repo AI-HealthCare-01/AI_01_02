@@ -1,7 +1,11 @@
+from unittest.mock import patch
+
 from httpx import ASGITransport, AsyncClient
 from starlette import status
 from tortoise.contrib.test import TestCase
 
+from app.core import config
+from app.core.config import Env
 from app.main import app
 
 
@@ -35,3 +39,24 @@ class TestLoginAPI(TestCase):
 
         # AuthService.authenticate 에서 실패 시 AUTH_INVALID_TOKEN(401) 발생
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    async def test_login_refresh_cookie_omits_domain_for_localhost(self):
+        signup_data = {
+            "email": "cookie_test@example.com",
+            "password": "Password123!",
+            "name": "쿠키테스터",
+            "gender": "FEMALE",
+            "birth_date": "1995-05-05",
+            "phone_number": "01012344321",
+        }
+        login_data = {"email": "cookie_test@example.com", "password": "Password123!"}
+
+        with patch.object(config, "COOKIE_DOMAIN", "localhost"), patch.object(config, "ENV", Env.LOCAL):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                await client.post("/api/v1/auth/signup", json=signup_data)
+                response = await client.post("/api/v1/auth/login", json=login_data)
+
+        assert response.status_code == status.HTTP_200_OK
+        set_cookie = response.headers.get("set-cookie", "")
+        assert "refresh_token=" in set_cookie
+        assert "Domain=" not in set_cookie

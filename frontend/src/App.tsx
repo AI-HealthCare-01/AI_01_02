@@ -1,9 +1,9 @@
-import { lazy, Suspense, Component, type ReactNode } from "react";
+import { lazy, Suspense, Component, type ReactNode, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { Toaster } from "sonner";
 import { NotificationProvider } from "@/lib/NotificationContext";
 import AppLayout from "./components/layout/AppLayout";
-import { getToken } from "./lib/api";
+import { ACCESS_TOKEN_STORAGE_KEY, getToken, subscribeToAuthChanges } from "./lib/api";
 
 // Lazy-loaded pages
 const Login = lazy(() => import("./pages/auth/Login"));
@@ -22,7 +22,26 @@ const Settings = lazy(() => import("./pages/app/Settings"));
 const Support = lazy(() => import("./pages/app/Support"));
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  return getToken() ? <>{children}</> : <Navigate to="/login" replace />;
+  const [token, setToken] = useState(() => getToken());
+
+  useEffect(() => {
+    const unsubscribe = subscribeToAuthChanges(() => {
+      setToken(getToken());
+    });
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === ACCESS_TOKEN_STORAGE_KEY) {
+        setToken(getToken());
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  return token ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
 function PageSpinner() {

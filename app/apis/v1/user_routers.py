@@ -12,6 +12,7 @@ from app.models.users import User
 from app.services.health_profiles import HealthProfileService
 from app.services.jwt import JwtService
 from app.services.users import UserManageService
+from app.utils.auth_cookies import get_refresh_cookie_kwargs
 
 user_router = APIRouter(prefix="/users", tags=["users"])
 _bearer = HTTPBearer()
@@ -65,7 +66,7 @@ async def delete_user_me(
 
     await user_manage_service.deactivate_user(user=user, access_jti=access_jti, refresh_jti=refresh_jti)
     resp = Response(status_code=status.HTTP_204_NO_CONTENT)
-    resp.delete_cookie(key="refresh_token")
+    resp.delete_cookie(key="refresh_token", **get_refresh_cookie_kwargs())
     return resp
 
 

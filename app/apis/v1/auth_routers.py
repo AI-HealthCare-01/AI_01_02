@@ -6,12 +6,12 @@ from fastapi.responses import ORJSONResponse as Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core import config
-from app.core.config import Env
 from app.core.exceptions import AppException, ErrorCode
 from app.core.logger import default_logger as logger
 from app.dtos.auth import LoginRequest, LoginResponse, SignUpRequest, TokenRefreshResponse
 from app.services.auth import AuthService, blacklist_jti
 from app.services.jwt import JwtService
+from app.utils.auth_cookies import get_refresh_cookie_kwargs
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -40,10 +40,7 @@ async def login(
     resp.set_cookie(
         key="refresh_token",
         value=str(refresh_token),
-        httponly=True,
-        secure=config.ENV == Env.PROD,
-        samesite="lax",
-        domain=config.COOKIE_DOMAIN or None,
+        **get_refresh_cookie_kwargs(),
         expires=refresh_token_exp,
         max_age=config.REFRESH_TOKEN_EXPIRE_MINUTES * 60,
     )
@@ -67,10 +64,7 @@ async def token_refresh(
     resp.set_cookie(
         key="refresh_token",
         value=str(new_refresh_token),
-        httponly=True,
-        secure=config.ENV == Env.PROD,
-        samesite="lax",
-        domain=config.COOKIE_DOMAIN or None,
+        **get_refresh_cookie_kwargs(),
         expires=refresh_token_exp,
         max_age=config.REFRESH_TOKEN_EXPIRE_MINUTES * 60,
     )
@@ -102,9 +96,6 @@ async def logout(
     resp = Response(content={"detail": "로그아웃되었습니다."}, status_code=status.HTTP_200_OK)
     resp.delete_cookie(
         key="refresh_token",
-        httponly=True,
-        secure=config.ENV == Env.PROD,
-        samesite="lax",
-        domain=config.COOKIE_DOMAIN or None,
+        **get_refresh_cookie_kwargs(),
     )
     return resp

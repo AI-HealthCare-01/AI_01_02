@@ -7,6 +7,7 @@ from redis.exceptions import RedisError
 from tortoise.transactions import in_transaction
 
 from app.core import config
+from app.core.config import Env
 from app.core.exceptions import AppException, ErrorCode
 from app.core.logger import default_logger as logger
 from app.dtos.auth import LoginRequest, SignUpRequest
@@ -52,14 +53,22 @@ async def is_jti_blacklisted(jti: str) -> bool:
         result = await cast(Awaitable, client.exists(f"{TOKEN_BLACKLIST_PREFIX}{jti}"))
         return bool(result)
     except RedisError:
-        # Fail-closed: Redis 장애 시 모든 토큰을 블랙리스트 처리하여 보안 유지.
-        # 이로 인해 Redis 장애 동안 모든 인증 요청이 거부됨.
-        logger.error(
-            "redis_jti_check_failed — fail-closed: all tokens treated as blacklisted",
+        if config.ENV == Env.PROD:
+            # 운영 환경에서는 Redis 장애 시 토큰 검증을 fail-closed로 유지한다.
+            logger.error(
+                "redis_jti_check_failed — fail-closed: all tokens treated as blacklisted",
+                extra={"jti": jti},
+                exc_info=True,
+            )
+            return True
+
+        # 로컬/개발 환경에서는 Redis 미연결 때문에 전체 로그인 흐름이 막히지 않도록 fail-open 한다.
+        logger.warning(
+            "redis_jti_check_failed — fail-open outside production",
             extra={"jti": jti},
             exc_info=True,
         )
-        return True
+        return False
 
 
 class AuthService:

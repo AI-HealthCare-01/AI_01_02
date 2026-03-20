@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { authApi, profileApi, setToken, clearPreviousUserData } from "@/lib/api";
+import { authApi, getToken, profileApi, resetLoginEntryState, storeLoginSession } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
 import { toast } from "sonner";
 
@@ -9,27 +9,44 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    resetLoginEntryState();
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    console.info("[auth/login] submit triggered", { email });
+    setSubmitError(null);
     setLoading(true);
     try {
       const { access_token } = await authApi.login(email, password);
-      setToken(access_token);
-      clearPreviousUserData(email);
+      console.info("[auth/login] login API succeeded", { hasAccessToken: Boolean(access_token) });
+      storeLoginSession(email, access_token);
+      console.info("[auth/login] token persisted", { hasStoredToken: Boolean(getToken()) });
       try {
+        console.info("[auth/login] fetching health profile");
         await profileApi.getHealth();
-        navigate("/");
+        console.info("[auth/login] health profile found, navigating to home");
+        navigate("/", { replace: true });
       } catch (profileErr: unknown) {
         const msg = profileErr instanceof Error ? profileErr.message : "";
+        console.warn("[auth/login] health profile fetch failed", { message: msg });
         if (msg.includes("RESOURCE_NOT_FOUND") || msg.includes("HTTP 404")) {
-          navigate("/onboarding");
+          console.info("[auth/login] health profile missing, navigating to onboarding");
+          navigate("/onboarding", { replace: true });
         } else {
-          toast.error("프로필 정보를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.");
+          const userMessage = toUserMessage(profileErr);
+          setSubmitError(userMessage);
+          toast.error(userMessage);
         }
       }
     } catch (err: unknown) {
-      toast.error(toUserMessage(err));
+      console.error("[auth/login] login flow failed", err);
+      const userMessage = toUserMessage(err);
+      setSubmitError(userMessage);
+      toast.error(userMessage);
     } finally {
       setLoading(false);
     }
@@ -84,6 +101,11 @@ export default function Login() {
             >
               {loading ? "로그인 중..." : "로그인"}
             </button>
+            {submitError && (
+              <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">
+                {submitError}
+              </p>
+            )}
           </form>
 
           <p className="text-center text-sm text-gray-400 mt-6">

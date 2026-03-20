@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { authApi, setToken, clearPreviousUserData } from "@/lib/api";
+import { authApi, storeLoginSession } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
 import { toast } from "sonner";
 
@@ -64,9 +64,8 @@ export default function Signup() {
         phone_number: form.phone_number,
       });
       const { access_token } = await authApi.login(form.email, form.password);
-      setToken(access_token);
-      clearPreviousUserData(form.email);
-      navigate("/onboarding");
+      storeLoginSession(form.email, access_token);
+      navigate("/onboarding", { replace: true });
     } catch (err: unknown) {
       toast.error(toUserMessage(err));
     } finally {

@@ -1,17 +1,71 @@
 const BASE = "/api/v1";
 const DEFAULT_TIMEOUT_MS = 30_000;
+export const ACCESS_TOKEN_STORAGE_KEY = "access_token";
+export const AUTH_STATE_CHANGE_EVENT = "logly:auth-state-change";
+const LOGIN_SESSION_STORAGE_KEYS = ["onboarding_basic", "onboarding_lifestyle"] as const;
+
+function authLog(message: string, data?: Record<string, unknown>) {
+  if (data) {
+    console.info(`[auth] ${message}`, data);
+    return;
+  }
+  console.info(`[auth] ${message}`);
+}
+
+function notifyAuthStateChange() {
+  window.dispatchEvent(new Event(AUTH_STATE_CHANGE_EVENT));
+}
 
 export function getToken() {
-  return localStorage.getItem("access_token");
+  return localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
 }
 export function setToken(token: string) {
-  localStorage.setItem("access_token", token);
+  localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+  notifyAuthStateChange();
 }
 export function clearToken() {
-  localStorage.removeItem("access_token");
+  localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  notifyAuthStateChange();
+}
+export function subscribeToAuthChanges(listener: () => void) {
+  const handler = () => listener();
+  window.addEventListener(AUTH_STATE_CHANGE_EVENT, handler);
+  return () => window.removeEventListener(AUTH_STATE_CHANGE_EVENT, handler);
+}
+export function isAuthRoute(pathname: string) {
+  return pathname === "/login" || pathname === "/signup";
+}
+export function resetLoginEntryState() {
+  clearToken();
+  for (const key of LOGIN_SESSION_STORAGE_KEYS) {
+    sessionStorage.removeItem(key);
+  }
+  authLog("login entry state reset", {
+    clearedSessionKeys: [...LOGIN_SESSION_STORAGE_KEYS],
+  });
+}
+export function storeLoginSession(email: string, token: string) {
+  if (!token) {
+    throw new Error("AUTH_INVALID_TOKEN");
+  }
+  setToken(token);
+  clearPreviousUserData(email);
+  const storedToken = getToken();
+  const persisted = storedToken === token;
+  authLog("client session stored", {
+    email,
+    persisted,
+    hasToken: Boolean(storedToken),
+  });
+  if (!persisted) {
+    throw new Error("로그인 토큰 저장에 실패했습니다.");
+  }
 }
 export function clearAllUserData() {
   clearToken();
+  for (const key of LOGIN_SESSION_STORAGE_KEYS) {
+    sessionStorage.removeItem(key);
+  }
   const CACHE_PREFIXES = ["weekly_med_rate:"];
   const prefixed: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
@@ -27,6 +81,9 @@ export function clearAllUserData() {
 export function clearPreviousUserData(currentEmail: string) {
   const prev = localStorage.getItem("logly_last_user");
   if (prev && prev !== currentEmail) {
+    for (const key of LOGIN_SESSION_STORAGE_KEYS) {
+      sessionStorage.removeItem(key);
+    }
     const USER_KEYS = ["ocr_job_id", "guide_job_id", "logly_chat_sessions"];
     const USER_PREFIXES = ["daily_med_confirmed:"];
     USER_KEYS.forEach((k) => localStorage.removeItem(k));
@@ -52,15 +109,22 @@ function extractErrorMessage(err: Record<string, unknown>, status: number): stri
 
 async function refreshAccessToken(): Promise<string | null> {
   try {
+    authLog("refresh token request started");
     const res = await fetch(`${BASE}/auth/token/refresh`, { method: "POST", credentials: "include" });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      authLog("refresh token request failed", { status: res.status });
+      return null;
+    }
     const data = await res.json();
     if (data.access_token) {
       setToken(data.access_token);
+      authLog("refresh token request succeeded", { hasAccessToken: true });
       return data.access_token as string;
     }
+    authLog("refresh token response missing access token");
     return null;
   } catch {
+    authLog("refresh token request errored");
     return null;
   }
 }
@@ -68,9 +132,11 @@ async function refreshAccessToken(): Promise<string | null> {
 async function withAuthRefresh(
   doFetch: (token: string | null) => Promise<Response>,
 ): Promise<Response> {
-  let res = await doFetch(getToken());
+  const currentToken = getToken();
+  let res = await doFetch(currentToken);
 
   if (res.status === 401) {
+    authLog("protected request returned 401", { hasToken: Boolean(currentToken) });
     if (!_refreshPromise) {
       _refreshPromise = refreshAccessToken().finally(() => { _refreshPromise = null; });
     }
@@ -79,8 +145,8 @@ async function withAuthRefresh(
       res = await doFetch(newToken);
     } else {
       clearToken();
-      window.location.href = "/login";
-      throw new Error("인증이 만료되었습니다. 다시 로그인해주세요.");
+      authLog("refresh failed, cleared access token");
+      throw new Error("AUTH_INVALID_TOKEN");
     }
   }
 

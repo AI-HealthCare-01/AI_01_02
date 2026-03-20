@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
+import { useLocation } from "react-router";
 import { toast } from "sonner";
-import { notificationApi, getToken } from "@/lib/api";
+import { notificationApi, getToken, isAuthRoute } from "@/lib/api";
 
 interface NotificationContextValue {
   unreadCount: number;
@@ -13,12 +14,14 @@ const NotificationContext = createContext<NotificationContextValue>({
 });
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
   const knownNotificationIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedRef = useRef(false);
+  const paused = isAuthRoute(location.pathname);
 
   const refresh = useCallback(() => {
-    if (!getToken()) return;
+    if (paused || !getToken()) return;
     notificationApi
       .list({ limit: 20 })
       .then((r) => {
@@ -42,13 +45,20 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         hasLoadedRef.current = true;
       })
       .catch(() => {});
-  }, []);
+  }, [paused]);
 
   useEffect(() => {
+    if (paused) {
+      setUnreadCount(0);
+      knownNotificationIdsRef.current = new Set();
+      hasLoadedRef.current = false;
+      return;
+    }
+
     refresh();
     const id = setInterval(refresh, 60000);
     return () => clearInterval(id);
-  }, [refresh]);
+  }, [paused, refresh]);
 
   return (
     <NotificationContext.Provider value={{ unreadCount, refresh }}>
