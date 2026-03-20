@@ -32,6 +32,7 @@ function isSameDay(a: Date, b: Date) {
 
 const DOW_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
 const WEEKLY_RATE_STORAGE_PREFIX = "weekly_med_rate";
+type DailyScheduleResponse = Awaited<ReturnType<typeof scheduleApi.getDaily>>;
 
 function getWeekdayIndexMondayStart(d: Date) {
   const day = d.getDay(); // 0=Sun
@@ -40,6 +41,17 @@ function getWeekdayIndexMondayStart(d: Date) {
 
 function getDailyConfirmStorageKey(date: string) {
   return `daily_med_confirmed:${date}`;
+}
+
+function createEmptyDailySchedule(date: string): DailyScheduleResponse {
+  return {
+    date,
+    items: [],
+    medications: [],
+    medication_done_count: 0,
+    medication_total_count: 0,
+    medication_adherence_rate_percent: 0,
+  };
 }
 
 // ─── main component ───────────────────────────────────────────────────────────
@@ -59,7 +71,7 @@ export default function Records() {
   const [showEdit, setShowEdit] = useState(false);
   const [showLifestyleInfo, setShowLifestyleInfo] = useState(false);
   const [dailyDiary, setDailyDiary] = useState("");
-  const weekCacheRef = useRef<Record<string, Awaited<ReturnType<typeof scheduleApi.getDaily>>[]>>({});
+  const weekCacheRef = useRef<Record<string, DailyScheduleResponse[]>>({});
 
   async function loadSchedule(date: Date) {
     try {
@@ -84,12 +96,15 @@ export default function Records() {
       return d;
     });
 
-    let dailySchedules: Awaited<ReturnType<typeof scheduleApi.getDaily>>[];
+    let dailySchedules: DailyScheduleResponse[];
     if (weekCacheRef.current[mondayKey]) {
       dailySchedules = weekCacheRef.current[mondayKey];
     } else {
       dailySchedules = await Promise.all(
-        weekDates.map((d) => scheduleApi.getDaily(toDateStr(d)).catch(() => ({ date: toDateStr(d), items: [] }))),
+        weekDates.map((d) => {
+          const dateStr = toDateStr(d);
+          return scheduleApi.getDaily(dateStr).catch(() => createEmptyDailySchedule(dateStr));
+        }),
       );
       weekCacheRef.current[mondayKey] = dailySchedules;
     }
