@@ -26,6 +26,7 @@ export default function Login() {
           navigate("/onboarding");
         } else {
           toast.error("프로필 정보를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.");
+          navigate("/");
         }
       }
     } catch (err: unknown) {

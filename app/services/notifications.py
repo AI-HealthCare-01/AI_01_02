@@ -94,7 +94,7 @@ class NotificationService:
             try:
                 await sync_fn(user=user)
             except Exception as exc:  # noqa: BLE001
-                logger.warning(f"notification_sync_partial_failure: {exc}", extra={"error": str(exc)})
+                logger.error("notification_sync_partial_failure: %s", exc, exc_info=True)
 
     async def _sync_medication_reminder_notifications(self, *, user: User) -> None:
         setting = await self.notification_setting_service.get_or_create(user=user)
