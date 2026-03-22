@@ -147,18 +147,27 @@ export default function MedicationScheduleCard({
     }));
 
   const medicationRows = (() => {
-    let scheduleCursor = 0;
+    const usedItemIds = new Set<string>();
+
+    function findScheduleItems(drugName: string, count: number) {
+      const matched: (typeof medicationItems[number] | null)[] = [];
+      for (const item of medicationItems) {
+        if (matched.length >= count) break;
+        if (!usedItemIds.has(item.item_id) && item.title === drugName) {
+          matched.push(item);
+          usedItemIds.add(item.item_id);
+        }
+      }
+      while (matched.length < count) matched.push(null);
+      return matched;
+    }
 
     if (filteredOcrMeds.length === 0) {
       return filteredReminders.flatMap((reminder, reminderIndex) => {
         const rowCount = Math.max(1, reminder.schedule_times.length);
+        const matched = findScheduleItems(reminder.medication_name, rowCount);
 
         return Array.from({ length: rowCount }, (_, rowIndex) => {
-          const scheduleItem = medicationItems[scheduleCursor] ?? null;
-          if (scheduleItem) {
-            scheduleCursor += 1;
-          }
-
           const reminderDose = reminder.dose?.trim() ?? "";
           const doseLabel = reminderDose && !reminderDose.includes("캡/정") ? reminderDose : "-";
           const dosagePerOnce = reminderDose && reminderDose.includes("캡/정") ? reminderDose : "-";
@@ -166,7 +175,7 @@ export default function MedicationScheduleCard({
           return {
             key: `${reminder.medication_name}-${reminderIndex}-${rowIndex}`,
             intakeLabel: reminder.schedule_times[rowIndex] ?? "-",
-            scheduleItem,
+            scheduleItem: matched[rowIndex],
             manualKey: `${reminder.medication_name}-${storageDateKey}-${rowIndex}`,
             drugName: reminder.medication_name || "-",
             doseLabel,
@@ -179,24 +188,18 @@ export default function MedicationScheduleCard({
     return filteredOcrMeds.flatMap((med, medIndex) => {
       const intakeLabels = toDisplayIntakeLabels(med.intake_time, med.frequency_per_day);
       const rowCount = Math.max(1, intakeLabels.length);
+      const matched = findScheduleItems(med.drug_name, rowCount);
 
-      return Array.from({ length: rowCount }, (_, rowIndex) => {
-        const scheduleItem = medicationItems[scheduleCursor] ?? null;
-        if (scheduleItem) {
-          scheduleCursor += 1;
-        }
-
-        return {
-          key: `${med.drug_name}-${medIndex}-${rowIndex}`,
-          intakeLabel: intakeLabels[rowIndex] ?? intakeLabels[intakeLabels.length - 1] ?? "-",
-          scheduleItem,
-          manualKey: `${med.drug_name}-${storageDateKey}-${rowIndex}`,
-          drugName: med.drug_name || "-",
-          doseLabel: med.dose !== null && med.dose !== undefined ? `${med.dose}mg` : "-",
-          dosagePerOnce:
-            med.dosage_per_once !== null && med.dosage_per_once !== undefined ? `${med.dosage_per_once}` : "-",
-        };
-      });
+      return Array.from({ length: rowCount }, (_, rowIndex) => ({
+        key: `${med.drug_name}-${medIndex}-${rowIndex}`,
+        intakeLabel: intakeLabels[rowIndex] ?? intakeLabels[intakeLabels.length - 1] ?? "-",
+        scheduleItem: matched[rowIndex],
+        manualKey: `${med.drug_name}-${storageDateKey}-${rowIndex}`,
+        drugName: med.drug_name || "-",
+        doseLabel: med.dose !== null && med.dose !== undefined ? `${med.dose}mg` : "-",
+        dosagePerOnce:
+          med.dosage_per_once !== null && med.dosage_per_once !== undefined ? `${med.dosage_per_once}` : "-",
+      }));
     });
   })();
 
