@@ -5,6 +5,7 @@ from fastapi.responses import ORJSONResponse as Response
 from starlette.responses import Response as StarletteResponse
 from tortoise import functions
 
+from app.core.logger import default_logger as logger
 from app.dependencies.security import get_request_user
 from app.dtos.reminders import (
     DdayReminderListResponse,
@@ -62,35 +63,38 @@ async def list_reminders(
     reminder_ids = [r.id for r in reminders]
     confirmed_count_by_reminder_id: dict[int, int] = {}
     responded_count_by_reminder_id: dict[int, int] = {}
-    if reminder_ids:
-        confirmed_rows = (
-            await ScheduleItem.filter(
-                reminder_id__in=reminder_ids,
-                status=ScheduleItemStatus.DONE,
+    try:
+        if reminder_ids:
+            confirmed_rows = (
+                await ScheduleItem.filter(
+                    reminder_id__in=reminder_ids,
+                    status=ScheduleItemStatus.DONE,
+                )
+                .group_by("reminder_id")
+                .annotate(confirmed_count=functions.Count("id"))
+                .values("reminder_id", "confirmed_count")
             )
-            .group_by("reminder_id")
-            .annotate(confirmed_count=functions.Count("id"))
-            .values("reminder_id", "confirmed_count")
-        )
-        confirmed_count_by_reminder_id = {
-            int(row["reminder_id"]): int(row["confirmed_count"])
-            for row in confirmed_rows
-            if row.get("reminder_id") is not None
-        }
-        responded_rows = (
-            await ScheduleItem.filter(
-                reminder_id__in=reminder_ids,
-                status__in=[ScheduleItemStatus.DONE, ScheduleItemStatus.SKIPPED],
+            confirmed_count_by_reminder_id = {
+                int(row["reminder_id"]): int(row["confirmed_count"])
+                for row in confirmed_rows
+                if row.get("reminder_id") is not None
+            }
+            responded_rows = (
+                await ScheduleItem.filter(
+                    reminder_id__in=reminder_ids,
+                    status__in=[ScheduleItemStatus.DONE, ScheduleItemStatus.SKIPPED],
+                )
+                .group_by("reminder_id")
+                .annotate(responded_count=functions.Count("id"))
+                .values("reminder_id", "responded_count")
             )
-            .group_by("reminder_id")
-            .annotate(responded_count=functions.Count("id"))
-            .values("reminder_id", "responded_count")
-        )
-        responded_count_by_reminder_id = {
-            int(row["reminder_id"]): int(row["responded_count"])
-            for row in responded_rows
-            if row.get("reminder_id") is not None
-        }
+            responded_count_by_reminder_id = {
+                int(row["reminder_id"]): int(row["responded_count"])
+                for row in responded_rows
+                if row.get("reminder_id") is not None
+            }
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to load intake counts: %s", exc, exc_info=True)
     for reminder in reminders:
         reminder.confirmed_intake_count = confirmed_count_by_reminder_id.get(reminder.id, 0)
         reminder.responded_intake_count = responded_count_by_reminder_id.get(reminder.id, 0)

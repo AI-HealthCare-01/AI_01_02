@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
-import { Pill, ChevronDown, ChevronUp, AlertTriangle, Upload, Pencil, X, Trash2, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
+import { Pill, ChevronDown, ChevronUp, AlertTriangle, Upload, Pencil, X, Trash2, Plus, Bell, Clock } from "lucide-react";
 import { toast } from "sonner";
-import { reminderApi, guideApi, Reminder, DdayReminder, GuideJobResult } from "@/lib/api";
+import { reminderApi, Reminder, DdayReminder } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
 
 const TIME_OPTIONS = [
@@ -26,12 +26,14 @@ function parseDosagePerOnce(doseText: string | null | undefined) {
 
 export default function Medications() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const setupReminders = (location.state as { setupReminders?: boolean })?.setupReminders === true;
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [ddayMap, setDdayMap] = useState<Record<string, DdayReminder>>({});
-  const [guide, setGuide] = useState<GuideJobResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showSetupBanner, setShowSetupBanner] = useState(setupReminders);
 
   async function reload(initial = false) {
     try {
@@ -43,7 +45,10 @@ export default function Medications() {
       const map: Record<string, DdayReminder> = {};
       for (const d of ddayData.items) map[d.medication_name] = d;
       setDdayMap(map);
-      if (initial && remData.items.length > 0) setExpandedId(remData.items[0].id);
+      if (initial && remData.items.length > 0) {
+        setExpandedId(remData.items[0].id);
+        if (setupReminders) setEditingId(remData.items[0].id);
+      }
     } catch (err) {
       toast.error(toUserMessage(err));
     } finally {
@@ -54,20 +59,11 @@ export default function Medications() {
   useEffect(() => {
     async function init() {
       await reload(true);
-
-      // 가이드 & 주간 복약률 (비동기)
-      const jobId = localStorage.getItem("guide_job_id");
-      if (jobId) {
-        try {
-          const s = await guideApi.getJobStatus(jobId);
-          if (s.status === "SUCCEEDED") {
-            const r = await guideApi.getJobResult(jobId);
-            setGuide(r);
-          }
-        } catch (err) { console.warn("Failed to load medication guide:", err); }
-      }
     }
     init();
+
+    // 온보딩에서 전달된 state를 소비하여 새로고침 시 재발 방지
+    if (setupReminders) window.history.replaceState({}, "");
   }, []); // eslint-disable-line
 
   async function handleSave(id: string, data: {
@@ -99,21 +95,6 @@ export default function Medications() {
     }
   }
 
-  // 가이드 데이터를 drug_name 기준 맵으로 파싱 (useMemo로 매 렌더 파싱 방지)
-  const guideMap = useMemo(() => {
-    const map: Record<string, MedGuideItem> = {};
-    if (!guide) return map;
-    try {
-      const parsed = JSON.parse(guide.medication_guidance);
-      if (Array.isArray(parsed)) {
-        for (const item of parsed as MedGuideItem[]) {
-          if (item.drug_name) map[item.drug_name] = item;
-        }
-      }
-    } catch (err) { console.warn("Failed to parse medication guidance JSON:", err); }
-    return map;
-  }, [guide]);
-
   const active = reminders.filter((r) => r.enabled);
   const inactive = reminders.filter((r) => !r.enabled);
   const ddayWarnings = Object.values(ddayMap).filter((d) => d.remaining_days <= 7);
@@ -134,6 +115,30 @@ export default function Medications() {
     <div className="min-h-full p-4 md:p-8 max-w-5xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-800 mb-1">내 약 정보</h1>
       <p className="text-sm font-medium text-gray-400 mb-5">현재 복용 중인 약물과 복약 현황을 확인하세요.</p>
+
+      {/* 복약 알림 설정 안내 배너 (온보딩에서 진입 시) */}
+      {showSetupBanner && reminders.length > 0 && (
+        <div className="mb-5 bg-green-50 border border-green-200 rounded-xl p-4 animate-in fade-in duration-300">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+              <Bell className="w-4 h-4 text-green-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-green-800 mb-1">복약 알림 시간을 설정하세요</p>
+              <p className="text-xs text-green-600 leading-relaxed">
+                아래에서 <Clock className="w-3 h-3 inline -mt-0.5" /> <strong>복용 시간</strong>을 선택하고 <strong>저장</strong>을 눌러주세요.
+                약마다 개별로 설정할 수 있어요.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowSetupBanner(false)}
+              className="text-green-400 hover:text-green-600 transition-colors shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 약 소진 경고 알람 */}
       {ddayWarnings.length > 0 && (
@@ -179,7 +184,6 @@ export default function Medications() {
                         key={r.id}
                         reminder={r}
                         dday={ddayMap[r.medication_name]}
-                        guideItem={guideMap[r.medication_name]}
                         expanded={expandedId === r.id}
                         editing={editingId === r.id}
                         onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
@@ -202,7 +206,6 @@ export default function Medications() {
                         key={r.id}
                         reminder={r}
                         dday={ddayMap[r.medication_name]}
-                        guideItem={guideMap[r.medication_name]}
                         expanded={expandedId === r.id}
                         editing={editingId === r.id}
                         onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
@@ -264,7 +267,6 @@ export default function Medications() {
 function MedicationAccordion({
   reminder: r,
   dday,
-  guideItem,
   expanded,
   editing,
   onToggle,
@@ -274,7 +276,6 @@ function MedicationAccordion({
 }: {
   reminder: Reminder;
   dday?: DdayReminder;
-  guideItem?: MedGuideItem;
   expanded: boolean;
   editing: boolean;
   onToggle: () => void;
@@ -323,7 +324,7 @@ function MedicationAccordion({
   const dosagePerOnce = parseDosagePerOnce(r.dose);
   const estimatedRemaining =
     dosagePerOnce != null && r.daily_intake_count != null && r.total_days != null
-      ? Math.max(0, dosagePerOnce * r.daily_intake_count * r.total_days - r.confirmed_intake_count)
+      ? Math.max(0, dosagePerOnce * r.daily_intake_count * r.total_days - r.confirmed_intake_count * dosagePerOnce)
       : null;
   const maxScheduleTimes =
     r.daily_intake_count != null && Number.isFinite(r.daily_intake_count)
@@ -393,7 +394,7 @@ function MedicationAccordion({
       {/* 펼쳐진 내용 */}
       {expanded && !editing && (
         <div className="px-5 pb-5 border-t border-gray-100">
-          <div className="flex gap-6 mt-4">
+          <div className="grid grid-cols-3 gap-3 mt-4 bg-gray-50 rounded-lg p-3">
             <div className="text-center">
               <p className="text-xs font-medium text-gray-400 mb-1">남은 약 갯수</p>
               <p className="text-sm font-bold text-gray-800">
@@ -414,41 +415,35 @@ function MedicationAccordion({
             </div>
           </div>
 
-          {r.dose && (
-            <p className="text-xs font-medium text-gray-400 mt-3">용량: {r.dose}</p>
-          )}
-
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {r.schedule_times.map((t) => (
-              <span
-                key={t}
-                className="text-xs bg-green-50 text-green-700 px-2.5 py-0.5 rounded-full font-medium"
-              >
-                {t}
-              </span>
-            ))}
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            {r.dose && (
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs font-medium text-gray-400 mb-1.5">용량</p>
+                <p className="text-sm font-semibold text-gray-800">{r.dose}</p>
+              </div>
+            )}
+            <div className={`bg-gray-50 rounded-lg p-3 ${!r.dose ? "col-span-2" : ""}`}>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Clock className="w-3.5 h-3.5 text-green-600" />
+                <span className="text-xs font-medium text-gray-400">복용 시간</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {r.schedule_times.map((t) => (
+                  <span
+                    key={t}
+                    className="text-xs bg-green-100 text-green-700 px-2.5 py-1 rounded-full font-semibold"
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
 
           {(r.start_date || r.end_date) && (
             <p className="text-xs font-medium text-gray-400 mt-2">
               {r.start_date ?? "—"} ~ {r.end_date ?? "계속"}
             </p>
-          )}
-
-          {/* 약물 상세 정보 (가이드) */}
-          {guideItem && (guideItem.precautions || guideItem.side_effects) && (
-            <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
-              {guideItem.precautions && (
-                <p className="text-xs text-amber-600">
-                  <span className="font-semibold">주의:</span> {guideItem.precautions}
-                </p>
-              )}
-              {guideItem.side_effects && (
-                <p className="text-xs text-red-400">
-                  <span className="font-semibold">부작용:</span> {guideItem.side_effects}
-                </p>
-              )}
-            </div>
           )}
 
           <button
@@ -700,13 +695,3 @@ function MedicationAccordion({
   );
 }
 
-// ── 약물 가이드 요약 ────────────────────────────────────────────────────────
-
-interface MedGuideItem {
-  drug_name?: string;
-  dose?: string | number;
-  frequency_per_day?: number;
-  intake_time?: string[] | string;
-  precautions?: string;
-  side_effects?: string;
-}

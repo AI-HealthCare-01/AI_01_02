@@ -21,12 +21,25 @@ export default function Signup() {
   const [birth, setBirth] = useState({ year: "", month: "", day: "" });
   const [loading, setLoading] = useState(false);
 
+  const pwRules = [
+    { label: "8자 이상", ok: form.password.length >= 8 },
+    { label: "128자 이하", ok: form.password.length <= 128 },
+    { label: "영문 포함", ok: /[a-zA-Z]/.test(form.password) },
+    { label: "숫자 포함", ok: /[0-9]/.test(form.password) },
+    { label: "특수문자 포함", ok: /[^a-zA-Z0-9]/.test(form.password) },
+  ];
+  const pwAllValid = pwRules.every((r) => r.ok);
+
   function set(field: string, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!pwAllValid) {
+      toast.error("비밀번호 조건을 모두 충족해주세요.");
+      return;
+    }
     if (form.password !== form.passwordConfirm) {
       toast.error("비밀번호가 일치하지 않습니다.");
       return;
@@ -119,10 +132,25 @@ export default function Signup() {
                 value={form.password}
                 onChange={(e) => set("password", e.target.value)}
                 required
-                placeholder="8자 이상"
+                placeholder="영문, 숫자, 특수문자 포함 8자 이상"
                 minLength={8}
                 className={inputCls}
               />
+              {form.password.length > 0 && (
+                <ul className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-0.5">
+                  {pwRules.map((r) => (
+                    <li
+                      key={r.label}
+                      className={`text-xs flex items-center gap-1 transition-colors duration-200 ${
+                        r.ok ? "text-green-500" : "text-gray-400"
+                      }`}
+                    >
+                      <span className="text-[10px]">{r.ok ? "\u2714" : "\u25CB"}</span>
+                      {r.label}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div>
               <label className={labelCls}>비밀번호 확인</label>
