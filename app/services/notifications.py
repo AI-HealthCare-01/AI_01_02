@@ -9,6 +9,7 @@ from app.core import config
 from app.core.exceptions import AppException, ErrorCode
 from app.core.logger import default_logger as logger
 from app.models.notifications import Notification, NotificationType
+from app.models.reminders import ScheduleItem, ScheduleItemCategory, ScheduleItemStatus
 from app.models.users import User
 from app.repositories.notification_repository import NotificationRepository
 from app.services.analysis import AnalysisService
@@ -16,6 +17,7 @@ from app.services.emergency_guidance import generate_medication_dday_guidance
 from app.services.guide_automation import GuideAutomationService
 from app.services.notification_settings import NotificationSettingService
 from app.services.reminders import ReminderService
+from app.services.schedules import ScheduleService
 
 _SYNC_TTL_SECONDS = 60  # 1분
 _SYNC_CACHE_MAX_SIZE = 10_000
@@ -29,6 +31,7 @@ class NotificationService:
         self.notification_setting_service = NotificationSettingService()
         self.analysis_service = AnalysisService()
         self.guide_automation_service = GuideAutomationService()
+        self.schedule_service = ScheduleService()
 
     async def list_notifications(
         self,
@@ -86,11 +89,12 @@ class NotificationService:
             self._sync_health_alert_notifications,
             self._sync_dday_notifications,
             self._sync_medication_reminder_notifications,
+            self._sync_medication_confirmation_notifications,
         ):
             try:
                 await sync_fn(user=user)
             except Exception as exc:  # noqa: BLE001
-                logger.warning(f"notification_sync_partial_failure: {exc}", extra={"error": str(exc)})
+                logger.error("notification_sync_partial_failure: %s", exc, exc_info=True)
 
     async def _sync_medication_reminder_notifications(self, *, user: User) -> None:
         setting = await self.notification_setting_service.get_or_create(user=user)
@@ -158,6 +162,74 @@ class NotificationService:
                     },
                 )
                 existing_keys.add(dedup_key)
+
+    async def _sync_medication_confirmation_notifications(self, *, user: User) -> None:
+        setting = await self.notification_setting_service.get_or_create(user=user)
+        if not setting.medication_alarm_enabled:
+            return
+
+        now = datetime.now(config.TIMEZONE)
+        await self.schedule_service.schedule_sync(user=user, target_date=now.date(), tz=config.TIMEZONE)
+
+        overdue_items = await ScheduleItem.filter(
+            user_id=user.id,
+            category=ScheduleItemCategory.MEDICATION,
+            status=ScheduleItemStatus.PENDING,
+            scheduled_at__lte=now - timedelta(hours=1),
+            scheduled_at__gte=datetime.combine(now.date(), dt_time.min).replace(tzinfo=config.TIMEZONE),
+        ).prefetch_related("reminder")
+        if not overdue_items:
+            return
+
+        existing_notifications = await Notification.filter(
+            user_id=user.id,
+            type=NotificationType.SYSTEM,
+        ).only("id", "payload")
+        existing_item_ids: set[int] = set()
+        for notification in existing_notifications:
+            payload = notification.payload if isinstance(notification.payload, dict) else {}
+            if payload.get("event") != "medication_confirmation_required":
+                continue
+            item_id = int(payload.get("schedule_item_id") or 0)
+            if item_id > 0:
+                existing_item_ids.add(item_id)
+
+        for item in overdue_items:
+            if item.id in existing_item_ids:
+                continue
+
+            try:
+                reminder = getattr(item, "reminder", None)
+                medication_name = str(getattr(reminder, "medication_name", "") or "복약")
+                dose_text = str(getattr(reminder, "dose_text", "") or "").strip()
+                medication_label = medication_name if not dose_text else f"{medication_name} {dose_text}"
+
+                await self.repo.create_notification(
+                    user_id=user.id,
+                    title="복약 확인",
+                    message=(
+                        f"{item.scheduled_at.astimezone(config.TIMEZONE).strftime('%H:%M')} 복약 기록이 아직 없어요. "
+                        f"{medication_label} 복용 여부를 선택해주세요."
+                    ),
+                    notification_type=NotificationType.SYSTEM,
+                    payload={
+                        "event": "medication_confirmation_required",
+                        "schedule_item_id": item.id,
+                        "reminder_id": item.reminder_id,
+                        "medication_name": medication_name,
+                        "dose": dose_text or None,
+                        "scheduled_at": item.scheduled_at.astimezone(config.TIMEZONE).isoformat(),
+                    },
+                )
+                existing_item_ids.add(item.id)
+            except Exception as exc:  # noqa: BLE001
+                logger.error(
+                    "medication_confirmation_notification_failed: user_id=%s, item_id=%s, error=%s",
+                    user.id,
+                    item.id,
+                    exc,
+                    exc_info=True,
+                )
 
     @staticmethod
     def _build_scheduled_at_for_today(*, time_str: str, now: datetime) -> datetime | None:

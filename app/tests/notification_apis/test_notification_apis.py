@@ -11,7 +11,7 @@ from app.models.health_profiles import UserHealthProfile
 from app.models.notifications import Notification, NotificationType
 from app.models.ocr import Document, DocumentType, OcrJob, OcrJobStatus
 from app.models.psych_drugs import PsychDrug
-from app.models.reminders import MedicationReminder
+from app.models.reminders import MedicationReminder, ScheduleItem, ScheduleItemCategory, ScheduleItemStatus
 from app.models.users import User
 from app.services.notifications import _sync_cache
 
@@ -618,3 +618,39 @@ class TestNotificationApis(TestCase):
 
             assert response.status_code == status.HTTP_200_OK
             assert response.json()["unread_count"] == 1
+
+    async def test_medication_confirmation_notification_created_one_hour_after_pending_schedule(self):
+        email = "noti_med_confirm@example.com"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            access_token = await self._signup_and_login(client, email=email, phone_number="01089990000")
+            user = await User.get(email=email)
+            reminder = await MedicationReminder.create(
+                user=user,
+                medication_name="메디키넷리타드캡슐",
+                dose_text="1 캡/정",
+                schedule_times=["09:00"],
+                enabled=True,
+            )
+            await ScheduleItem.create(
+                user=user,
+                reminder=reminder,
+                category=ScheduleItemCategory.MEDICATION,
+                title="복약",
+                scheduled_at=datetime.now(config.TIMEZONE) - timedelta(hours=2),
+                status=ScheduleItemStatus.PENDING,
+            )
+
+            headers = {"Authorization": f"Bearer {access_token}"}
+            response = await client.get("/api/v1/notifications", headers=headers)
+
+            assert response.status_code == status.HTTP_200_OK
+            body = response.json()
+            confirmation_notifications = [
+                item
+                for item in body["items"]
+                if item["type"] == "SYSTEM"
+                and item.get("payload", {}).get("event") == "medication_confirmation_required"
+            ]
+            assert len(confirmation_notifications) == 1
+            assert confirmation_notifications[0]["title"] == "복약 확인"
+            assert "복용 여부를 선택해주세요" in confirmation_notifications[0]["message"]

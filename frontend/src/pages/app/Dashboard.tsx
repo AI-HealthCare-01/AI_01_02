@@ -88,7 +88,7 @@ export default function Dashboard() {
 
   useEffect(() => { load(); }, [todayKey]); // eslint-disable-line
 
-  async function updateMedicationStatus(itemId: string, status: "PENDING" | "DONE") {
+  async function updateMedicationStatus(itemId: string, status: "PENDING" | "DONE" | "SKIPPED") {
     try {
       const updated = await scheduleApi.updateStatus(itemId, status);
       setItems((prev) => prev.map((it) => (it.item_id === itemId ? updated : it)));

@@ -461,7 +461,7 @@ export default function OcrResult() {
             </div>
             <div className="p-4 flex flex-col gap-2">
               <button
-                onClick={() => navigate("/medications")}
+                onClick={() => navigate("/medications", { state: { setupReminders: true } })}
                 className="w-full py-3.5 gradient-primary text-white text-sm rounded-xl font-bold hover:shadow-lg transition-all active:scale-95"
               >
                 지금 설정하기
