@@ -106,7 +106,7 @@ class ScheduleService:
                     try:
                         h, m = map(int, str(time_str).split(":"))
                         scheduled_at = datetime.combine(target_date, time(h, m)).replace(tzinfo=tz)
-                        desired[(ScheduleItemCategory.MEDICATION, "복약", scheduled_at, reminder.id)] = None
+                        desired[(ScheduleItemCategory.MEDICATION, reminder.medication_name, scheduled_at, reminder.id)] = None
                     except (ValueError, AttributeError):
                         continue
         return desired
