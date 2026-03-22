@@ -242,8 +242,8 @@ function formatLifestyleGuidanceText(raw: string): string {
         .map(([key, value]) => buildBlock(key, String(value)));
       if (blocks.length > 0) return blocks.join("\n\n");
     }
-  } catch {
-    // fallback to line-based parser
+  } catch (err) {
+    console.warn("Lifestyle guidance JSON parse failed, using line-based fallback:", err);
   }
 
   const lines = raw
@@ -289,7 +289,8 @@ function buildMedicationActionItems(
           tone: MEDICATION_GUIDE_TONE,
         };
       });
-  } catch {
+  } catch (err) {
+    console.warn("Failed to parse medication guidance JSON:", err);
     return [];
   }
 }
@@ -588,7 +589,7 @@ function GuideActionCard({
           <span>더보기</span>
           <ChevronRight className="h-4 w-4" />
         </button>
-        <p className="text-right text-xs leading-5 text-gray-400">카드 전면에는 원문 첫 문장을 그대로 보여줍니다.</p>
+        <p className="sr-only">카드 전면에는 원문 첫 문장을 그대로 보여줍니다.</p>
       </div>
     </article>
   );
@@ -677,7 +678,7 @@ export default function AiGuide() {
     return () => {
       cancelledRef.current = true;
     };
-  }, []); // eslint-disable-line
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!result?.medication_guidance) return;
@@ -710,8 +711,10 @@ export default function AiGuide() {
         }
         return next;
       });
+    }).catch((err) => {
+      console.warn("Unexpected error updating medication info:", err);
     });
-  }, [result?.medication_guidance]); // eslint-disable-line
+  }, [result?.medication_guidance]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const guideItems = useMemo(() => {
     const items: GuideActionItem[] = [];
@@ -746,7 +749,8 @@ export default function AiGuide() {
 
       setConfirmedGuideIds(next);
       localStorage.setItem(confirmStorageKey, JSON.stringify(next));
-    } catch {
+    } catch (err) {
+      console.warn("Failed to parse confirmed guide IDs from localStorage:", err);
       setConfirmedGuideIds([]);
       localStorage.setItem(confirmStorageKey, JSON.stringify([]));
     }

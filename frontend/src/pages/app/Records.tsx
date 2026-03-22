@@ -178,7 +178,7 @@ export default function Records() {
     setLoading(false);
   }
 
-  useEffect(() => { load(selectedDate); }, []); // eslint-disable-line
+  useEffect(() => { load(selectedDate); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     diaryApi.getByDate(toDateStr(selectedDate))

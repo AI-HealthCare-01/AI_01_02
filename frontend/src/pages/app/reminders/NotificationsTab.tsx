@@ -267,7 +267,7 @@ export default function NotificationsTab() {
 
   useEffect(() => {
     load();
-  }, []); // eslint-disable-line
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function markRead(id: string) {
     try {
@@ -293,8 +293,12 @@ export default function NotificationsTab() {
   async function deleteRead() {
     try {
       const { updated_count } = await notificationApi.deleteRead();
-      setNotifications((prev) => prev.filter((item) => !item.is_read));
-      setExpandedIds((prev) => prev.filter((id) => notifications.some((item) => item.id === id && !item.is_read)));
+      setNotifications((prev) => {
+        const next = prev.filter((item) => !item.is_read);
+        const survivingIds = new Set(next.map((item) => item.id));
+        setExpandedIds((ids) => ids.filter((id) => survivingIds.has(id)));
+        return next;
+      });
       toast.success(updated_count > 0 ? "읽은 알림을 삭제했습니다." : "삭제할 읽은 알림이 없습니다.");
     } catch {
       toast.error("읽은 알림 삭제에 실패했습니다.");

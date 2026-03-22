@@ -289,7 +289,7 @@ export default function MedicationScheduleCard({
                   </div>
 
                   <div className="flex min-h-[72px] shrink-0 flex-col items-end justify-between gap-2">
-                    {scheduleItem ? (
+                    {scheduleItem && !isDone ? (
                       <button
                         type="button"
                         onClick={() =>

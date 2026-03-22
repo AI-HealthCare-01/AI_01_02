@@ -16,10 +16,7 @@ export default function Contact() {
   const [content, setContent] = useState("");
 
   function handleSubmit() {
-    toast.success("문의 화면이 준비되었습니다. 실제 접수 연동은 추후 연결될 예정입니다.");
-    setTitle("");
-    setContent("");
-    setType("서비스 이용 문의");
+    toast.info("문의 기능은 현재 준비 중입니다. 입력하신 내용은 아직 전송되지 않습니다.");
   }
 
   return (

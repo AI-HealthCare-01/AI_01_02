@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { ChevronDown, ChevronRight, FileText, LockKeyhole, LogOut, ShieldCheck, UserRound, UserX } from "lucide-react";
+import { toast } from "sonner";
 import { authApi, clearAllUserData, userApi } from "@/lib/api";
 import type { UserInfo } from "@/lib/api";
 import { useNavigate } from "react-router";
@@ -16,7 +17,7 @@ export default function Settings() {
   const [selectedPolicy, setSelectedPolicy] = useState<PolicyType>(null);
   const [accountInfo, setAccountInfo] = useState<UserInfo | null>(null);
   const [accountInfoLoading, setAccountInfoLoading] = useState(false);
-  const [alertSettings, setAlertSettings] = useState({
+  const [alertSettings] = useState({
     medication: true,
     guide: true,
   });
@@ -35,6 +36,9 @@ export default function Settings() {
         }
       } catch (err) {
         console.warn("Failed to load account info:", err);
+        if (!cancelled) {
+          toast.error("계정 정보를 불러오지 못했습니다.");
+        }
       } finally {
         if (!cancelled) {
           setAccountInfoLoading(false);
@@ -47,7 +51,7 @@ export default function Settings() {
     return () => {
       cancelled = true;
     };
-  }, [accountInfo, accountInfoLoading, accountOpen]);
+  }, [accountOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleLogout() {
     authApi.logout();
@@ -60,13 +64,11 @@ export default function Settings() {
       await userApi.deleteAccount();
     } catch (err) {
       console.warn("Account deletion request failed:", err);
+      toast.error("회원 탈퇴 처리에 실패했습니다. 다시 시도해 주세요.");
+      return;
     }
     clearAllUserData();
     navigate("/login");
-  }
-
-  function toggleAlert(key: keyof typeof alertSettings) {
-    setAlertSettings((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
   return (
@@ -142,14 +144,15 @@ export default function Settings() {
             title="복약 알림"
             description="복약 시간과 확인 알림을 받습니다."
             checked={alertSettings.medication}
-            onToggle={() => toggleAlert("medication")}
+            disabled
           />
           <ToggleRow
             title="가이드 알림"
             description="AI 가이드 업데이트와 안내 알림을 받습니다."
             checked={alertSettings.guide}
-            onToggle={() => toggleAlert("guide")}
+            disabled
           />
+          <p className="px-5 pb-4 text-xs text-gray-400">알림 설정 기능은 준비 중입니다.</p>
         </SettingSection>
       </div>
 
@@ -309,14 +312,16 @@ function ToggleRow({
   description,
   checked,
   onToggle,
+  disabled = false,
 }: {
   title: string;
   description: string;
   checked: boolean;
-  onToggle: () => void;
+  onToggle?: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 px-5 py-4">
+    <div className={`flex items-center gap-3 px-5 py-4 ${disabled ? "opacity-50" : ""}`}>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-gray-700">{title}</p>
         <p className="mt-0.5 text-xs text-gray-400">{description}</p>
@@ -326,7 +331,8 @@ function ToggleRow({
         role="switch"
         aria-checked={checked}
         onClick={onToggle}
-        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+        disabled={disabled}
+        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:cursor-not-allowed ${
           checked ? "bg-green-500" : "bg-gray-200"
         }`}
       >
