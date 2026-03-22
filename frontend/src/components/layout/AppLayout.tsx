@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { authApi, clearAllUserData, userApi } from "@/lib/api";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 
 const NAV_ITEMS = [
   { to: "/", label: "홈", icon: LayoutDashboard, end: true },
@@ -63,12 +62,12 @@ export default function AppLayout() {
     setShowMobileUtilityMenu(false);
 
     if (action === "settings") {
-      toast("환경설정 기능은 준비 중입니다.");
+      navigate("/settings");
       return;
     }
 
     if (action === "contact") {
-      toast("문의하기 기능은 준비 중입니다.");
+      navigate("/contact");
       return;
     }
 
