@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Edit2, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Edit2, CalendarDays, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   scheduleApi,
@@ -57,6 +57,7 @@ export default function Records() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
+  const [showMobileProfileDetails, setShowMobileProfileDetails] = useState(false);
   const [dailyDiary, setDailyDiary] = useState("");
   const weekCacheRef = useRef<Record<string, Awaited<ReturnType<typeof scheduleApi.getDaily>>[]>>({});
 
@@ -177,7 +178,7 @@ export default function Records() {
     setLoading(false);
   }
 
-  useEffect(() => { load(selectedDate); }, []); // eslint-disable-line
+  useEffect(() => { load(selectedDate); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     diaryApi.getByDate(toDateStr(selectedDate))
@@ -375,6 +376,27 @@ export default function Records() {
             )}
           </div>
 
+          <div className="card-warm p-4 md:hidden">
+            <div className="flex flex-col gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-gray-700">입력된 일상정보</h3>
+                <p className="mt-1 text-xs leading-5 text-gray-400">
+                  현재 저장된 일상정보 전체를 바로 확인할 수 있습니다.
+                </p>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowMobileProfileDetails(true)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-semibold text-gray-600 transition-all duration-200 hover:border-gray-300 hover:text-gray-800"
+                >
+                  <span>전체 보기</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
           <MedicationScheduleCard
             title="복약 일정"
             loading={loading}
@@ -438,23 +460,15 @@ export default function Records() {
           </div>
 
           {/* 입력된 일상정보 */}
-          <div className="card-warm p-5">
+          <div className="hidden md:block card-warm p-5">
             <h3 className="text-sm font-bold text-gray-700 mb-3">입력된 일상정보</h3>
             <div className="rounded-xl border border-gray-200 bg-white/70 p-3">
-              {!profile ? (
-                <p className="text-sm text-gray-400">온보딩 정보가 아직 없습니다.</p>
-              ) : (
-                <div className="space-y-2 text-sm text-gray-700">
-                  <InfoRow label="키/몸무게" value={`${profile.basic_info.height_cm}cm / ${profile.basic_info.weight_kg}kg`} />
-                  <InfoRow label="운동 빈도" value={`주 ${profile.lifestyle.exercise_frequency_per_week}회`} />
-                  <InfoRow label="PC/스마트폰" value={`${profile.lifestyle.pc_hours_per_day}h / ${profile.lifestyle.smartphone_hours_per_day}h`} />
-                  <InfoRow label="커피" value={`${profile.lifestyle.caffeine_cups_per_day}잔`} />
-                  <InfoRow label="흡연" value={smokingLabel} />
-                  <InfoRow label="음주" value={alcoholLabel} />
-                  <InfoRow label="취침/기상" value={`${profile.sleep_input.bed_time} / ${profile.sleep_input.wake_time}`} />
-                  <InfoRow label="식사 패턴" value={regularMealsLabel} />
-                </div>
-              )}
+              <ProfileInfoContent
+                profile={profile}
+                smokingLabel={smokingLabel}
+                alcoholLabel={alcoholLabel}
+                regularMealsLabel={regularMealsLabel}
+              />
             </div>
           </div>
 
@@ -477,6 +491,16 @@ export default function Records() {
             await loadProfile();
             toast.success("정보가 업데이트되었습니다.");
           }}
+        />
+      )}
+
+      {showMobileProfileDetails && (
+        <MobileProfileInfoSheet
+          profile={profile}
+          smokingLabel={smokingLabel}
+          alcoholLabel={alcoholLabel}
+          regularMealsLabel={regularMealsLabel}
+          onClose={() => setShowMobileProfileDetails(false)}
         />
       )}
     </div>
@@ -839,6 +863,87 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-1.5">
       <span className="text-xs text-gray-500">{label}</span>
       <span className="text-sm font-medium text-gray-700 text-right">{value}</span>
+    </div>
+  );
+}
+
+function ProfileInfoContent({
+  profile,
+  smokingLabel,
+  alcoholLabel,
+  regularMealsLabel,
+}: {
+  profile: HealthProfile | null;
+  smokingLabel: string;
+  alcoholLabel: string;
+  regularMealsLabel: string;
+}) {
+  if (!profile) {
+    return <p className="text-sm text-gray-400">온보딩 정보가 아직 없습니다.</p>;
+  }
+
+  return (
+    <div className="space-y-2 text-sm text-gray-700">
+      <InfoRow label="키/몸무게" value={`${profile.basic_info.height_cm}cm / ${profile.basic_info.weight_kg}kg`} />
+      <InfoRow label="운동 빈도" value={`주 ${profile.lifestyle.exercise_frequency_per_week}회`} />
+      <InfoRow label="PC/스마트폰" value={`${profile.lifestyle.pc_hours_per_day}h / ${profile.lifestyle.smartphone_hours_per_day}h`} />
+      <InfoRow label="커피" value={`${profile.lifestyle.caffeine_cups_per_day}잔`} />
+      <InfoRow label="흡연" value={smokingLabel} />
+      <InfoRow label="음주" value={alcoholLabel} />
+      <InfoRow label="취침/기상" value={`${profile.sleep_input.bed_time} / ${profile.sleep_input.wake_time}`} />
+      <InfoRow label="식사 패턴" value={regularMealsLabel} />
+    </div>
+  );
+}
+
+function MobileProfileInfoSheet({
+  profile,
+  smokingLabel,
+  alcoholLabel,
+  regularMealsLabel,
+  onClose,
+}: {
+  profile: HealthProfile | null;
+  smokingLabel: string;
+  alcoholLabel: string;
+  regularMealsLabel: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 md:hidden">
+      <button
+        type="button"
+        aria-label="입력된 일상정보 닫기"
+        className="absolute inset-0 bg-black/30 backdrop-blur-[1px]"
+        onClick={onClose}
+      />
+      <div className="absolute inset-x-0 bottom-0 max-h-[82vh] rounded-t-[28px] bg-white shadow-[0_-12px_40px_rgba(42,38,34,0.18)]">
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+          <div>
+            <h3 className="text-base font-bold text-gray-800">입력된 일상정보</h3>
+            <p className="mt-1 text-xs leading-5 text-gray-400">
+              현재 저장된 일상정보 전체를 바로 확인할 수 있습니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="overflow-y-auto px-5 py-5">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4">
+            <ProfileInfoContent
+              profile={profile}
+              smokingLabel={smokingLabel}
+              alcoholLabel={alcoholLabel}
+              regularMealsLabel={regularMealsLabel}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

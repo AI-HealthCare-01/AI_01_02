@@ -1,15 +1,18 @@
-import { Outlet, NavLink, useNavigate } from "react-router";
+import { Outlet, NavLink, useLocation, useNavigate } from "react-router";
 import {
   LayoutDashboard,
   BookOpen,
   MessageCircle,
   Pill,
   NotebookPen,
+  MoreHorizontal,
+  Settings,
   LogOut,
-  UserX,
+  CircleHelp,
+  X,
 } from "lucide-react";
-import { authApi, clearAllUserData, userApi } from "@/lib/api";
-import { useState } from "react";
+import { authApi, clearAllUserData } from "@/lib/api";
+import { useEffect, useState } from "react";
 
 const NAV_ITEMS = [
   { to: "/", label: "홈", icon: LayoutDashboard, end: true },
@@ -19,9 +22,18 @@ const NAV_ITEMS = [
   { to: "/records", label: "일상 기록", icon: NotebookPen },
 ];
 
+const UTILITY_ITEMS = [
+  { key: "settings", label: "환경설정", icon: Settings },
+  { key: "contact", label: "문의하기", icon: CircleHelp },
+  { key: "logout", label: "로그아웃", icon: LogOut },
+] as const;
+
+type UtilityActionKey = (typeof UTILITY_ITEMS)[number]["key"];
+
 export default function AppLayout() {
   const navigate = useNavigate();
-  const [showWithdraw, setShowWithdraw] = useState(false);
+  const location = useLocation();
+  const [showMobileUtilityMenu, setShowMobileUtilityMenu] = useState(false);
 
   function handleLogout() {
     authApi.logout();
@@ -29,14 +41,26 @@ export default function AppLayout() {
     navigate("/login");
   }
 
-  async function handleWithdraw() {
-    try {
-      await userApi.deleteAccount();
-    } catch (err) {
-      console.warn("Account deletion request failed:", err);
+  useEffect(() => {
+    setShowMobileUtilityMenu(false);
+  }, [location.pathname]);
+
+  function handleUtilityAction(action: UtilityActionKey) {
+    setShowMobileUtilityMenu(false);
+
+    if (action === "settings") {
+      navigate("/settings");
+      return;
     }
-    clearAllUserData();
-    navigate("/login");
+
+    if (action === "contact") {
+      navigate("/contact");
+      return;
+    }
+
+    if (action === "logout") {
+      handleLogout();
+    }
   }
 
   return (
@@ -78,70 +102,93 @@ export default function AppLayout() {
           ))}
         </nav>
 
-        {/* Logout / Withdraw */}
-        <div className="px-3 pb-4 space-y-0.5 relative z-10">
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3.5 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:bg-red-50 hover:text-red-500 transition-all duration-200"
-          >
-            <LogOut className="w-4 h-4 shrink-0" />
-            로그아웃
-          </button>
-          <button
-            onClick={() => setShowWithdraw(true)}
-            className="flex items-center gap-3 w-full px-3.5 py-2 rounded-xl text-xs font-medium text-gray-300 hover:bg-red-50 hover:text-red-400 transition-all duration-200"
-          >
-            <UserX className="w-3.5 h-3.5 shrink-0" />
-            회원 탈퇴
-          </button>
+        {/* Utility menu */}
+        <div className="px-3 pb-4 space-y-1 relative z-10">
+          <p className="px-3.5 pb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-300">
+            지원 및 계정
+          </p>
+          {UTILITY_ITEMS.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => handleUtilityAction(key)}
+              className={`flex items-center gap-3 w-full rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-200 ${
+                key === "logout"
+                  ? "text-gray-400 hover:bg-red-50 hover:text-red-500"
+                  : "text-gray-400 hover:bg-white/60 hover:text-gray-700"
+              }`}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              {label}
+            </button>
+          ))}
         </div>
       </aside>
 
-      {/* ── Withdraw modal ── */}
-      {showWithdraw && (
-        <div className="fixed inset-0 bg-black/25 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-6 text-center animate-page-enter">
-            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
-              <UserX className="w-5 h-5 text-red-400" />
-            </div>
-            <h3 className="text-base font-bold text-gray-800 mb-1">회원 탈퇴</h3>
-            <p className="text-sm text-gray-400 mb-6">
-              탈퇴 시 모든 데이터가 비활성화됩니다.<br />정말 탈퇴하시겠습니까?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowWithdraw(false)}
-                className="flex-1 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleWithdraw}
-                className="flex-1 py-2.5 text-sm font-medium bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors"
-              >
-                탈퇴하기
-              </button>
+      {/* ── Mobile global header ── */}
+      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-gray-200/40 glass px-4 md:hidden">
+        <div className="flex items-center">
+          <span className="font-display text-lg font-bold tracking-tight text-green-600">logly</span>
+          <span className="ml-1 mt-1 text-[9px] font-semibold uppercase tracking-[0.2em] text-green-400/70">care</span>
+        </div>
+        <button
+          type="button"
+          aria-label="전역 메뉴 열기"
+          onClick={() => setShowMobileUtilityMenu((prev) => !prev)}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white/80 text-gray-600 shadow-sm transition-colors hover:border-gray-300 hover:text-gray-800"
+        >
+          {showMobileUtilityMenu ? <X className="w-4 h-4" /> : <MoreHorizontal className="w-5 h-5" />}
+        </button>
+      </header>
+
+      {showMobileUtilityMenu && (
+        <>
+          <button
+            type="button"
+            aria-label="전역 메뉴 닫기"
+            className="fixed inset-0 z-30 bg-black/10 md:hidden"
+            onClick={() => setShowMobileUtilityMenu(false)}
+          />
+          <div className="fixed right-4 top-[3.75rem] z-40 w-56 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_18px_40px_rgba(42,38,34,0.16)] md:hidden">
+            <div className="p-2">
+              {UTILITY_ITEMS.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleUtilityAction(key)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-left text-sm font-semibold transition-colors ${
+                    key === "logout"
+                      ? "text-gray-700 hover:bg-gray-50"
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span>{label}</span>
+                </button>
+              ))}
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* ── Main content ── */}
-      <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+      <main className="flex-1 overflow-y-auto pb-28 pt-14 md:pb-0 md:pt-0">
         <div className="min-h-full animate-page-enter">
           <Outlet />
         </div>
       </main>
 
       {/* ── Bottom tab bar (mobile) ── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 glass border-t border-gray-200/40 flex z-40">
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex border-t border-gray-200/40 glass px-2 pt-2"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}
+      >
         {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
             className={({ isActive }) =>
-              `relative flex flex-col items-center justify-center flex-1 py-2.5 gap-0.5 transition-all duration-200 ${
+              `relative flex min-h-[60px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-3 transition-all duration-200 ${
                 isActive ? "text-green-600" : "text-gray-400"
               }`
             }
@@ -149,11 +196,11 @@ export default function AppLayout() {
             {({ isActive }) => (
               <>
                 <div className="relative">
-                  <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive ? "scale-110" : ""}`} />
+                  <Icon className={`h-[22px] w-[22px] transition-transform duration-200 ${isActive ? "scale-110" : ""}`} />
                 </div>
-                <span className="text-[10px] font-semibold leading-none">{label}</span>
+                <span className="text-[11px] font-semibold leading-none tracking-[-0.01em]">{label}</span>
                 {isActive && (
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-green-500 rounded-full" />
+                  <div className="absolute top-0 left-1/2 h-0.5 w-9 -translate-x-1/2 rounded-full bg-green-500" />
                 )}
               </>
             )}
