@@ -12,7 +12,6 @@ import {
   Dumbbell,
   HeartPulse,
   MoonStar,
-  MoreHorizontal,
   Pill,
   Smartphone,
   Sparkles,
@@ -786,20 +785,9 @@ export default function AiGuide() {
   return (
     <>
       <div className="min-h-full max-w-4xl mx-auto p-4 md:p-8 stagger-children">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">AI 가이드</h1>
-            <p className="mt-0.5 text-sm font-medium text-gray-400">복약 및 생활습관 맞춤 가이드</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowOverviewModal(true)}
-            disabled={isOverviewDisabled}
-            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-600 shadow-sm transition-colors hover:border-gray-300 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <span>더보기</span>
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">AI 가이드</h1>
+          <p className="mt-0.5 text-sm font-medium text-gray-400">복약 및 생활습관 맞춤 가이드</p>
         </div>
 
         {status === "IDLE" && (
@@ -873,7 +861,18 @@ export default function AiGuide() {
                 <StatBox label="남음" value={remainingGuideCount} />
               </div>
 
-              {updatedAt ? <p className="mt-5 text-sm text-green-50/90">최종 업데이트: {updatedAt}</p> : null}
+              <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                {updatedAt ? <p className="text-sm text-green-50/90">최종 업데이트: {updatedAt}</p> : <span />}
+                <button
+                  type="button"
+                  onClick={() => setShowOverviewModal(true)}
+                  disabled={isOverviewDisabled}
+                  className="inline-flex items-center gap-2 self-start rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span>전체 가이드 보기</span>
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
             </section>
 
             <section className="space-y-4">
