@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { ChevronRight, FileText, LockKeyhole, LogOut, ShieldCheck, UserRound, UserX } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, LockKeyhole, LogOut, ShieldCheck, UserRound, UserX } from "lucide-react";
 import { authApi, clearAllUserData, userApi } from "@/lib/api";
+import type { UserInfo } from "@/lib/api";
 import { useNavigate } from "react-router";
 
 const APP_VERSION = "v0.1.0";
@@ -10,12 +11,43 @@ type PolicyType = "terms" | "privacy" | null;
 
 export default function Settings() {
   const navigate = useNavigate();
+  const [accountOpen, setAccountOpen] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [selectedPolicy, setSelectedPolicy] = useState<PolicyType>(null);
+  const [accountInfo, setAccountInfo] = useState<UserInfo | null>(null);
+  const [accountInfoLoading, setAccountInfoLoading] = useState(false);
   const [alertSettings, setAlertSettings] = useState({
     medication: true,
     guide: true,
   });
+
+  useEffect(() => {
+    if (!accountOpen || accountInfo || accountInfoLoading) return;
+
+    let cancelled = false;
+
+    async function loadAccountInfo() {
+      setAccountInfoLoading(true);
+      try {
+        const profile = await userApi.me();
+        if (!cancelled) {
+          setAccountInfo(profile);
+        }
+      } catch (err) {
+        console.warn("Failed to load account info:", err);
+      } finally {
+        if (!cancelled) {
+          setAccountInfoLoading(false);
+        }
+      }
+    }
+
+    void loadAccountInfo();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accountInfo, accountInfoLoading, accountOpen]);
 
   function handleLogout() {
     authApi.logout();
@@ -47,9 +79,17 @@ export default function Settings() {
 
         <SettingSection
           title="계정"
-          description="로그인 상태와 계정 관련 기능을 관리합니다."
+          description="가입한 이메일과 전화번호, 계정 관련 기능을 확인할 수 있습니다."
           icon={<UserRound className="w-4 h-4" />}
+          collapsible
+          open={accountOpen}
+          onToggle={() => setAccountOpen((prev) => !prev)}
         >
+          <AccountInfoCard
+            loading={accountInfoLoading}
+            email={accountInfo?.email ?? ""}
+            phoneNumber={accountInfo?.phone_number ?? ""}
+          />
           <ActionRow
             title="로그아웃"
             description="현재 계정에서 로그아웃합니다."
@@ -132,15 +172,25 @@ function SettingSection({
   description,
   icon,
   children,
+  collapsible = false,
+  open = true,
+  onToggle,
 }: {
   title: string;
   description: string;
   icon: ReactNode;
   children: ReactNode;
+  collapsible?: boolean;
+  open?: boolean;
+  onToggle?: () => void;
 }) {
   return (
     <section className="card-warm overflow-hidden">
-      <div className="border-b border-gray-100 px-5 py-4">
+      <button
+        type="button"
+        onClick={collapsible ? onToggle : undefined}
+        className={`flex w-full items-center justify-between px-5 py-4 text-left ${collapsible ? "transition-colors hover:bg-gray-50/70" : "cursor-default"}`}
+      >
         <div className="flex items-center gap-2">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-green-50 text-green-600">
             {icon}
@@ -150,9 +200,51 @@ function SettingSection({
             <p className="mt-0.5 text-xs text-gray-400">{description}</p>
           </div>
         </div>
-      </div>
-      <div className="divide-y divide-gray-100">{children}</div>
+        {collapsible ? (
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gray-50 text-gray-400">
+            <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+          </span>
+        ) : null}
+      </button>
+      {open ? (
+        <div className="divide-y divide-gray-100 border-t border-gray-100">{children}</div>
+      ) : null}
     </section>
+  );
+}
+
+function AccountInfoCard({
+  loading,
+  email,
+  phoneNumber,
+}: {
+  loading: boolean;
+  email: string;
+  phoneNumber: string;
+}) {
+  return (
+    <div className="px-5 py-4">
+      <div className="rounded-2xl border border-green-100 bg-green-50/60 px-4 py-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-green-700">가입 정보</p>
+        {loading ? (
+          <p className="mt-3 text-sm text-gray-500">계정 정보를 불러오는 중입니다.</p>
+        ) : (
+          <div className="mt-3 space-y-3">
+            <AccountInfoRow label="이메일" value={email || "-"} />
+            <AccountInfoRow label="전화번호" value={phoneNumber || "-"} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AccountInfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-xl bg-white/85 px-3.5 py-3">
+      <span className="text-xs font-semibold text-gray-400">{label}</span>
+      <span className="text-sm font-semibold text-gray-700">{value}</span>
+    </div>
   );
 }
 

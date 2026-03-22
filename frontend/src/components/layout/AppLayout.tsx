@@ -9,10 +9,9 @@ import {
   Settings,
   LogOut,
   CircleHelp,
-  UserX,
   X,
 } from "lucide-react";
-import { authApi, clearAllUserData, userApi } from "@/lib/api";
+import { authApi, clearAllUserData } from "@/lib/api";
 import { useEffect, useState } from "react";
 
 const NAV_ITEMS = [
@@ -27,7 +26,6 @@ const UTILITY_ITEMS = [
   { key: "settings", label: "환경설정", icon: Settings },
   { key: "contact", label: "문의하기", icon: CircleHelp },
   { key: "logout", label: "로그아웃", icon: LogOut },
-  { key: "withdraw", label: "회원탈퇴", icon: UserX },
 ] as const;
 
 type UtilityActionKey = (typeof UTILITY_ITEMS)[number]["key"];
@@ -35,21 +33,10 @@ type UtilityActionKey = (typeof UTILITY_ITEMS)[number]["key"];
 export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [showWithdraw, setShowWithdraw] = useState(false);
   const [showMobileUtilityMenu, setShowMobileUtilityMenu] = useState(false);
 
   function handleLogout() {
     authApi.logout();
-    clearAllUserData();
-    navigate("/login");
-  }
-
-  async function handleWithdraw() {
-    try {
-      await userApi.deleteAccount();
-    } catch (err) {
-      console.warn("Account deletion request failed:", err);
-    }
     clearAllUserData();
     navigate("/login");
   }
@@ -73,10 +60,7 @@ export default function AppLayout() {
 
     if (action === "logout") {
       handleLogout();
-      return;
     }
-
-    setShowWithdraw(true);
   }
 
   return (
@@ -127,12 +111,10 @@ export default function AppLayout() {
             <button
               key={key}
               onClick={() => handleUtilityAction(key)}
-              className={`flex items-center gap-3 w-full rounded-xl px-3.5 py-2.5 text-sm transition-all duration-200 ${
-                key === "withdraw"
-                  ? "font-medium text-gray-300 hover:bg-red-50 hover:text-red-400"
-                  : key === "logout"
-                    ? "font-medium text-gray-400 hover:bg-red-50 hover:text-red-500"
-                    : "font-medium text-gray-400 hover:bg-white/60 hover:text-gray-700"
+              className={`flex items-center gap-3 w-full rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-200 ${
+                key === "logout"
+                  ? "text-gray-400 hover:bg-red-50 hover:text-red-500"
+                  : "text-gray-400 hover:bg-white/60 hover:text-gray-700"
               }`}
             >
               <Icon className="w-4 h-4 shrink-0" />
@@ -174,11 +156,9 @@ export default function AppLayout() {
                   type="button"
                   onClick={() => handleUtilityAction(key)}
                   className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-left text-sm font-semibold transition-colors ${
-                    key === "withdraw"
-                      ? "text-red-500 hover:bg-red-50"
-                      : key === "logout"
-                        ? "text-gray-700 hover:bg-gray-50"
-                        : "text-gray-600 hover:bg-gray-50"
+                    key === "logout"
+                      ? "text-gray-700 hover:bg-gray-50"
+                      : "text-gray-600 hover:bg-gray-50"
                   }`}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
@@ -188,35 +168,6 @@ export default function AppLayout() {
             </div>
           </div>
         </>
-      )}
-
-      {/* ── Withdraw modal ── */}
-      {showWithdraw && (
-        <div className="fixed inset-0 bg-black/25 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-6 text-center animate-page-enter">
-            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
-              <UserX className="w-5 h-5 text-red-400" />
-            </div>
-            <h3 className="text-base font-bold text-gray-800 mb-1">회원 탈퇴</h3>
-            <p className="text-sm text-gray-400 mb-6">
-              탈퇴 시 모든 데이터가 비활성화됩니다.<br />정말 탈퇴하시겠습니까?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowWithdraw(false)}
-                className="flex-1 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleWithdraw}
-                className="flex-1 py-2.5 text-sm font-medium bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors"
-              >
-                탈퇴하기
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* ── Main content ── */}
