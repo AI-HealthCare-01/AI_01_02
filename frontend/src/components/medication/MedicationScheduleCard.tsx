@@ -95,30 +95,6 @@ type Props = {
   onProgressChange?: (progress: number, totalCount: number) => void;
 };
 
-function getMedicationStatusMeta(
-  scheduleStatus: ScheduleItem["status"] | null | undefined,
-  isManualConfirmed: boolean,
-) {
-  if (scheduleStatus === "DONE" || (!scheduleStatus && isManualConfirmed)) {
-    return {
-      label: "완료",
-      className: "bg-green-50 text-green-700",
-    };
-  }
-
-  if (scheduleStatus === "SKIPPED") {
-    return {
-      label: "건너뜀",
-      className: "bg-amber-50 text-amber-700",
-    };
-  }
-
-  return {
-    label: "미응답",
-    className: "bg-gray-100 text-gray-600",
-  };
-}
-
 export default function MedicationScheduleCard({
   title = "복약 일정",
   loading,
@@ -282,7 +258,8 @@ export default function MedicationScheduleCard({
           {medicationRows.map(({ key, intakeLabel, scheduleItem, manualKey, drugName, doseLabel, dosagePerOnce }) => {
             const isManualConfirmed = !!manualConfirmedMap[manualKey];
             const displayIntakeLabel = scheduleItem ? formatTime(scheduleItem.scheduled_at) : intakeLabel;
-            const statusMeta = getMedicationStatusMeta(scheduleItem?.status, isManualConfirmed);
+            const isDone = scheduleItem ? scheduleItem.status === "DONE" : isManualConfirmed;
+            const isSkipped = scheduleItem?.status === "SKIPPED";
 
             return (
               <article
@@ -312,9 +289,27 @@ export default function MedicationScheduleCard({
                   </div>
 
                   <div className="flex min-h-[72px] shrink-0 flex-col items-end justify-between gap-2">
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusMeta.className}`}>
-                      {statusMeta.label}
-                    </span>
+                    {scheduleItem ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateScheduleStatus(
+                            scheduleItem.item_id,
+                            scheduleItem.status === "SKIPPED" ? "PENDING" : "SKIPPED",
+                          )
+                        }
+                        aria-pressed={isSkipped}
+                        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                          isSkipped
+                            ? "border-amber-200 bg-amber-100 text-amber-700"
+                            : "border-amber-200 bg-white text-amber-600 hover:bg-amber-50"
+                        }`}
+                      >
+                        건너뜀
+                      </button>
+                    ) : (
+                      <span className="inline-flex h-[28px]" aria-hidden="true" />
+                    )}
 
                     <div className="flex items-center justify-end">
                       {scheduleItem ? (
@@ -329,7 +324,7 @@ export default function MedicationScheduleCard({
                           className="inline-flex items-center justify-center rounded-md p-0.5 transition-all duration-150"
                           aria-label={scheduleItem.status === "DONE" ? "복약 완료" : "복약 예정"}
                         >
-                          <CheckBox checked={scheduleItem.status === "DONE"} />
+                          <CheckBox checked={isDone} />
                         </button>
                       ) : (
                         <button
