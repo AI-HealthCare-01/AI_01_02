@@ -614,7 +614,8 @@ export default function AiGuide() {
       try {
         s = await guideApi.getLatestJobStatus();
         localStorage.setItem("guide_job_id", s.job_id);
-      } catch {
+      } catch (err) {
+        console.warn("getLatestJobStatus failed, falling back to cached job ID:", err);
         const fallbackJobId = localStorage.getItem("guide_job_id");
         if (!fallbackJobId) {
           setStatus("IDLE");
@@ -686,7 +687,8 @@ export default function AiGuide() {
     try {
       const parsed = JSON.parse(result.medication_guidance) as unknown;
       if (Array.isArray(parsed)) meds = parsed as MedicationGuideItem[];
-    } catch {
+    } catch (err) {
+      console.warn("Failed to parse medication_guidance for info lookup:", err);
       return;
     }
     const names = Array.from(new Set(meds.map((med) => med.drug_name).filter((name): name is string => Boolean(name))));

@@ -160,7 +160,7 @@ function NotificationCard({
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      onToggleExpanded(notification);
+      void onToggleExpanded(notification);
     }
   }
 
@@ -168,7 +168,7 @@ function NotificationCard({
     <article
       role="button"
       tabIndex={0}
-      onClick={() => onToggleExpanded(notification)}
+      onClick={() => void onToggleExpanded(notification)}
       onKeyDown={handleKeyDown}
       className={`overflow-hidden rounded-[24px] px-4 py-4 shadow-sm transition-all duration-200 md:px-5 ${
         expanded ? "max-h-none" : "max-h-[108px]"
