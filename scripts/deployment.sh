@@ -118,20 +118,27 @@ echo "2) https 사용중"
 read -p "선택(ex. 1): " is_https
 echo ""
 
+# ---------- SSH 옵션 (한글 사용자명 known_hosts 경로 문제 우회) ----------
+SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+# ---------- EC2 디렉토리 생성 ----------
+echo "${COLOR_BLUE}EC2 프로젝트 디렉토리 생성 중...${COLOR_NC}"
+ssh ${SSH_OPTS} -i ~/.ssh/${ssh_key_file} ubuntu@${ec2_ip} "mkdir -p ~/project/nginx"
+
 # ---------- EC2 내에 배포 준비 파일 복사  ----------
-scp -i ~/.ssh/${ssh_key_file} envs/.prod.env ubuntu@${ec2_ip}:~/project/.env
-scp -i ~/.ssh/${ssh_key_file} docker-compose.prod.yml ubuntu@${ec2_ip}:~/project/docker-compose.yml
+scp ${SSH_OPTS} -i ~/.ssh/${ssh_key_file} envs/.prod.env ubuntu@${ec2_ip}:~/project/.env
+scp ${SSH_OPTS} -i ~/.ssh/${ssh_key_file} docker-compose.prod.yml ubuntu@${ec2_ip}:~/project/docker-compose.yml
 if [[ "$is_https" == "1" ]]; then
   # ---------- prod_http.conf 파일의 server_name 자동 수정 ----------
   replace_in_file "s/server_name .*/server_name ${ec2_ip};/g" "nginx/prod_http.conf"
-  scp -i ~/.ssh/${ssh_key_file} nginx/prod_http.conf ubuntu@${ec2_ip}:~/project/nginx/default.conf
+  scp ${SSH_OPTS} -i ~/.ssh/${ssh_key_file} nginx/prod_http.conf ubuntu@${ec2_ip}:~/project/nginx/default.conf
 elif [[ "$is_https" == "2" ]]; then
   echo "${COLOR_BLUE}사용중인 도메인을 입력하세요. (ex. api.ozcoding.site)${COLOR_NC}"
   read -p "Domain: " domain
   # ---------- prod_https.conf 파일의 server_name, ssl_certificate 자동 수정 ----------
   replace_in_file "s/server_name .*/server_name ${domain};/g" "nginx/prod_https.conf"
   replace_in_file "s|/etc/letsencrypt/live/[^/]*|/etc/letsencrypt/live/${domain}|g" "nginx/prod_https.conf"
-  scp -i ~/.ssh/${ssh_key_file} nginx/prod_https.conf ubuntu@${ec2_ip}:~/project/nginx/default.conf
+  scp ${SSH_OPTS} -i ~/.ssh/${ssh_key_file} nginx/prod_https.conf ubuntu@${ec2_ip}:~/project/nginx/default.conf
 else
   echo "${COLOR_RED}잘못된 선택입니다. 1 또는 2를 입력해주세요.${COLOR_NC}"
   exit 1
@@ -140,7 +147,7 @@ fi
 # ---------- EC2 배포 자동화  ----------
 echo "${COLOR_BLUE}EC2 인스턴스에 SSH 접속을 시도합니다.${COLOR_NC}"
 chmod 400 ~/.ssh/${ssh_key_file}
-ssh -i ~/.ssh/${ssh_key_file} ubuntu@${ec2_ip} \
+ssh ${SSH_OPTS} -i ~/.ssh/${ssh_key_file} ubuntu@${ec2_ip} \
   "DEPLOY_SERVICES='${DEPLOY_SERVICES[*]}' \
    bash -s" << EOF
   set -e

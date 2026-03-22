@@ -42,9 +42,6 @@ services:
   # 3. API Server (FastAPI)
   fastapi:
     container_name: fastapi
-    build:
-      context: .
-      dockerfile: app/Dockerfile
     image: ${DOCKER_USER}/${DOCKER_REPOSITORY}:app-${APP_VERSION}
     env_file: .env
     mem_limit: 512M
@@ -74,9 +71,6 @@ services:
   # 4. AI Worker (Model 학습 및 추론)
   ai-worker:
     container_name: ai-worker
-    build:
-      context: .
-      dockerfile: ai_worker/Dockerfile
     image: ${DOCKER_USER}/${DOCKER_REPOSITORY}:ai-${AI_WORKER_VERSION}
     env_file: .env
     restart: always
