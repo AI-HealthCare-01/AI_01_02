@@ -336,13 +336,13 @@ export default function Chat() {
 
           {/* Quick prompts */}
           {promptOptions.length > 0 && messages.length <= 1 && (
-            <div className="flex flex-wrap gap-2 mt-2">
+            <div className="flex flex-wrap gap-2.5 mt-3">
               {promptOptions.slice(0, 4).map((opt) => (
                 <button
                   key={opt.id}
                   onClick={() => sendMessage(opt.label)}
                   disabled={streaming}
-                  className="px-4 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 hover:border-green-300 hover:text-green-700 hover:bg-green-50/50 bg-white transition-all duration-200 font-medium"
+                  className="px-5 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-600 hover:border-green-300 hover:text-green-700 hover:bg-green-50/50 bg-white active:scale-95 transition-all duration-200 font-medium"
                 >
                   {opt.label}
                 </button>

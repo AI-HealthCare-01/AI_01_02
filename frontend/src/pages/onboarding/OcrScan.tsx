@@ -188,7 +188,7 @@ export default function OcrScan() {
           <div className="flex gap-3 mt-4">
             <button
               onClick={() => { setFile(null); setPreview(null); if (inputRef.current) inputRef.current.value = ""; if (cameraRef.current) cameraRef.current.value = ""; }}
-              className="flex-1 py-3 border border-gray-200 text-sm text-gray-500 rounded-lg hover:bg-gray-50 transition-all duration-200"
+              className="flex-1 py-3 border border-gray-200 text-sm font-semibold text-gray-500 rounded-xl hover:bg-gray-50 active:scale-95 transition-all duration-200"
             >
               다시 선택
             </button>
@@ -203,7 +203,7 @@ export default function OcrScan() {
 
         <button
           onClick={() => navigate("/")}
-          className="w-full mt-3 py-2 text-sm text-gray-400 hover:text-gray-600 transition-all duration-200"
+          className="w-full mt-3 py-2.5 text-sm font-medium text-gray-400 hover:text-gray-600 active:text-gray-700 transition-all duration-200"
         >
           나중에 하기
         </button>

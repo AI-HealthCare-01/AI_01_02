@@ -448,7 +448,7 @@ function MedicationAccordion({
 
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className="mt-3 flex items-center gap-1.5 text-xs font-medium text-green-600 hover:text-green-700 transition-colors"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3.5 py-2 text-xs font-semibold text-green-600 hover:bg-green-100 active:scale-95 transition-all"
           >
             <Pencil className="w-3.5 h-3.5" />
             수정

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Edit2, CalendarDays, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -483,7 +484,7 @@ export default function Records() {
         </div>
       </div>
 
-      {showEdit && (
+      {showEdit && createPortal(
         <EditModal
           profile={profile}
           onClose={() => setShowEdit(false)}
@@ -491,17 +492,19 @@ export default function Records() {
             await loadProfile();
             toast.success("정보가 업데이트되었습니다.");
           }}
-        />
+        />,
+        document.body,
       )}
 
-      {showMobileProfileDetails && (
+      {showMobileProfileDetails && createPortal(
         <MobileProfileInfoSheet
           profile={profile}
           smokingLabel={smokingLabel}
           alcoholLabel={alcoholLabel}
           regularMealsLabel={regularMealsLabel}
           onClose={() => setShowMobileProfileDetails(false)}
-        />
+        />,
+        document.body,
       )}
     </div>
   );

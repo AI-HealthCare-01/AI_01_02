@@ -226,29 +226,29 @@ export default function MedicationScheduleCard({
 
   return (
     <div className="card-warm p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div>
+      <div className="mb-4 space-y-3">
+        <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-gray-800">{title}</h2>
-          <div className="flex items-center gap-2 mt-2 text-[11px]">
-            <span className="rounded-full bg-green-50 px-2 py-0.5 font-semibold text-green-700">
-              완료 {completedMedicationCount}
-            </span>
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 font-semibold text-gray-600">
-              미응답 {pendingMedicationCount}
-            </span>
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">
-              건너뜀 {skippedMedicationCount}
-            </span>
+          <div className="flex items-center gap-2.5">
+            <span className="text-sm font-bold text-green-600">복약율 {progress}%</span>
+            <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full gradient-primary rounded-full transition-all duration-700 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2.5">
-          <span className="text-sm font-bold text-green-600">복약율 {progress}%</span>
-          <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className="h-full gradient-primary rounded-full transition-all duration-700 ease-out"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
+        <div className="flex items-center gap-2 text-[11px]">
+          <span className="rounded-full bg-green-50 px-2.5 py-1 font-semibold text-green-700">
+            완료 {completedMedicationCount}
+          </span>
+          <span className="rounded-full bg-gray-100 px-2.5 py-1 font-semibold text-gray-600">
+            미응답 {pendingMedicationCount}
+          </span>
+          <span className="rounded-full bg-amber-50 px-2.5 py-1 font-semibold text-amber-700">
+            건너뜀 {skippedMedicationCount}
+          </span>
         </div>
       </div>
 
