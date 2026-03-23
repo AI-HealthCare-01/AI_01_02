@@ -72,7 +72,10 @@ function extractErrorMessage(err: Record<string, unknown>, status: number): stri
     }).filter(Boolean);
     if (messages.length > 0) return messages.join("\n");
   }
-  return (err?.message as string) ?? (err?.code as string) ?? `HTTP ${status}`;
+  const code = err?.code as string | undefined;
+  const message = err?.message as string | undefined;
+  if (code && message) return `${code} ${message}`;
+  return message ?? code ?? `HTTP ${status}`;
 }
 
 async function refreshAccessToken(): Promise<string | null> {
