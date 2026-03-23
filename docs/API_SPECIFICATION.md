@@ -1,7 +1,7 @@
 # AI Health Project API 명세서
 
-문서 버전: v1.40
-작성일: 2026-03-19
+문서 버전: v1.41
+작성일: 2026-03-23
 원본:
 - `docs/요구사항_정의서.xlsx`
 - `docs/API_명세서.xlsx`
@@ -10,6 +10,7 @@
 문서 목적: 객체 모델 명세와 API 계약 명세를 독립 문서로 관리한다.
 
 문서 변경 이력:
+- v1.41 (2026-03-23): 코드 실사 기반 동기화 — 11.11 가이드 피드백(GuideFeedback) 객체 모델 추가; 11.12 약물 사전(PsychDrug) 객체 추가; 12.3에 가이드 최신 조회/피드백/피드백 통계/OCR 확정+결과/약물 사전 API 5건 추가; 12.9 동기화 목록 46건→51건 갱신; REQ-075~076 연계
 - v1.40 (2026-03-19): 코드 실사 기반 동기화 — 11.9 일기(Diary) 객체 모델 추가; 11.10 알림 설정(UserNotificationSetting) 객체 추가; 12.6 일기 API 3건 추가(PUT/GET /diaries/{date}, GET /diaries); 12.8 동기화 목록 43건→46건 갱신; onboarding_completed_at nullable 정정
 - v1.39 (2026-03-16): 코드 실사 기반 전수 정합 동기화 — 12.2 token/refresh GET→POST 정정, profiles/health→users/me/health-profile 경로 정정, logout 엔드포인트 추가; 12.3 medications/info·guides/confirm-and-create 추가; 12.4 chat messages 200→201 정정; 12.5 알림 설정·읽은 알림 삭제 엔드포인트 추가; 12.6 AUTH_INVALID_CREDENTIALS 추가·VALIDATION_ERROR HTTP 400→422 정정; 12.8 동기화 목록 36건→43건 갱신; 정책 메모 health-profile alias 경로 정정
 - v1.38 (2026-03-14): 코드 실사 기반 동기화 — 11.3 건강 프로필 객체를 실제 구현(`health_profiles.py`) 기준으로 재정렬: lifestyle 평탄화, nutrition_status 필드명 반영, computed 메트릭 추가; 11.8 ScheduleItem category에 EXERCISE 추가
@@ -336,6 +337,39 @@
 | NotificationSettingUpdateRequest | sleep_alarm_enabled | bool | 선택 | 수면 알림 |
 | NotificationSettingUpdateRequest | medication_dday_alarm_enabled | bool | 선택 | 약 소진 D-day 알림 |
 
+### 11.11 가이드 피드백 객체
+
+| 객체명 | 필드 | 타입 | 필수/선택 | 설명 |
+|---|---|---|---|---|
+| GuideFeedbackRequest | rating | int(1~5) | 필수 | 별점 평가 |
+| GuideFeedbackRequest | is_helpful | bool | 필수 | 도움 여부 |
+| GuideFeedbackRequest | comment | string | 선택(nullable, 최대 1000자) | 추가 의견 |
+| GuideFeedbackResponse | id | string | 필수 | 피드백 ID |
+| GuideFeedbackResponse | guide_job_id | string | 필수 | 대상 가이드 작업 ID |
+| GuideFeedbackResponse | rating | int | 필수 | 별점 |
+| GuideFeedbackResponse | is_helpful | bool | 필수 | 도움 여부 |
+| GuideFeedbackResponse | comment | string \| null | 선택(nullable) | 추가 의견 |
+| GuideFeedbackResponse | created_at | string(datetime) | 필수 | 작성 시각 |
+| GuideFeedbackSummaryResponse | total_count | int | 필수 | 전체 피드백 수 |
+| GuideFeedbackSummaryResponse | average_rating | float | 필수 | 평균 별점 |
+| GuideFeedbackSummaryResponse | helpful_rate | float | 필수 | 도움됨 비율(0~1) |
+| GuideFeedbackSummaryResponse | prompt_version | string | 필수 | 프롬프트 버전 |
+
+정책 메모:
+- 사용자당 가이드 작업 1건에 피드백 1건만 허용한다 (unique: guide_job_id + user_id).
+- 피드백에 `prompt_version`을 저장하여 프롬프트 버전별 품질 추적에 활용한다 (`REQ-075`, `REQ-076`).
+
+### 11.12 약물 사전 객체
+
+| 객체명 | 필드 | 타입 | 필수/선택 | 설명 |
+|---|---|---|---|---|
+| DrugItem | id | string | 필수 | 약물 사전 ID |
+| DrugItem | ingredient_name | string \| null | 선택(nullable) | 성분명 |
+| DrugItem | product_name | string \| null | 선택(nullable) | 제품명 |
+| DrugItem | side_effects | string \| null | 선택(nullable) | 부작용 정보 |
+| DrugItem | precautions | string \| null | 선택(nullable) | 주의사항 |
+| DrugListResponse | items | DrugItem[] | 필수 | 약물 목록 |
+
 ## 12. API 계약 명세 (Request/Response)
 
 ### 12.1 공통 규칙
@@ -385,11 +419,16 @@
 | PATCH | `/api/v1/ocr/jobs/{job_id}/confirm` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수), `OcrReviewConfirmRequest` (`confirmed` 필수) | `200 OcrResult(계획)` |
 | GET | `/api/v1/medications/search` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `q`(필수), `limit`(선택, 기본 10) | `200 MedicationSearchResponse` |
 | GET | `/api/v1/medications/info` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `name`(필수) | `200 MedicationInfoResponse` |
+| PUT | `/api/v1/ocr/jobs/{job_id}/result/confirm` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수), `OcrResultConfirmRequest` (필수) | `200 OcrJobResult` |
 | POST | `/api/v1/guides/jobs` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `{"ocr_job_id": string}` (필수) | `202 GuideJobCreateResponse` |
 | POST | `/api/v1/guides/jobs/confirm-and-create` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), `GuideJobCreateFromSnapshotRequest` (필수) | `202 GuideJobCreateResponse` |
+| GET | `/api/v1/guides/jobs/latest` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 GuideJobStatus` |
 | GET | `/api/v1/guides/jobs/{job_id}` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 GuideJobStatus` |
 | GET | `/api/v1/guides/jobs/{job_id}/result` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수) | `200 GuideJobResult` |
 | POST | `/api/v1/guides/jobs/{job_id}/refresh` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수), `GuideRefreshRequest`(선택) | `202 GuideRefreshResponse` |
+| POST | `/api/v1/guides/jobs/{job_id}/feedback` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `job_id`(string, 필수), `GuideFeedbackRequest` (`rating,is_helpful` 필수) | `201 GuideFeedbackResponse` |
+| GET | `/api/v1/guides/feedback/summary` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수) | `200 GuideFeedbackSummaryResponse[]` |
+| GET | `/api/v1/drugs` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `product_name`(선택) | `200 DrugListResponse` |
 | GET | `/api/v1/analysis/summary` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query: `date_from,date_to`(선택) | `200 AnalysisSummary` |
 | GET | `/api/v1/schedules/daily` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), query `date`(필수), `timezone`(선택) | `200 DailyScheduleResponse` |
 | PATCH | `/api/v1/schedules/items/{item_id}/status` | 개발완료 | 헤더 `Authorization: Bearer <access_token>` (필수), path `item_id`(string, 필수), `ScheduleItemStatusUpdateRequest` (`status` 필수) | `200 ScheduleItem` |
@@ -403,6 +442,11 @@
 - 약물 정보 조회 API(`GET /medications/info`)는 효능, 용법, 주의사항, 부작용 등 약물 상세 정보를 반환한다.
 - 가이드 갱신 API는 최근 1주 입력 데이터 기반 주기 갱신 요구사항을 지원한다 (`REQ-007`).
 - 가이드 스냅샷 확정+생성 API(`POST /guides/jobs/confirm-and-create`)는 OCR 확정과 가이드 생성을 단일 요청으로 처리한다.
+- 가이드 최신 조회 API(`GET /guides/jobs/latest`)는 사용자의 가장 최근 가이드 작업 상태를 반환한다.
+- 가이드 피드백 API(`POST /guides/jobs/{job_id}/feedback`)는 사용자당 가이드 1건에 1회만 허용하며, `prompt_version`을 자동 기록한다 (`REQ-075`).
+- 피드백 통계 API(`GET /guides/feedback/summary`)는 프롬프트 버전별 평균 평점/도움됨 비율을 집계하여 모델 개선 판단 근거를 제공한다 (`REQ-076`).
+- OCR 결과 확정 API(`PUT /ocr/jobs/{job_id}/result/confirm`)는 사용자가 수정한 OCR 결과를 저장한다.
+- 약물 사전 API(`GET /drugs`)는 정신과 약물 DB(`psych_drugs`)에서 제품명 검색/조회를 제공한다.
 
 ### 12.4 챗봇 API
 
@@ -497,8 +541,8 @@
 
 ### 12.9 API_명세서.xlsx 동기화 목록
 
-- 기준: `docs/API_명세서.xlsx` `origin` 시트 + 코드 실사 (v1.40)
-- 동기화 건수: 46건
+- 기준: `docs/API_명세서.xlsx` `origin` 시트 + 코드 실사 (v1.41)
+- 동기화 건수: 51건
 
 | 도메인 | Method | Path | 기능 요약 | 완료 상태 |
 |---|---|---|---|---|
@@ -522,7 +566,12 @@
 | V1 | POST | `/api/v1/guides/jobs/confirm-and-create` | OCR 확정+가이드 생성 | 개발완료 |
 | V1 | GET | `/api/v1/guides/jobs/{job_id}` | 가이드 작업 상태 조회 | 개발완료 |
 | V1 | GET | `/api/v1/guides/jobs/{job_id}/result` | 가이드 결과 조회 | 개발완료 |
+| V1 | GET | `/api/v1/guides/jobs/latest` | 가이드 최신 작업 상태 조회 | 개발완료 |
 | V1 | POST | `/api/v1/guides/jobs/{job_id}/refresh` | 가이드 재생성 작업 생성 | 개발완료 |
+| V1 | POST | `/api/v1/guides/jobs/{job_id}/feedback` | 가이드 피드백 제출 | 개발완료 |
+| V1 | GET | `/api/v1/guides/feedback/summary` | 가이드 피드백 통계 조회 | 개발완료 |
+| V1 | PUT | `/api/v1/ocr/jobs/{job_id}/result/confirm` | OCR 결과 확정 저장 | 개발완료 |
+| V1 | GET | `/api/v1/drugs` | 약물 사전 검색/조회 | 개발완료 |
 | V1 | GET | `/api/v1/analysis/summary` | 분석 요약 조회 | 개발완료 |
 | V1 | GET | `/api/v1/schedules/daily` | 일일 일정 조회 | 개발완료 |
 | V1 | PATCH | `/api/v1/schedules/items/{item_id}/status` | 일정 항목 상태 업데이트 | 개발완료 |
@@ -548,7 +597,7 @@
 | V1 | GET | `/api/v1/diaries/{diary_date}` | 일기 단건 조회 | 개발완료 |
 | V1 | GET | `/api/v1/diaries` | 일기 목록 조회(기간) | 개발완료 |
 
-### 12.10 요구사항 기반 미등록 API 갭 (2026-03-19)
+### 12.10 요구사항 기반 미등록 API 갭 (2026-03-23)
 
 - 기준: `요구사항_정의서.xlsx`, `API_명세서.xlsx`, 코드 실사
-- 현재 기준 미등록 API 갭 없음 (v1.40 동기화 완료).
+- 현재 기준 미등록 API 갭 없음 (v1.41 동기화 완료).
