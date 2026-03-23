@@ -451,7 +451,7 @@ function GuideDetailModal({
           <span>{item.label}</span>
         </div>
         <div className="rounded-[26px] border border-gray-200 bg-gray-50/70 p-5">
-          <p className="text-xl font-bold leading-snug text-gray-800">{item.summary}</p>
+          <p className="text-lg font-bold leading-snug text-gray-800">{item.summary}</p>
           <div className="mt-5">{renderGuideDetailContent(item)}</div>
         </div>
       </div>
@@ -570,7 +570,7 @@ function GuideActionCard({
       </div>
 
       <div className="mt-6">
-        <p className="overflow-hidden text-ellipsis whitespace-nowrap text-xl font-bold leading-snug text-gray-800 md:text-[1.55rem]">
+        <p className="line-clamp-2 text-base font-bold leading-snug text-gray-800 md:text-lg">
           {item.summary}
         </p>
       </div>
