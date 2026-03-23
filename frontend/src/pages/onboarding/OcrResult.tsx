@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router";
 import { Loader2, AlertTriangle, Search, Bell, X, FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -446,7 +447,7 @@ export default function OcrResult() {
       </div>
 
       {/* 복약 알림 설정 제안 모달 */}
-      {showReminderModal && (
+      {showReminderModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="bg-green-50 p-6 flex flex-col items-center text-center">
@@ -474,7 +475,8 @@ export default function OcrResult() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
