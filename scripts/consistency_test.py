@@ -26,7 +26,6 @@ import asyncio
 import json
 import os
 import statistics
-import sys
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -159,7 +158,7 @@ def _text_length_variance(results: list[dict], key: str) -> float:
     mean_len = statistics.mean(lengths)
     if mean_len == 0:
         return 0.0
-    max_dev = max(abs(l - mean_len) for l in lengths)
+    max_dev = max(abs(length - mean_len) for length in lengths)
     return (max_dev / mean_len) * 100
 
 

@@ -4,7 +4,7 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from app.core import config, default_logger
-from app.models.guides import GuideFeedback, GuideFailureCode, GuideJob, GuideJobStatus
+from app.models.guides import GuideFailureCode, GuideFeedback, GuideJob, GuideJobStatus
 from app.models.health_profiles import UserHealthProfile
 from app.models.notifications import Notification, NotificationType
 from app.models.ocr import OcrJob, OcrJobStatus
