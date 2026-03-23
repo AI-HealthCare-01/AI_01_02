@@ -4,7 +4,7 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from app.core import config, default_logger
-from app.models.guides import GuideFailureCode, GuideJob, GuideJobStatus
+from app.models.guides import GuideFailureCode, GuideFeedback, GuideJob, GuideJobStatus
 from app.models.health_profiles import UserHealthProfile
 from app.models.notifications import Notification, NotificationType
 from app.models.ocr import OcrJob, OcrJobStatus
@@ -154,6 +154,25 @@ class GuideAutomationService:
             default_logger.exception("guide queue publish failed (job_id=%s reason=%s)", job.id, reason)
             return False
 
+    async def _log_low_rated_prompt_versions(self) -> None:
+        """피드백 평균 평점 < 3.0인 프롬프트 버전을 로그에 경고한다."""
+        from tortoise.functions import Avg
+
+        rows = (
+            await GuideFeedback.all()
+            .group_by("prompt_version")
+            .annotate(avg_rating=Avg("rating"))
+            .values("prompt_version", "avg_rating")
+        )
+        for row in rows:
+            avg = float(row["avg_rating"] or 0)
+            if avg < 3.0:
+                default_logger.warning(
+                    "low_feedback_score: prompt_version=%s avg_rating=%.2f — improvement recommended",
+                    row["prompt_version"],
+                    avg,
+                )
+
     async def process_weekly_refresh_due_users(self, *, batch_size: int) -> int:
         lock_key = "guide:weekly_refresh_lock"
         lock_ttl = config.GUIDE_WEEKLY_REFRESH_CHECK_INTERVAL_SECONDS
@@ -164,6 +183,11 @@ class GuideAutomationService:
         except RedisError:
             default_logger.warning("weekly_refresh_lock_redis_error — skipping this cycle", exc_info=True)
             return 0
+
+        try:
+            await self._log_low_rated_prompt_versions()
+        except Exception:
+            default_logger.warning("failed to log low-rated prompt versions", exc_info=True)
 
         cutoff = datetime.now(config.TIMEZONE) - timedelta(days=7)
         user_ids = (

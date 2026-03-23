@@ -44,10 +44,38 @@ export function clearPreviousUserData(currentEmail: string) {
 
 let _refreshPromise: Promise<string | null> | null = null;
 
+const FIELD_LABELS: Record<string, string> = {
+  name: "이름", email: "이메일", password: "비밀번호", phone_number: "전화번호",
+  birth_date: "생년월일", gender: "성별",
+};
+
+function translateMsg(msg: string): string {
+  if (msg.startsWith("Value error, ")) return msg.slice(13);
+  const m = msg.match(/String should have at least (\d+) character/);
+  if (m) return `최소 ${m[1]}자 이상 입력해주세요.`;
+  const m2 = msg.match(/String should have at most (\d+) character/);
+  if (m2) return `최대 ${m2[1]}자까지 입력 가능합니다.`;
+  if (msg.includes("not a valid email")) return "올바른 이메일 형식이 아닙니다.";
+  if (msg.includes("Input should be")) return "올바른 값을 선택해주세요.";
+  if (msg.includes("Field required")) return "필수 입력 항목입니다.";
+  return msg;
+}
+
 function extractErrorMessage(err: Record<string, unknown>, status: number): string {
   const detail = err?.detail;
-  const detailMsg = Array.isArray(detail) ? detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join(", ") : (detail as { message?: string })?.message;
-  return (err?.message as string) ?? detailMsg ?? (err?.code as string) ?? `HTTP ${status}`;
+  if (Array.isArray(detail) && detail.length > 0) {
+    const messages = detail.map((d: { loc?: string[]; msg?: string }) => {
+      const field = d.loc?.filter((l) => l !== "body").pop();
+      const label = (field && FIELD_LABELS[field]) || field;
+      const translated = translateMsg(d.msg ?? "");
+      return label ? `${label}: ${translated}` : translated;
+    }).filter(Boolean);
+    if (messages.length > 0) return messages.join("\n");
+  }
+  const code = err?.code as string | undefined;
+  const message = err?.message as string | undefined;
+  if (code && message) return `${code} ${message}`;
+  return message ?? code ?? `HTTP ${status}`;
 }
 
 async function refreshAccessToken(): Promise<string | null> {

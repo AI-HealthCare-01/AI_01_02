@@ -1,6 +1,6 @@
 Project AI_Health_Core_Baseline {
   database_type: "MySQL"
-  Note: 'Simplified ERD for first web service project (2026-03-19). Aligned with latest requirements and API spreadsheets. Focuses on minimum tables needed to implement current API contract (46 endpoints).'
+  Note: 'Simplified ERD for first web service project (2026-03-23). Aligned with latest requirements and API spreadsheets. Focuses on minimum tables needed to implement current API contract (50 endpoints).'
 }
 
 // ----------------------------------------------------------------------
@@ -13,6 +13,7 @@ Project AI_Health_Core_Baseline {
 // - chat_message_references / chat_guardrail_events / ocr_results / ocr_medications
 // Note: guide_results IS included (separate 1:1 table with guide_jobs) to match actual ORM.
 // Note: psych_drugs, user_notification_settings, daily_diaries added (2026-03-19) to match actual ORM.
+// Note: guide_feedbacks added (2026-03-23) to match actual ORM (REQ-075~076).
 // Reason: keep first-project schema easy to understand and implement.
 
 // ----------------------------------------------------------------------
@@ -88,11 +89,12 @@ Table users {
   birthday date [not null]
   phone_number varchar(11) [not null, unique]
   is_active boolean [not null, default: true]
+  is_admin boolean [not null, default: false]
   last_login datetime(6)
   created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
   updated_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
 
-  Note: 'Core account table. Withdrawal uses soft delete (is_active=false) + Redis JTI blacklist for immediate token invalidation (no withdrawn_at/token_version columns in ORM). Supports REQ-024~028.'
+  Note: 'Core account table. Withdrawal uses soft delete (is_active=false) + Redis JTI blacklist for immediate token invalidation (no withdrawn_at/token_version columns in ORM). is_admin gates admin-only endpoints (e.g. feedback summary). Supports REQ-024~028.'
 
   indexes {
     (email) [name: 'idx_users_email', unique]
@@ -101,7 +103,7 @@ Table users {
   }
 }
 
-Table health_profiles {
+Table user_health_profiles {
   id bigint [pk, increment, not null]
   user_id bigint [not null, unique]
   height_cm float [not null]
@@ -157,6 +159,7 @@ Table documents {
 
   indexes {
     (user_id, uploaded_at) [name: 'idx_documents_user_uploaded_at']
+    (document_type) [name: 'idx_documents_document_type']
   }
 }
 
@@ -267,6 +270,24 @@ Table guide_results {
 
   indexes {
     (job_id) [name: 'idx_guide_results_job_id', unique]
+  }
+}
+
+Table guide_feedbacks {
+  id bigint [pk, increment, not null]
+  guide_job_id bigint [not null]
+  user_id bigint [not null]
+  rating smallint [not null, note: '1~5']
+  is_helpful boolean [not null]
+  comment longtext
+  prompt_version varchar(20) [not null, default: '']
+  created_at datetime(6) [not null, default: `CURRENT_TIMESTAMP(6)`]
+
+  Note: 'User feedback on guide results. Tracks rating/helpfulness per prompt version for improvement pipeline (REQ-075~076). unique(guide_job_id, user_id) prevents duplicate feedback.'
+
+  indexes {
+    (guide_job_id, user_id) [name: 'idx_guide_feedbacks_job_user', unique]
+    (prompt_version, is_helpful) [name: 'idx_guide_feedbacks_version_helpful']
   }
 }
 
@@ -428,13 +449,15 @@ Table daily_diaries {
 // ----------------------------------------------------------------------
 // Relationships
 // ----------------------------------------------------------------------
-Ref: users.id - health_profiles.user_id [delete: cascade]
+Ref: users.id - user_health_profiles.user_id [delete: cascade]
 Ref: users.id < documents.user_id [delete: cascade]
 Ref: users.id < ocr_jobs.user_id [delete: cascade]
 Ref: documents.id < ocr_jobs.document_id [delete: cascade]
 Ref: users.id < guide_jobs.user_id [delete: cascade]
 Ref: ocr_jobs.id < guide_jobs.ocr_job_id [delete: cascade]
 Ref: guide_jobs.id - guide_results.job_id [delete: cascade]
+Ref: guide_jobs.id < guide_feedbacks.guide_job_id [delete: cascade]
+Ref: users.id < guide_feedbacks.user_id [delete: cascade]
 Ref: users.id < chat_sessions.user_id [delete: cascade]
 Ref: chat_sessions.id < chat_messages.session_id [delete: cascade]
 Ref: users.id < notifications.user_id [delete: cascade]

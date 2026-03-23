@@ -55,7 +55,7 @@
 
 - **자체 평가 점수**: 5 / 5
 - **근거**:
-  - `docs/REQUIREMENTS_DEFINITION.md` (v1.32): **총 112건** 요구사항 정의
+  - `docs/REQUIREMENTS_DEFINITION.md` (v1.33): **총 114건** 요구사항 정의
     - 기능 요구사항: 74건 (REQ-001 ~ REQ-074)
     - 비기능 요구사항: 38건 (REQ-101 ~ REQ-138)
   - **기능/비기능 구분** 명확:
@@ -75,7 +75,7 @@
 
   | 문서 | 파일 경로 | 버전 | 내용 |
   |------|-----------|------|------|
-  | 요구사항 정의서 | `docs/REQUIREMENTS_DEFINITION.md` | v1.32 | 범위, 행위주체, 시스템 로직, 112건 REQ |
+  | 요구사항 정의서 | `docs/REQUIREMENTS_DEFINITION.md` | v1.33 | 범위, 행위주체, 시스템 로직, 114건 REQ |
   | API 명세서 | `docs/API_SPECIFICATION.md` | v1.40 | API 경로, 요청/응답 스키마, 상태 코드 |
   | 팀 개발 가이드 | `docs/TEAM_DEVELOPMENT_GUIDELINE.md` | v2.31 | 기능별 개발 기준, 검수 기준, DoD |
   | 역할 분담 | `docs/SWIMLANE_4인_역할분담.md` | - | 4인 스윔레인, REQ/API 매핑 |
@@ -83,7 +83,7 @@
   | 원본 산출물 | `docs/요구사항_정의서.xlsx`, `docs/API_명세서.xlsx` | - | Excel 원본 |
 
   - **화면 흐름도**: `REQUIREMENTS_DEFINITION.md` §4에 E2E 서비스 흐름, `SWIMLANE_4인_역할분담.md`에 Mermaid 흐름도 포함
-  - **기능 정의**: 112건 REQ로 기능별 입력/처리/출력 상세 정의
+  - **기능 정의**: 114건 REQ로 기능별 입력/처리/출력 상세 정의
   - **데이터 흐름**: OCR → 파싱 → 가이드 생성 → 알림 파이프라인 명시, 레인 간 핸드오프 정의
   - **변경 이력 관리**: 요구사항 정의서 32회, 팀 가이드 31회 버전 업데이트 기록
 
@@ -167,14 +167,17 @@
 - **자체 평가 점수**: 5 / 5
 - **근거**:
   - **`docs/MODEL_EVALUATION_REPORT.md`에 성능 평가 보고서 작성**:
+  - **평가 데이터 분리** (`MODEL_EVALUATION_REPORT.md` §2.5):
+    - 본 프로젝트는 외부 LLM API(gpt-4o-mini)를 활용하므로, 전통적 Train/Test split 대신 **프롬프트 개발용 데이터 vs 평가용 데이터** 분리
+    - 평가 데이터셋: EVAL-OCR-001~005 (5건), EVAL-GUIDE-001~005 (5건) — 프롬프트 개발 시 미사용
   - **성능 지표 2개 이상 제시**:
     - 지표 ① OCR 파싱 신뢰도 (`overall_confidence`): 0.0~1.0, 감점 규칙(×0.7), 임계값 0.85
     - 지표 ② RAG 검색 유사도 (`hybrid_score`): BM25(0.3)+Dense(0.7), 임계값 0.4
-  - **실험 비교 결과 제시** (프롬프트 버전별):
-    - OCR 프롬프트 v1.0→v1.1→v1.2: 구조 오류 100% 해소, 사용자 검수 전환율 30% 감소
-    - Guide 프롬프트 v1.0→v1.1→v1.2: 개인화 수준 향상, 텍스트 길이 편차 ±8% 이내 달성
+  - **정량적 실험 비교 결과 제시** (프롬프트 버전별, 평가 데이터셋 기준):
+    - OCR: EVAL 샘플별 v1.0→v1.2 confidence 값 정량 비교표 — 감점 로직으로 EVAL-OCR-003/004에서 0.88→0.62, 0.90→0.63
+    - Guide: EVAL 샘플별 v1.0→v1.2 키 일관성·텍스트 편차 비교표 — v1.2에서 ±8% 이내 달성
   - 프롬프트 버전 관리: `GUIDE_PROMPT_VERSION = "v1.2"` (`ai_worker/tasks/guide.py:20`)
-  - 본 프로젝트는 외부 LLM API 활용(추론 전용)이므로 **프롬프트 엔지니어링 + 신뢰도 지표**로 품질 관리
+  - 검증 자동화: `scripts/consistency_test.py` — 평가 데이터셋으로 반복 테스트 자동 실행
 
 ---
 
@@ -213,6 +216,10 @@
     - OCR 파싱 (temperature=0.0): 동일 입력 5회 반복 → JSON 구조 100% 동일, confidence 100% 동일
     - Guide 생성 (temperature=0.2): 동일 입력 5회 반복 → 8개 키 구조 100% 동일, 텍스트 길이 편차 ±8% 이내
     - RAG 검색: 동일 쿼리 5회 반복 → 동일 문서 집합 + 동일 점수 (100% 결정적)
+  - **자동화 검증 스크립트**: `scripts/consistency_test.py`
+    - 실행: `uv run python scripts/consistency_test.py --mode all --iterations 5`
+    - OCR/Guide/RAG 3가지 모드 지원, 평가 데이터셋(§2.5)을 입력으로 사용
+    - 구조 일치율, 값 일치율, 텍스트 편차율 자동 측정 → PASS/FAIL 판정
   - **편차 최소화 전략**:
     - `response_format={"type": "json_object"}` — 구조 변동 원천 차단
     - `temperature=0.0` (OCR) — 완전 결정적 출력
@@ -235,11 +242,12 @@
     - `guide_feedbacks` 테이블 (`app/models/guides.py:GuideFeedback`)
     - 필드: guide_job_id, user_id, rating, is_helpful, comment, prompt_version
     - unique 제약: (guide_job_id, user_id) — 중복 피드백 방지
-  - **③ 개선 파이프라인** (통계 + 버전 관리):
+  - **③ 개선 파이프라인** (통계 + 자동 트리거 + 버전 관리):
     - `GET /guides/feedback/summary` — 프롬프트 버전별 평균 평점, 도움됨 비율 집계
     - 각 피드백에 `prompt_version` 저장 → 버전별 품질 추적
-    - 평균 평점 < 3.0인 버전 → 프롬프트 수정 트리거 (운영팀 알림)
-    - 주간 갱신 시 최신 프롬프트 버전으로 재생성 (`app/services/guide_automation.py`)
+    - **자동 트리거**: 주간 갱신 루프(`app/services/guide_automation.py:_log_low_rated_prompt_versions`)에서 평균 평점 < 3.0 버전 감지 시 WARNING 로그 자동 출력
+    - 운영팀이 로그 확인 후 프롬프트 개선 → `GUIDE_PROMPT_VERSION` 갱신
+    - 주간 갱신 시 최신 프롬프트 버전으로 재생성
   - **간접 피드백도 병행**:
     - OCR 사용자 수정/확정 흐름 → OCR 오류 피드백
     - 복약 이행 기록 (`PATCH /schedules/items/{id}/status`) → 이행률 데이터
@@ -327,9 +335,10 @@
 - **자체 평가 점수**: 5 / 5
 - **근거**:
   - **P95 성능 테스트 결과 제시** (`docs/PERFORMANCE_TEST_RESULTS.md`):
-    - 테스트 도구: `scripts/performance_test.py` (httpx, 순차 100회 요청)
-    - 모든 API 엔드포인트 P95 < 100ms (3초 기준 대비 충분한 여유)
-    - 최대 P95: GET /schedules/daily = 98ms
+    - 테스트 도구: `scripts/performance_test.py` (httpx, 순차/동시 접속 모드)
+    - **순차 테스트** (100회): 모든 API P95 < 100ms — 최대 P95: 98ms
+    - **동시 접속 테스트** (10명 동시): 모든 API P95 < 200ms — 최대 P95: 155ms
+    - 동시 부하 시에도 3초 기준의 5% 미만으로 안정적 성능 유지
     - OCR/Guide 비동기 작업은 큐 enqueue만 측정 (API 응답 <100ms, 202 Accepted)
   - **성능 모니터링 인프라** (`app/main.py:146-168`):
     - `X-Process-Time` 헤더: 모든 응답에 처리 시간 포함

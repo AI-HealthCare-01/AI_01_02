@@ -1,9 +1,9 @@
-import { lazy, Suspense, Component, type ReactNode } from "react";
+import { lazy, Suspense, Component, type ReactNode, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { Toaster } from "sonner";
 import { NotificationProvider } from "@/lib/NotificationContext";
 import AppLayout from "./components/layout/AppLayout";
-import { getToken } from "./lib/api";
+import { getToken, profileApi } from "./lib/api";
 
 // Lazy-loaded pages
 const Login = lazy(() => import("./pages/auth/Login"));
@@ -23,6 +23,27 @@ const Contact = lazy(() => import("./pages/app/Contact"));
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   return getToken() ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
+function RequireOnboarding({ children }: { children: React.ReactNode }) {
+  const [status, setStatus] = useState<"loading" | "done" | "needed">("loading");
+
+  useEffect(() => {
+    profileApi.getHealth()
+      .then(() => setStatus("done"))
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "";
+        if (msg.includes("RESOURCE_NOT_FOUND") || msg.includes("HTTP 404")) {
+          setStatus("needed");
+        } else {
+          setStatus("done");
+        }
+      });
+  }, []);
+
+  if (status === "loading") return <PageSpinner />;
+  if (status === "needed") return <Navigate to="/onboarding" replace />;
+  return <>{children}</>;
 }
 
 function PageSpinner() {
@@ -122,7 +143,9 @@ export default function App() {
           path="/"
           element={
             <RequireAuth>
-              <AppLayout />
+              <RequireOnboarding>
+                <AppLayout />
+              </RequireOnboarding>
             </RequireAuth>
           }
         >
