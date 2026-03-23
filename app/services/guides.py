@@ -114,12 +114,12 @@ class GuideService:
 
     # ── Feedback ──────────────────────────────────────
 
-    async def submit_feedback(
-        self, *, user: User, job_id: int, request: GuideFeedbackRequest
-    ) -> GuideFeedback:
+    async def submit_feedback(self, *, user: User, job_id: int, request: GuideFeedbackRequest) -> GuideFeedback:
         job = await self.get_guide_job(user=user, job_id=job_id)
         if job.status != GuideJobStatus.SUCCEEDED:
-            raise AppException(ErrorCode.STATE_CONFLICT, developer_message="완료된 가이드에만 피드백을 남길 수 있습니다.")
+            raise AppException(
+                ErrorCode.STATE_CONFLICT, developer_message="완료된 가이드에만 피드백을 남길 수 있습니다."
+            )
 
         existing = await GuideFeedback.get_or_none(guide_job_id=job.id, user_id=user.id)
         if existing:
@@ -164,9 +164,7 @@ class GuideService:
         for row in rows:
             version = row["prompt_version"] or "unknown"
             total = row["total_count"]
-            helpful_count = await GuideFeedback.filter(
-                prompt_version=row["prompt_version"], is_helpful=True
-            ).count()
+            helpful_count = await GuideFeedback.filter(prompt_version=row["prompt_version"], is_helpful=True).count()
             summaries.append(
                 {
                     "prompt_version": version,
