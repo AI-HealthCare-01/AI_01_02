@@ -10,7 +10,7 @@ from app.validators.user_validators import validate_birthday, validate_phone_num
 
 
 class UserUpdateRequest(BaseModel):
-    name: Annotated[str | None, Field(None, min_length=2, max_length=20)]
+    name: Annotated[str | None, Field(None, min_length=1, max_length=20)]
     email: Annotated[
         EmailStr | None,
         Field(None, max_length=40),

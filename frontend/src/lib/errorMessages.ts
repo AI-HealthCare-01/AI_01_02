@@ -17,6 +17,7 @@ const ERROR_MAP: Record<string, ErrorMeta> = {
   DUPLICATE_PHONE:           { message: "이미 사용 중인 전화번호입니다.", action: "다른 번호를 입력해주세요." },
   STATE_CONFLICT:            { message: "현재 상태에서 처리할 수 없습니다.", action: "작업 상태를 확인 후 다시 시도해주세요." },
   OCR_LOW_CONFIDENCE:        { message: "사진 인식 품질이 낮습니다.", action: "더 선명한 사진으로 다시 촬영해주세요." },
+  NOT_PRESCRIPTION:          { message: "처방전 또는 약봉투가 아닌 이미지입니다.", action: "처방전 사진을 다시 업로드해주세요." },
   RATE_LIMITED:              { message: "요청이 너무 많습니다.", action: "잠시 후 다시 시도해주세요." },
   INTERNAL_ERROR:            { message: "서버 오류가 발생했습니다.", action: "잠시 후 다시 시도해주세요." },
   OCR_QUEUE_UNAVAILABLE:     { message: "OCR 처리 서비스가 일시적으로 불가합니다.", action: "잠시 후 다시 시도해주세요." },

@@ -18,8 +18,15 @@ from app.models.ocr import OcrFailureCode, OcrJob, OcrJobStatus
 
 _SUPPORTED_IMAGE_FORMATS = {"jpg", "jpeg", "png", "pdf", "tiff", "tif"}
 
+
+class NotPrescriptionError(Exception):
+    """업로드된 이미지가 처방전/약봉투가 아닐 때 발생"""
+
+
 _PARSE_SYSTEM_PROMPT = (
     "처방전/약봉투 OCR 텍스트에서 약물 정보를 추출하세요. "
+    "먼저 텍스트가 처방전·약봉투·의약품 관련 문서인지 판별하세요. "
+    "관련 없는 문서라면 is_prescription=false로 응답하세요. "
     "각 필드 설명: "
     "drug_name=약품명 전체(제형 포함, mg 숫자만 제외. 예: '콘서타오로스서방정27mg' → '콘서타오로스서방정'), "
     "dose=약물 함량의 mg 숫자(예: '콘서타오로스서방정27mg' → 27.0), "
@@ -28,7 +35,7 @@ _PARSE_SYSTEM_PROMPT = (
     "dispensed_date=조제일(YYYY-MM-DD), "
     "total_days=총 투약 일수. "
     "반드시 JSON으로만 응답하세요: "
-    '{"medications": [{"drug_name": str, "dose": float|null, "frequency_per_day": int|null, '
+    '{"is_prescription": bool, "medications": [{"drug_name": str, "dose": float|null, "frequency_per_day": int|null, '
     '"dosage_per_once": int|null, "intake_time": str|null, "administration_timing": str|null, "dispensed_date": "YYYY-MM-DD"|null, "total_days": int|null}], '
     '"overall_confidence": float, "needs_user_review": bool}. '
     "빈 값이 있거나 텍스트가 잘렸다면 confidence를 절대 0.85 이상 주지 마라."
@@ -95,6 +102,10 @@ async def _parse_medications_with_llm(extracted_text: str, raw_blocks: list[dict
         response_format={"type": "json_object"},
     )
     parsed = json.loads(response.choices[0].message.content or "{}")
+
+    if not parsed.get("is_prescription", True):
+        raise NotPrescriptionError("처방전 또는 약봉투가 아닌 이미지입니다.")
+
     overall_confidence = parsed.get("overall_confidence", 1.0)
 
     # 후처리 검증 (신뢰도 강제 감점 로직)
@@ -148,6 +159,8 @@ def _ensure_transition(from_status: OcrJobStatus, to_status: OcrJobStatus) -> No
 
 
 def _classify_failure(err: Exception) -> OcrFailureCode:
+    if isinstance(err, NotPrescriptionError):
+        return OcrFailureCode.NOT_PRESCRIPTION
     if isinstance(err, FileNotFoundError):
         return OcrFailureCode.FILE_NOT_FOUND
     if isinstance(err, ValueError) and "Invalid OCR state transition" in str(err):
@@ -231,7 +244,7 @@ async def process_ocr_job(
         failure_code = _classify_failure(err)
         error_message = _format_error_message(failure_code=failure_code, detail=str(err))
 
-        if next_retry_count < current.max_retries:
+        if failure_code != OcrFailureCode.NOT_PRESCRIPTION and next_retry_count < current.max_retries:
             _ensure_transition(OcrJobStatus.PROCESSING, OcrJobStatus.QUEUED)
             await OcrJob.filter(id=current.id, status=OcrJobStatus.PROCESSING).update(
                 status=OcrJobStatus.QUEUED,
