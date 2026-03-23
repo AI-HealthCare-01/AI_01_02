@@ -783,21 +783,19 @@ function EditModal({
               <input type="number" min="0" max="24" value={phoneHours} onChange={(e) => setPhoneHours(e.target.value)} className={inputCls} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">커피</label>
-              <div className="grid grid-cols-[minmax(0,1fr)_132px] gap-2">
-                <select value={coffee} onChange={(e) => setCoffee(e.target.value)} className={inputCls}>
-                  {Array.from({ length: 11 }, (_, i) => i).map((cup) => (
-                    <option key={cup} value={cup}>
-                      {cup}잔
-                    </option>
-                  ))}
-                </select>
-                <div className="flex items-center justify-center whitespace-nowrap text-xs font-medium tabular-nums text-gray-500">
-                  카페인 함량 {coffeeMg}mg
-                </div>
-              </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">커피</label>
+            <div className="flex items-center gap-3">
+              <select value={coffee} onChange={(e) => setCoffee(e.target.value)} className={`${inputCls} w-24`}>
+                {Array.from({ length: 11 }, (_, i) => i).map((cup) => (
+                  <option key={cup} value={cup}>
+                    {cup}잔
+                  </option>
+                ))}
+              </select>
+              <span className="whitespace-nowrap text-xs font-medium tabular-nums text-gray-500">
+                카페인 함량 {coffeeMg}mg
+              </span>
             </div>
           </div>
           <div>
