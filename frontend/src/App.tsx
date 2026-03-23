@@ -31,7 +31,14 @@ function RequireOnboarding({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     profileApi.getHealth()
       .then(() => setStatus("done"))
-      .catch(() => setStatus("needed"));
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "";
+        if (msg.includes("RESOURCE_NOT_FOUND") || msg.includes("HTTP 404")) {
+          setStatus("needed");
+        } else {
+          setStatus("done");
+        }
+      });
   }, []);
 
   if (status === "loading") return <PageSpinner />;
