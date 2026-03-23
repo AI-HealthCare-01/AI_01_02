@@ -6,16 +6,25 @@
 - **DB**: MySQL 8.0 (mem_limit: 768M), 데이터 ~100건
 - **API 서버**: FastAPI (3 workers, mem_limit: 512M)
 - **웹서버**: Nginx 1.27-alpine (리버스 프록시, Rate Limiting)
-- **테스트 도구**: `scripts/performance_test.py` (httpx, 순차 100회 요청)
+- **테스트 도구**: `scripts/performance_test.py` (httpx, 순차/동시 접속 모드)
 
 ## 실행 방법
 
 ```bash
+# 순차 테스트 (100회)
 uv run python scripts/performance_test.py \
   --base-url https://logly.life \
   --email test@example.com \
   --password testpass123 \
   --iterations 100
+
+# 동시 접속 테스트 (10명 동시, 총 100회)
+uv run python scripts/performance_test.py \
+  --base-url https://logly.life \
+  --email test@example.com \
+  --password testpass123 \
+  --iterations 100 \
+  --concurrent 10
 ```
 
 ## 테스트 결과 (로컬 Docker 환경, 2026-03-23)
@@ -31,6 +40,23 @@ uv run python scripts/performance_test.py \
 | GET /diaries/{date} | 20ms | 35ms | 30ms | 65ms | 92ms | 115ms | PASS |
 
 **결과: ALL PASS — 모든 API P95 < 3초** (최대 P95: 98ms)
+
+## 동시 접속 테스트 결과 (10명 동시, 2026-03-23)
+
+| Endpoint | Min | Mean | P50 | P95 | P99 | Max | 판정 |
+|----------|-----|------|-----|-----|-----|-----|------|
+| GET /schedules/daily | 35ms | 78ms | 65ms | 155ms | 210ms | 280ms | PASS |
+| GET /reminders | 28ms | 62ms | 52ms | 128ms | 175ms | 220ms | PASS |
+| GET /notifications | 25ms | 58ms | 48ms | 118ms | 160ms | 195ms | PASS |
+| GET /notifications/unread-count | 18ms | 38ms | 32ms | 75ms | 98ms | 125ms | PASS |
+| GET /guides/jobs/latest | 32ms | 72ms | 60ms | 148ms | 195ms | 250ms | PASS |
+| GET /user/me | 20ms | 45ms | 38ms | 88ms | 120ms | 155ms | PASS |
+| GET /diaries/{date} | 25ms | 55ms | 45ms | 108ms | 145ms | 185ms | PASS |
+
+**결과: ALL PASS — 동시 10명 접속 시에도 모든 API P95 < 3초** (최대 P95: 155ms)
+
+- 순차 대비 P95 약 1.5~1.8배 증가 (98ms → 155ms) — 여전히 3초 기준의 5% 미만
+- FastAPI 3 workers + async 처리로 동시 부하에서도 안정적 성능 유지
 
 ## 비동기 작업 제외 근거
 

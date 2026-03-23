@@ -1,6 +1,6 @@
 # AI Health Project API 명세서
 
-문서 버전: v1.41
+문서 버전: v1.42
 작성일: 2026-03-23
 원본:
 - `docs/요구사항_정의서.xlsx`
@@ -10,7 +10,8 @@
 문서 목적: 객체 모델 명세와 API 계약 명세를 독립 문서로 관리한다.
 
 문서 변경 이력:
-- v1.41 (2026-03-23): 코드 실사 기반 동기화 — 11.11 가이드 피드백(GuideFeedback) 객체 모델 추가; 11.12 약물 사전(PsychDrug) 객체 추가; 12.3에 가이드 최신 조회/피드백/피드백 통계/OCR 확정+결과/약물 사전 API 5건 추가; 12.9 동기화 목록 46건→51건 갱신; REQ-075~076 연계
+- v1.42 (2026-03-23): 코드 실사 기반 정합성 보정 — OcrDocument 응답에서 `file_path` 필드 제거(보안상 API 응답에 경로 미포함, REQ-126); DailyScheduleResponse에 `medication_done_count`/`medication_total_count`/`medication_adherence_rate_percent` 3개 필드 추가; GuideJobResult에 `personalized_guides`/`source_attributions`/`weekly_adherence_rate` 3개 필드 추가
+- v1.41 (2026-03-23): 코드 실사 기반 동기화 — 11.11 가이드 피드백(GuideFeedback) 객체 모델 추가; 11.12 약물 사전(PsychDrug) 객체 추가; 12.3에 가이드 최신 조회/피드백/피드백 통계/OCR 확정+결과/약물 사전 API 5건 추가; 12.9 동기화 목록 46건→50건 갱신; REQ-075~076 연계
 - v1.40 (2026-03-19): 코드 실사 기반 동기화 — 11.9 일기(Diary) 객체 모델 추가; 11.10 알림 설정(UserNotificationSetting) 객체 추가; 12.6 일기 API 3건 추가(PUT/GET /diaries/{date}, GET /diaries); 12.8 동기화 목록 43건→46건 갱신; onboarding_completed_at nullable 정정
 - v1.39 (2026-03-16): 코드 실사 기반 전수 정합 동기화 — 12.2 token/refresh GET→POST 정정, profiles/health→users/me/health-profile 경로 정정, logout 엔드포인트 추가; 12.3 medications/info·guides/confirm-and-create 추가; 12.4 chat messages 200→201 정정; 12.5 알림 설정·읽은 알림 삭제 엔드포인트 추가; 12.6 AUTH_INVALID_CREDENTIALS 추가·VALIDATION_ERROR HTTP 400→422 정정; 12.8 동기화 목록 36건→43건 갱신; 정책 메모 health-profile alias 경로 정정
 - v1.38 (2026-03-14): 코드 실사 기반 동기화 — 11.3 건강 프로필 객체를 실제 구현(`health_profiles.py`) 기준으로 재정렬: lifestyle 평탄화, nutrition_status 필드명 반영, computed 메트릭 추가; 11.8 ScheduleItem category에 EXERCISE 추가
@@ -159,7 +160,6 @@
 | OcrDocument | id | string | 필수 | 업로드 문서 ID |
 | OcrDocument | document_type | enum | 필수 | 문서 타입 |
 | OcrDocument | file_name | string | 필수 | 업로드 파일명 |
-| OcrDocument | file_path | string | 필수 | 현재 구현 응답에 포함되는 저장 상대경로(원본 파일 폐기 이후에도 메타데이터로 유지) |
 | OcrDocument | mime_type | string | 필수 | 파일 MIME 타입 |
 | OcrDocument | file_size | int | 필수 | 파일 크기(byte) |
 | OcrDocument | uploaded_at | string(datetime) | 필수 | 업로드 시각 |
@@ -221,6 +221,9 @@
 | GuideJobResult | safety_notice | string | 필수 | 의료진 상담 고지 |
 | GuideJobResult | source_references | GuideSourceReference[] | 선택 | 가이드 근거 출처 목록(REQ-005) |
 | GuideJobResult | adherence_rate_percent | float | 선택 | 최근 일정 이행률(0~100, REQ-008) |
+| GuideJobResult | personalized_guides | object \| null | 선택(nullable) | 8개 섹션별 개인화 가이드(nutrition_guide, exercise_guide 등) |
+| GuideJobResult | source_attributions | string[] \| null | 선택(nullable) | 가이드 생성에 사용된 출처 속성 목록 |
+| GuideJobResult | weekly_adherence_rate | float \| null | 선택(nullable) | 최근 7일 복약 이행률(0~100) |
 | GuideJobResult | structured_data | object | 필수 | 생성 메타데이터(JSON) |
 | GuideJobResult | created_at/updated_at | string(datetime) | 필수 | 결과 생성/수정 시각 |
 | GuideSourceReference | title | string | 필수 | 근거 문서 제목 |
@@ -300,6 +303,9 @@
 |---|---|---|---|---|
 | DailyScheduleResponse | date | string(date) | 필수 | 조회 기준일 |
 | DailyScheduleResponse | items | ScheduleItem[] | 필수 | 시계열 일정 목록 |
+| DailyScheduleResponse | medication_done_count | int | 필수 | 당일 복약 완료 건수 |
+| DailyScheduleResponse | medication_total_count | int | 필수 | 당일 복약 총 건수 |
+| DailyScheduleResponse | medication_adherence_rate_percent | float | 필수 | 당일 복약 이행률(0~100%) |
 | ScheduleItem | item_id | string | 필수 | 일정 항목 ID |
 | ScheduleItem | category | enum(`MEDICATION`,`MEAL`,`EXERCISE`,`SLEEP`) | 필수 | 일정 분류 |
 | ScheduleItem | title | string | 필수 | 일정 제목 |
