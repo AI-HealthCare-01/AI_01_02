@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { ChevronDown, ChevronRight, FileText, LockKeyhole, LogOut, ShieldCheck, UserRound, UserX } from "lucide-react";
 import { toast } from "sonner";
@@ -156,15 +157,17 @@ export default function Settings() {
         </SettingSection>
       </div>
 
-      {selectedPolicy && (
-        <PolicyModal type={selectedPolicy} onClose={() => setSelectedPolicy(null)} />
+      {selectedPolicy && createPortal(
+        <PolicyModal type={selectedPolicy} onClose={() => setSelectedPolicy(null)} />,
+        document.body,
       )}
 
-      {showWithdraw && (
+      {showWithdraw && createPortal(
         <WithdrawModal
           onClose={() => setShowWithdraw(false)}
           onConfirm={handleWithdraw}
-        />
+        />,
+        document.body,
       )}
     </>
   );

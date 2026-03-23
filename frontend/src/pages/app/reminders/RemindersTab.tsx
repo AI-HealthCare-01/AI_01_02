@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Plus, Trash2, Bell, BellOff, Clock, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { reminderApi, Reminder, DdayReminder } from "@/lib/api";
@@ -136,7 +137,10 @@ export default function RemindersTab() {
         </div>
       )}
 
-      {showForm && <ReminderForm onClose={() => setShowForm(false)} onSaved={load} />}
+      {showForm && createPortal(
+        <ReminderForm onClose={() => setShowForm(false)} onSaved={load} />,
+        document.body,
+      )}
     </div>
   );
 }
