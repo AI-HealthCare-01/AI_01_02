@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -796,7 +797,7 @@ export default function AiGuide() {
 
   return (
     <>
-      <div className="min-h-full max-w-4xl mx-auto p-4 md:p-8 stagger-children">
+      <div className="min-h-full max-w-4xl mx-auto p-4 pb-8 md:p-8 stagger-children">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-800">AI 가이드</h1>
           <p className="mt-0.5 text-sm font-medium text-gray-400">복약 및 생활습관 맞춤 가이드</p>
@@ -879,7 +880,7 @@ export default function AiGuide() {
                   type="button"
                   onClick={() => setShowOverviewModal(true)}
                   disabled={isOverviewDisabled}
-                  className="inline-flex items-center gap-2 self-start rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center gap-2 self-start rounded-full border border-white/30 bg-white/20 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-white/30 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span>전체 가이드 보기</span>
                   <ChevronRight className="h-4 w-4" />
@@ -1034,21 +1035,23 @@ export default function AiGuide() {
         )}
       </div>
 
-      {selectedGuide ? (
+      {selectedGuide ? createPortal(
         <GuideDetailModal
           item={selectedGuide}
           onClose={() => setSelectedGuideId(null)}
-        />
+        />,
+        document.body,
       ) : null}
 
-      {showOverviewModal && result ? (
+      {showOverviewModal && result ? createPortal(
         <GuideOverviewModal
           items={guideItems}
           updatedAt={updatedAt}
           references={result.source_references ?? []}
           safetyNotice={safetyNotice}
           onClose={() => setShowOverviewModal(false)}
-        />
+        />,
+        document.body,
       ) : null}
     </>
   );
