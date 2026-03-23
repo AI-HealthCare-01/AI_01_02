@@ -189,7 +189,9 @@ def run_concurrent(args: argparse.Namespace, today: str) -> bool:
     iterations_per_user = max(1, args.iterations // args.concurrent)
     total_requests = args.concurrent * iterations_per_user
 
-    print(f"[동시 접속 테스트] concurrent={args.concurrent}, iterations_per_user={iterations_per_user}, total={total_requests}")
+    print(
+        f"[동시 접속 테스트] concurrent={args.concurrent}, iterations_per_user={iterations_per_user}, total={total_requests}"
+    )
     print(f"{'Endpoint':<50} {'Min':>8} {'Mean':>8} {'P50':>8} {'P95':>8} {'P99':>8} {'Max':>8}")
     print("-" * 115)
 

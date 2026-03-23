@@ -194,9 +194,7 @@ async def test_ocr_consistency(iterations: int) -> dict[str, Any]:
 
     keys_ok = _keys_match(results)
     confidence_ok = _values_identical(results, "overall_confidence")
-    meds_count_ok = all(
-        len(r.get("medications", [])) == len(results[0].get("medications", [])) for r in results
-    )
+    meds_count_ok = all(len(r.get("medications", [])) == len(results[0].get("medications", [])) for r in results)
     drug_names_ok = all(
         [m.get("drug_name") for m in r.get("medications", [])]
         == [m.get("drug_name") for m in results[0].get("medications", [])]
