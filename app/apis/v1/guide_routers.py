@@ -189,6 +189,10 @@ async def get_guide_feedback_summary(
     user: Annotated[User, Depends(get_request_user)],
     guide_service: Annotated[GuideService, Depends(GuideService)],
 ) -> Response:
+    if not user.is_admin:
+        from app.core.exceptions import AppException, ErrorCode
+
+        raise AppException(ErrorCode.AUTH_FORBIDDEN, developer_message="관리자만 접근할 수 있습니다.")
     summaries = await guide_service.get_feedback_summary()
     return Response(
         [s.model_dump() for s in summaries],

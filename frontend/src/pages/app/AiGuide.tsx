@@ -21,6 +21,7 @@ import {
   Wine,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   guideApi,
   GuideJobResult,
@@ -1017,6 +1018,8 @@ export default function AiGuide() {
                       if (msg.includes("STATE_CONFLICT") || msg.includes("이미")) {
                         setFeedbackSubmitted(true);
                         localStorage.setItem(`guide_feedback:${result.job_id}`, "1");
+                      } else {
+                        toast.error("피드백 전송에 실패했습니다. 다시 시도해주세요.");
                       }
                     } finally {
                       setFeedbackSubmitting(false);
