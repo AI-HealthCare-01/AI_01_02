@@ -40,7 +40,7 @@ interface MedicationGuideItem {
   side_effect?: string | null;
   precautions?: string | null;
   side_effects?: string | null;
-  safety_source?: string | null;
+
 }
 
 interface GuideTone {
@@ -176,13 +176,6 @@ function buildGuideBadgeStyle(tone: GuideTone): CSSProperties {
   };
 }
 
-function formatSafetySourceLabel(source: string | null | undefined): string {
-  if (source === "DB") return "drugDB(psych_drugs)";
-  if (source === "EASY_DRUG") return "e약은요";
-  if (source === "LLM") return "LLM";
-  return "미확인";
-}
-
 function extractFirstSentence(text: string): string {
   const trimmed = text.trim();
   if (!trimmed) return "";
@@ -215,7 +208,6 @@ function buildMedicationGuidanceLines(
   const sideEffectsText = med.side_effects ?? medInfo?.side_effects;
   const sideEffectsFromApi = sideEffectsText ? `부작용: ${sideEffectsText}` : "";
   const hasApiInfo = Boolean(precautionsText || sideEffectsText);
-  const sourceLine = `출처: ${formatSafetySourceLabel(med.safety_source ?? medInfo?.source)}`;
   const fallbackSafetyLine = !hasApiInfo
     ? "주의사항/부작용 정보가 없습니다. 복용 중 이상 반응이 있으면 의료진과 상담하세요."
     : "";
@@ -228,7 +220,6 @@ function buildMedicationGuidanceLines(
     precautionsLine,
     sideEffectsFromApi,
     fallbackSafetyLine,
-    sourceLine,
   ].filter(Boolean);
 }
 
