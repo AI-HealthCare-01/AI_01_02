@@ -377,14 +377,14 @@ export default function NotificationsTab() {
   return (
     <div>
       <div className="min-w-0">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex gap-2">
+        <div className="mb-4 space-y-2">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => {
                 setFilter("all");
                 setShowAllInAllTab(false);
               }}
-              className={`rounded-lg border px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
+              className={`whitespace-nowrap rounded-lg border px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
                 filter === "all"
                   ? "gradient-primary border-transparent text-white shadow-sm"
                   : "border-gray-200 text-gray-500 hover:border-gray-300"
@@ -394,28 +394,27 @@ export default function NotificationsTab() {
             </button>
             <button
               onClick={() => setFilter("unread")}
-              className={`rounded-lg border px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
+              className={`whitespace-nowrap rounded-lg border px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
                 filter === "unread"
                   ? "gradient-primary border-transparent text-white shadow-sm"
                   : "border-gray-200 text-gray-500 hover:border-gray-300"
               }`}
             >
-              읽지 않은 알림 {unread.length}개
+              안 읽음 {unread.length}
             </button>
           </div>
-
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={deleteRead}
               disabled={read.length === 0}
-              className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition-all duration-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="whitespace-nowrap rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 transition-all duration-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               읽은 알림 삭제
             </button>
             <button
               onClick={markAllRead}
               disabled={unread.length === 0}
-              className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition-all duration-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="whitespace-nowrap rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 transition-all duration-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               모두 읽음
             </button>
