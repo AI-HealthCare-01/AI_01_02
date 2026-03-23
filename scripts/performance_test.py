@@ -86,18 +86,20 @@ async def _async_request(
     url: str,
     method: str,
     headers: dict[str, str],
-) -> float:
-    """단일 비동기 요청 → 레이턴시(ms) 반환."""
+) -> tuple[float, bool]:
+    """단일 비동기 요청 → (레이턴시 ms, 에러 여부) 반환."""
     start = time.perf_counter()
+    is_error = False
     try:
         if method == "GET":
             resp = await client.get(url, headers=headers)
         else:
             resp = await client.post(url, headers=headers, json={})
-        _ = resp.status_code
+        if resp.status_code >= 400:
+            is_error = True
     except httpx.HTTPError:
-        pass
-    return (time.perf_counter() - start) * 1000
+        is_error = True
+    return (time.perf_counter() - start) * 1000, is_error
 
 
 async def measure_endpoint_concurrent(
@@ -114,19 +116,21 @@ async def measure_endpoint_concurrent(
 
     async with httpx.AsyncClient(timeout=30.0) as client:
 
-        async def _worker() -> list[float]:
+        async def _worker() -> list[tuple[float, bool]]:
             results = []
             for _ in range(iterations_per_user):
-                ms = await _async_request(client, url, method, headers)
-                results.append(ms)
+                results.append(await _async_request(client, url, method, headers))
             return results
 
         worker_results = await asyncio.gather(*[_worker() for _ in range(concurrent)])
 
     all_latencies: list[float] = []
-    for r in worker_results:
-        all_latencies.extend(r)
-    errors = 0  # 간략화: 상태 코드 에러 별도 집계 생략
+    errors = 0
+    for worker in worker_results:
+        for ms, is_err in worker:
+            all_latencies.append(ms)
+            if is_err:
+                errors += 1
     return all_latencies, errors
 
 
@@ -212,7 +216,7 @@ def run_concurrent(args: argparse.Namespace, today: str) -> bool:
         p99 = percentile(latencies, 99)
         max_ms = max(latencies)
 
-        pass_fail = "PASS" if p95 < 3000 else "FAIL"
+        pass_fail = "PASS" if p95 < 3000 and errors == 0 else "FAIL"
         if pass_fail == "FAIL":
             all_pass = False
 
@@ -221,7 +225,7 @@ def run_concurrent(args: argparse.Namespace, today: str) -> bool:
             label = label[:48]
         print(
             f"{label:<50} {min_ms:>7.1f} {mean_ms:>7.1f} {p50:>7.1f} "
-            f"{p95:>7.1f} {p99:>7.1f} {max_ms:>7.1f}  {pass_fail}"
+            f"{p95:>7.1f} {p99:>7.1f} {max_ms:>7.1f}  {errors:>4}  {pass_fail}"
         )
 
     print("-" * 115)

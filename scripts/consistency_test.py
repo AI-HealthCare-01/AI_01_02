@@ -179,18 +179,28 @@ async def test_ocr_consistency(iterations: int) -> dict[str, Any]:
     results: list[dict] = []
 
     for i in range(iterations):
-        response = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": OCR_SYSTEM_PROMPT},
-                {"role": "user", "content": EVAL_OCR_TEXT},
-            ],
-            temperature=0.0,
-            response_format={"type": "json_object"},
-        )
-        parsed = json.loads(response.choices[0].message.content or "{}")
+        try:
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": OCR_SYSTEM_PROMPT},
+                    {"role": "user", "content": EVAL_OCR_TEXT},
+                ],
+                temperature=0.0,
+                response_format={"type": "json_object"},
+            )
+            parsed = json.loads(response.choices[0].message.content or "{}")
+        except (json.JSONDecodeError, IndexError, AttributeError) as exc:
+            print(f"  OCR iteration {i + 1}/{iterations} — parse error: {exc}")
+            continue
+        except Exception as exc:
+            print(f"  OCR iteration {i + 1}/{iterations} — API error: {exc}")
+            continue
         results.append(parsed)
         print(f"  OCR iteration {i + 1}/{iterations} — confidence={parsed.get('overall_confidence')}")
+
+    if len(results) < 2:
+        return {"mode": "ocr", "status": "FAIL", "reason": f"only {len(results)}/{iterations} iterations succeeded"}
 
     keys_ok = _keys_match(results)
     confidence_ok = _values_identical(results, "overall_confidence")
@@ -231,18 +241,28 @@ async def test_guide_consistency(iterations: int) -> dict[str, Any]:
     results: list[dict] = []
 
     for i in range(iterations):
-        response = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": GUIDE_SYSTEM_PROMPT},
-                {"role": "user", "content": EVAL_GUIDE_PROFILE},
-            ],
-            temperature=0.2,
-            response_format={"type": "json_object"},
-        )
-        parsed = json.loads(response.choices[0].message.content or "{}")
+        try:
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": GUIDE_SYSTEM_PROMPT},
+                    {"role": "user", "content": EVAL_GUIDE_PROFILE},
+                ],
+                temperature=0.2,
+                response_format={"type": "json_object"},
+            )
+            parsed = json.loads(response.choices[0].message.content or "{}")
+        except (json.JSONDecodeError, IndexError, AttributeError) as exc:
+            print(f"  Guide iteration {i + 1}/{iterations} — parse error: {exc}")
+            continue
+        except Exception as exc:
+            print(f"  Guide iteration {i + 1}/{iterations} — API error: {exc}")
+            continue
         results.append(parsed)
         print(f"  Guide iteration {i + 1}/{iterations} — keys={set(parsed.keys())}")
+
+    if len(results) < 2:
+        return {"mode": "guide", "status": "FAIL", "reason": f"only {len(results)}/{iterations} iterations succeeded"}
 
     keys_ok = all(set(r.keys()) == GUIDE_EXPECTED_KEYS for r in results)
     variances = {key: _text_length_variance(results, key) for key in GUIDE_EXPECTED_KEYS}
@@ -308,7 +328,10 @@ def test_rag_consistency(base_url: str, email: str, password: str, iterations: i
             try:
                 data = msg_resp.json()
                 refs = data.get("references", [])
-            except Exception:
+            except (json.JSONDecodeError, ValueError):
+                refs = []
+            except Exception as exc:
+                print(f"  RAG iteration {i + 1}/{iterations} — unexpected error: {exc}")
                 refs = []
             all_references.append(refs)
             print(f"  RAG iteration {i + 1}/{iterations} — refs={len(refs)}")

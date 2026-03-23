@@ -184,7 +184,10 @@ class GuideAutomationService:
             default_logger.warning("weekly_refresh_lock_redis_error — skipping this cycle", exc_info=True)
             return 0
 
-        await self._log_low_rated_prompt_versions()
+        try:
+            await self._log_low_rated_prompt_versions()
+        except Exception:
+            default_logger.warning("failed to log low-rated prompt versions", exc_info=True)
 
         cutoff = datetime.now(config.TIMEZONE) - timedelta(days=7)
         user_ids = (
