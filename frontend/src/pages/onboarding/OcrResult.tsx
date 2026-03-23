@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router";
-import { Loader2, AlertTriangle, Search, Bell, X, FileText } from "lucide-react";
+import { Loader2, Search, Bell, X, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { ocrApi, guideApi, OcrMedication, request } from "@/lib/api";
 import { toUserMessage } from "@/lib/errorMessages";
@@ -17,10 +17,6 @@ async function searchMedications(q: string): Promise<string[]> {
     console.warn("Medication search failed:", err);
     return [];
   }
-}
-
-function isLowConfidence(val: number | null | undefined) {
-  return val !== null && val !== undefined && val < 0.85;
 }
 
 // ── MedRow ────────────────────────────────────────────────────────────────────
@@ -87,12 +83,6 @@ function MedRow({
     <div className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-gray-500">약물 {index + 1}</span>
-        {med.confidence !== null && med.confidence !== undefined && (
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isLowConfidence(med.confidence) ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"
-            }`}>
-            신뢰도 {Math.round(med.confidence * 100)}%
-          </span>
-        )}
       </div>
 
       {/* 약품명 */}
@@ -198,9 +188,7 @@ export default function OcrResult() {
   const [medications, setMedications] = useState<OcrMedication[]>([]);
   const [jobId, setJobId] = useState("");
   const [editable, setEditable] = useState(false);
-  const [hasLowConfidence, setHasLowConfidence] = useState(false);
   const [loadingResult, setLoadingResult] = useState(false);
-  const ocrConfidences = useRef<number[]>([]);
   const cancelledRef = useRef(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [analyzeElapsed, setAnalyzeElapsed] = useState(0);
@@ -218,9 +206,7 @@ export default function OcrResult() {
       ocrApi.getJobResult(savedJobId)
         .then((res) => {
           const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
-          ocrConfidences.current = meds.map((m) => m.confidence ?? 0);
           setMedications(meds);
-          setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
         })
         .catch((err) => toast.error(toUserMessage(err)))
@@ -247,9 +233,7 @@ export default function OcrResult() {
           localStorage.setItem("ocr_job_id", job_id);
           const res = await ocrApi.getJobResult(job_id);
           const meds = res.structured_data?.extracted_medications ?? res.structured_data?.medications ?? [];
-          ocrConfidences.current = meds.map((m) => m.confidence ?? 0);
           setMedications(meds);
-          setHasLowConfidence(meds.some((m) => isLowConfidence(m.confidence)));
           setPhase("result");
           return;
         }
@@ -267,11 +251,7 @@ export default function OcrResult() {
   function updateField(index: number, field: keyof OcrMedication, value: string | number | null) {
     setMedications((prev) => prev.map((m, i) => {
       if (i !== index) return m;
-      const updated = { ...m, [field]: value };
-      const allFilled = (["drug_name", "dose", "intake_time", "dosage_per_once",
-        "frequency_per_day", "total_days", "dispensed_date"] as (keyof OcrMedication)[])
-        .every((k) => { const v = updated[k]; return v !== null && v !== undefined && v !== ""; });
-      return { ...updated, confidence: allFilled ? 1.0 : ocrConfidences.current[index] ?? m.confidence };
+      return { ...m, [field]: value };
     }));
   }
 
@@ -404,15 +384,7 @@ export default function OcrResult() {
         {(phase === "result" || phase === "confirming") && (
           <div className="card-warm p-5">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <p className="text-sm font-semibold text-gray-700">스캔된 약 정보</p>
-                {hasLowConfidence && (
-                  <div className="flex items-center gap-1 text-amber-600">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span className="text-xs">신뢰도 낮은 항목 있음</span>
-                  </div>
-                )}
-              </div>
+              <p className="text-sm font-semibold text-gray-700">스캔된 약 정보</p>
             </div>
 
             {medications.length === 0 ? (
