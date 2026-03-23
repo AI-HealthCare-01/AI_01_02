@@ -11,10 +11,13 @@ import {
   Coffee,
   Dumbbell,
   HeartPulse,
+  MessageSquare,
   MoonStar,
   Pill,
   Smartphone,
   Sparkles,
+  Star,
+  ThumbsUp,
   Wine,
   X,
 } from "lucide-react";
@@ -604,6 +607,11 @@ export default function AiGuide() {
   const [confirmedGuideIds, setConfirmedGuideIds] = useState<string[]>([]);
   const [selectedGuideId, setSelectedGuideId] = useState<string | null>(null);
   const [showOverviewModal, setShowOverviewModal] = useState(false);
+  const [feedbackRating, setFeedbackRating] = useState(0);
+  const [feedbackHelpful, setFeedbackHelpful] = useState<boolean | null>(null);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const cancelledRef = useRef(false);
   const todayKey = useMemo(() => getLocalDateKey(), []);
 
@@ -917,6 +925,107 @@ export default function AiGuide() {
                 </div>
               )}
             </section>
+
+            {/* 피드백 섹션 */}
+            {result && !feedbackSubmitted && (
+              <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-gray-700">
+                  <MessageSquare className="h-4 w-4" />
+                  가이드가 도움이 되었나요?
+                </h3>
+
+                {/* 별점 */}
+                <div className="mb-3 flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setFeedbackRating(n)}
+                      className="p-0.5 transition-transform hover:scale-110"
+                    >
+                      <Star
+                        className={`h-6 w-6 ${n <= feedbackRating ? "fill-amber-400 text-amber-400" : "text-gray-300"}`}
+                      />
+                    </button>
+                  ))}
+                  {feedbackRating > 0 && (
+                    <span className="ml-2 text-xs text-gray-500">{feedbackRating}점</span>
+                  )}
+                </div>
+
+                {/* 도움됨 버튼 */}
+                <div className="mb-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFeedbackHelpful(true)}
+                    className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition-colors ${
+                      feedbackHelpful === true
+                        ? "bg-green-100 text-green-700 ring-1 ring-green-300"
+                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    }`}
+                  >
+                    <ThumbsUp className="h-3.5 w-3.5" />
+                    도움됨
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFeedbackHelpful(false)}
+                    className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition-colors ${
+                      feedbackHelpful === false
+                        ? "bg-red-100 text-red-700 ring-1 ring-red-300"
+                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    }`}
+                  >
+                    <ThumbsUp className="h-3.5 w-3.5 rotate-180" />
+                    아쉬움
+                  </button>
+                </div>
+
+                {/* 코멘트 */}
+                <textarea
+                  value={feedbackComment}
+                  onChange={(e) => setFeedbackComment(e.target.value)}
+                  placeholder="추가 의견이 있다면 적어주세요 (선택)"
+                  maxLength={1000}
+                  rows={2}
+                  className="mb-3 w-full rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-green-300 focus:outline-none focus:ring-2 focus:ring-green-400/30"
+                />
+
+                {/* 제출 */}
+                <button
+                  type="button"
+                  disabled={feedbackRating === 0 || feedbackHelpful === null || feedbackSubmitting}
+                  onClick={async () => {
+                    if (!result || feedbackRating === 0 || feedbackHelpful === null) return;
+                    setFeedbackSubmitting(true);
+                    try {
+                      await guideApi.submitFeedback(result.job_id, {
+                        rating: feedbackRating,
+                        is_helpful: feedbackHelpful,
+                        comment: feedbackComment || undefined,
+                      });
+                      setFeedbackSubmitted(true);
+                    } catch {
+                      // 이미 제출한 경우에도 성공 처리
+                      setFeedbackSubmitted(true);
+                    } finally {
+                      setFeedbackSubmitting(false);
+                    }
+                  }}
+                  className="gradient-primary w-full rounded-xl py-2.5 text-sm font-bold text-white shadow-sm transition-opacity disabled:opacity-50"
+                >
+                  {feedbackSubmitting ? "전송 중..." : "피드백 보내기"}
+                </button>
+              </section>
+            )}
+
+            {feedbackSubmitted && (
+              <section className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-5 text-center shadow-sm">
+                <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-green-500" />
+                <p className="text-sm font-semibold text-green-700">피드백을 보내주셔서 감사합니다!</p>
+                <p className="mt-1 text-xs text-green-600">보내주신 의견은 가이드 품질 개선에 활용됩니다.</p>
+              </section>
+            )}
           </div>
         )}
       </div>

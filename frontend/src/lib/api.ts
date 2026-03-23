@@ -496,6 +496,12 @@ export const guideApi = {
       method: "POST",
       body: JSON.stringify({ reason }),
     }),
+
+  submitFeedback: (jobId: string, data: { rating: number; is_helpful: boolean; comment?: string }) =>
+    request<{ id: string; guide_job_id: string }>(`/guides/jobs/${jobId}/feedback`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 // ── Profile ───────────────────────────────────────────
