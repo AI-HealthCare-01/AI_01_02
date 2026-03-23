@@ -26,9 +26,9 @@ class GuideFeedbackResponse(BaseModel):
 
 
 class GuideFeedbackSummaryResponse(BaseModel):
-    total_count: int
-    average_rating: float
-    helpful_rate: float
+    total_count: int = Field(ge=0)
+    average_rating: float = Field(ge=0.0, le=5.0)
+    helpful_rate: float = Field(ge=0.0, le=1.0)
     prompt_version: str
 
 

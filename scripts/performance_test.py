@@ -53,10 +53,11 @@ def measure_endpoint(
     path: str,
     token: str,
     iterations: int,
-) -> list[float]:
+) -> tuple[list[float], int]:
     url = f"{base_url}{path}"
     headers = {"Authorization": f"Bearer {token}"}
     latencies: list[float] = []
+    errors = 0
 
     for _ in range(iterations):
         start = time.perf_counter()
@@ -65,13 +66,14 @@ def measure_endpoint(
                 resp = client.get(url, headers=headers)
             else:
                 resp = client.post(url, headers=headers, json={})
-            _ = resp.status_code
+            if resp.status_code >= 400:
+                errors += 1
         except httpx.HTTPError:
-            pass
+            errors += 1
         elapsed_ms = (time.perf_counter() - start) * 1000
         latencies.append(elapsed_ms)
 
-    return latencies
+    return latencies, errors
 
 
 def main() -> None:
@@ -93,13 +95,13 @@ def main() -> None:
             sys.exit(1)
         print("로그인 성공\n")
 
-        print(f"{'Endpoint':<50} {'Min':>8} {'Mean':>8} {'P50':>8} {'P95':>8} {'P99':>8} {'Max':>8}")
-        print("-" * 108)
+        print(f"{'Endpoint':<50} {'Min':>8} {'Mean':>8} {'P50':>8} {'P95':>8} {'P99':>8} {'Max':>8} {'Err':>5}")
+        print("-" * 115)
 
         all_pass = True
         for method, path_template in ENDPOINTS:
             path = path_template.replace("{today}", today)
-            latencies = measure_endpoint(client, args.base_url, method, path, token, args.iterations)
+            latencies, errors = measure_endpoint(client, args.base_url, method, path, token, args.iterations)
 
             min_ms = min(latencies)
             mean_ms = statistics.mean(latencies)
@@ -108,8 +110,8 @@ def main() -> None:
             p99 = percentile(latencies, 99)
             max_ms = max(latencies)
 
-            pass_fail = "PASS" if p95 < 3000 else "FAIL"
-            if p95 >= 3000:
+            pass_fail = "PASS" if p95 < 3000 and errors == 0 else "FAIL"
+            if pass_fail == "FAIL":
                 all_pass = False
 
             label = f"{method} {path}"
@@ -117,7 +119,7 @@ def main() -> None:
                 label = label[:48]
             print(
                 f"{label:<50} {min_ms:>7.1f} {mean_ms:>7.1f} {p50:>7.1f} "
-                f"{p95:>7.1f} {p99:>7.1f} {max_ms:>7.1f}  {pass_fail}"
+                f"{p95:>7.1f} {p99:>7.1f} {max_ms:>7.1f}  {errors:>4}  {pass_fail}"
             )
 
         print("-" * 108)

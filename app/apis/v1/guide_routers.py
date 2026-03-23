@@ -191,6 +191,6 @@ async def get_guide_feedback_summary(
 ) -> Response:
     summaries = await guide_service.get_feedback_summary()
     return Response(
-        [GuideFeedbackSummaryResponse(**s).model_dump() for s in summaries],
+        [s.model_dump() for s in summaries],
         status_code=status.HTTP_200_OK,
     )

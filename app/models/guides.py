@@ -104,3 +104,4 @@ class GuideFeedback(models.Model):
     class Meta:
         table = "guide_feedbacks"
         unique_together = (("guide_job_id", "user_id"),)
+        indexes = (("prompt_version", "is_helpful"),)

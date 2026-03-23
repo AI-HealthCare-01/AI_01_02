@@ -690,6 +690,12 @@ export default function AiGuide() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (result?.job_id && localStorage.getItem(`guide_feedback:${result.job_id}`)) {
+      setFeedbackSubmitted(true);
+    }
+  }, [result?.job_id]);
+
+  useEffect(() => {
     if (!result?.medication_guidance) return;
     let meds: MedicationGuideItem[] = [];
     try {
@@ -1005,9 +1011,13 @@ export default function AiGuide() {
                         comment: feedbackComment || undefined,
                       });
                       setFeedbackSubmitted(true);
-                    } catch {
-                      // 이미 제출한 경우에도 성공 처리
-                      setFeedbackSubmitted(true);
+                      localStorage.setItem(`guide_feedback:${result.job_id}`, "1");
+                    } catch (err) {
+                      const msg = err instanceof Error ? err.message : String(err);
+                      if (msg.includes("STATE_CONFLICT") || msg.includes("이미")) {
+                        setFeedbackSubmitted(true);
+                        localStorage.setItem(`guide_feedback:${result.job_id}`, "1");
+                      }
                     } finally {
                       setFeedbackSubmitting(false);
                     }

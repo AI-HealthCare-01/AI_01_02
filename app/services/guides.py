@@ -1,8 +1,10 @@
+from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 
 from app.core import config
 from app.core.exceptions import AppException, ErrorCode
-from app.dtos.guides import GuideFeedbackRequest, GuideJobCreateFromSnapshotRequest
+from app.core.logger import default_logger as logger
+from app.dtos.guides import GuideFeedbackRequest, GuideFeedbackSummaryResponse, GuideJobCreateFromSnapshotRequest
 from app.models.guides import GuideFeedback, GuideJob, GuideJobStatus, GuideResult
 from app.models.ocr import OcrJobStatus
 from app.models.users import User
@@ -126,21 +128,27 @@ class GuideService:
             raise AppException(ErrorCode.STATE_CONFLICT, developer_message="이미 이 가이드에 피드백을 남겼습니다.")
 
         result = await GuideResult.get_or_none(job_id=job.id)
-        prompt_version = ""
-        if result:
-            prompt_version = result.structured_data.get("prompt_version", "")
+        if not result:
+            logger.warning("SUCCEEDED guide job %d has no GuideResult — prompt_version will be empty", job.id)
+        raw_version = result.structured_data.get("prompt_version", "") if result else ""
+        prompt_version = str(raw_version)[:20] if raw_version else ""
 
-        feedback = await GuideFeedback.create(
-            guide_job_id=job.id,
-            user_id=user.id,
-            rating=request.rating,
-            is_helpful=request.is_helpful,
-            comment=request.comment,
-            prompt_version=prompt_version,
-        )
+        try:
+            feedback = await GuideFeedback.create(
+                guide_job_id=job.id,
+                user_id=user.id,
+                rating=request.rating,
+                is_helpful=request.is_helpful,
+                comment=request.comment,
+                prompt_version=prompt_version,
+            )
+        except IntegrityError as exc:
+            raise AppException(
+                ErrorCode.STATE_CONFLICT, developer_message="이미 이 가이드에 피드백을 남겼습니다."
+            ) from exc
         return feedback
 
-    async def get_feedback_summary(self) -> list[dict]:
+    async def get_feedback_summary(self) -> list[GuideFeedbackSummaryResponse]:
         """프롬프트 버전별 피드백 통계를 반환한다.
 
         피드백 개선 파이프라인:
@@ -160,17 +168,17 @@ class GuideService:
             .values("prompt_version", "total_count", "avg_rating")
         )
 
-        summaries = []
+        summaries: list[GuideFeedbackSummaryResponse] = []
         for row in rows:
             version = row["prompt_version"] or "unknown"
             total = row["total_count"]
             helpful_count = await GuideFeedback.filter(prompt_version=row["prompt_version"], is_helpful=True).count()
             summaries.append(
-                {
-                    "prompt_version": version,
-                    "total_count": total,
-                    "average_rating": round(float(row["avg_rating"] or 0), 2),
-                    "helpful_rate": round(helpful_count / total, 2) if total else 0.0,
-                }
+                GuideFeedbackSummaryResponse(
+                    prompt_version=version,
+                    total_count=total,
+                    average_rating=round(float(row["avg_rating"] or 0), 2),
+                    helpful_rate=round(helpful_count / total, 2) if total else 0.0,
+                )
             )
         return summaries
