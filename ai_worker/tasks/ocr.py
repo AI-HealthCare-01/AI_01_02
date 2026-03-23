@@ -22,6 +22,7 @@ _SUPPORTED_IMAGE_FORMATS = {"jpg", "jpeg", "png", "pdf", "tiff", "tif"}
 class NotPrescriptionError(Exception):
     """업로드된 이미지가 처방전/약봉투가 아닐 때 발생"""
 
+
 _PARSE_SYSTEM_PROMPT = (
     "처방전/약봉투 OCR 텍스트에서 약물 정보를 추출하세요. "
     "먼저 텍스트가 처방전·약봉투·의약품 관련 문서인지 판별하세요. "
