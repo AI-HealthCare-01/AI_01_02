@@ -7,6 +7,33 @@ from app.dtos.health_profiles import HealthProfileUpsertRequest
 from app.dtos.ocr import OcrResultConfirmRequest
 from app.models.guides import GuideFailureCode, GuideJobStatus, GuideRiskLevel
 
+# ── Feedback DTOs ─────────────────────────────────────
+
+
+class GuideFeedbackRequest(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    is_helpful: bool
+    comment: str | None = Field(None, max_length=1000)
+
+
+class GuideFeedbackResponse(BaseModel):
+    id: str
+    guide_job_id: str
+    rating: int
+    is_helpful: bool
+    comment: str | None
+    created_at: datetime
+
+
+class GuideFeedbackSummaryResponse(BaseModel):
+    total_count: int = Field(ge=0)
+    average_rating: float = Field(ge=0.0, le=5.0)
+    helpful_rate: float = Field(ge=0.0, le=1.0)
+    prompt_version: str
+
+
+# ── Guide DTOs ────────────────────────────────────────
+
 
 class GuideSourceReference(BaseModel):
     title: str

@@ -5,6 +5,9 @@ from fastapi.responses import ORJSONResponse as Response
 
 from app.dependencies.security import get_request_user
 from app.dtos.guides import (
+    GuideFeedbackRequest,
+    GuideFeedbackResponse,
+    GuideFeedbackSummaryResponse,
     GuideJobCreateFromSnapshotRequest,
     GuideJobCreateRequest,
     GuideJobCreateResponse,
@@ -149,4 +152,49 @@ async def refresh_guide_job(
             status=new_job.status,
         ).model_dump(),
         status_code=status.HTTP_202_ACCEPTED,
+    )
+
+
+@guide_router.post(
+    "/jobs/{job_id}/feedback",
+    response_model=GuideFeedbackResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def submit_guide_feedback(
+    job_id: Annotated[str, Path(pattern=r"^\d+$")],
+    request: GuideFeedbackRequest,
+    user: Annotated[User, Depends(get_request_user)],
+    guide_service: Annotated[GuideService, Depends(GuideService)],
+) -> Response:
+    feedback = await guide_service.submit_feedback(user=user, job_id=int(job_id), request=request)
+    return Response(
+        GuideFeedbackResponse(
+            id=str(feedback.id),
+            guide_job_id=str(feedback.guide_job_id),
+            rating=feedback.rating,
+            is_helpful=feedback.is_helpful,
+            comment=feedback.comment,
+            created_at=feedback.created_at,
+        ).model_dump(),
+        status_code=status.HTTP_201_CREATED,
+    )
+
+
+@guide_router.get(
+    "/feedback/summary",
+    response_model=list[GuideFeedbackSummaryResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def get_guide_feedback_summary(
+    user: Annotated[User, Depends(get_request_user)],
+    guide_service: Annotated[GuideService, Depends(GuideService)],
+) -> Response:
+    if not user.is_admin:
+        from app.core.exceptions import AppException, ErrorCode
+
+        raise AppException(ErrorCode.AUTH_FORBIDDEN, developer_message="관리자만 접근할 수 있습니다.")
+    summaries = await guide_service.get_feedback_summary()
+    return Response(
+        [s.model_dump() for s in summaries],
+        status_code=status.HTTP_200_OK,
     )

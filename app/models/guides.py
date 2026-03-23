@@ -79,3 +79,29 @@ class GuideResult(models.Model):
 
     class Meta:
         table = "guide_results"
+
+
+class GuideFeedback(models.Model):
+    id = fields.BigIntField(primary_key=True)
+    guide_job: ForeignKeyRelation[GuideJob] = fields.ForeignKeyField(
+        "models.GuideJob",
+        related_name="feedbacks",
+        on_delete=fields.CASCADE,
+    )
+    guide_job_id: int
+    user: ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User",
+        related_name="guide_feedbacks",
+        on_delete=fields.CASCADE,
+    )
+    user_id: int
+    rating = fields.SmallIntField()  # 1~5
+    is_helpful = fields.BooleanField()
+    comment = fields.TextField(null=True)
+    prompt_version = fields.CharField(max_length=20, default="")
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "guide_feedbacks"
+        unique_together = (("guide_job_id", "user_id"),)
+        indexes = (("prompt_version", "is_helpful"),)
